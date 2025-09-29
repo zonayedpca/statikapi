@@ -1,0 +1,30 @@
+{
+  "name": "@staticapi/monorepo",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "lint": "eslint . --ext .js,.mjs,.cjs",
+    "format": "prettier . --check",
+    "format:fix": "prettier . --write",
+    "test": "node --test",
+    "test:watch": "node --test --watch"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9",
+    "eslint": "^9.36.0",
+    "eslint-config-prettier": "^9.1.2",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-n": "^17.23.1",
+    "eslint-plugin-promise": "^6.6.0",
+    "globals": "^16.4.0",
+    "prettier": "^3.3.3",
+    "@staticapi/cli": "workspace:*"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

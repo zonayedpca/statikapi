@@ -1,0 +1,14 @@
+{
+  "name": "@staticapi/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "staticapi": "bin/staticapi.js"
+  },
+  "dependencies": {
+    "@staticapi/core": "workspace:*"
+  },
+  "scripts": {
+    "lint": "eslint . --ext .js"
+  }
+}

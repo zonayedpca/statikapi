@@ -1,0 +1,15 @@
+# deps
+node_modules
+pnpm-lock.yaml
+
+# build outputs
+dist
+.tmp
+tmp
+coverage
+
+# editors
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json

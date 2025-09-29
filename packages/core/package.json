@@ -1,0 +1,17 @@
+{
+  "name": "@staticapi/core",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "node ./scripts/build.js || true",
+    "lint": "eslint . --ext .js",
+    "prepublishOnly": "pnpm build"
+  }
+}

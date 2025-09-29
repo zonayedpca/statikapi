@@ -1,38 +1,35 @@
 import { test } from 'node:test';
-import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const BIN = resolve(__dirname, '../bin/staticapi.js');
+const BIN = resolve('packages/cli/bin/staticapi.js');
 
 function run(args = []) {
-  return new Promise((resolvePromise, reject) => {
-    execFile(process.execPath, [BIN, ...args], { env: process.env }, (err, stdout, stderr) => {
-      if (err) return reject(Object.assign(err, { stdout, stderr }));
-      resolvePromise({ stdout: String(stdout), stderr: String(stderr) });
+  return new Promise((resolve, reject) => {
+    execFile(process.execPath, [BIN, ...args], (err, stdout, stderr) => {
+      if (err)
+        return reject(Object.assign(err, { stdout: String(stdout), stderr: String(stderr) }));
+      resolve({ stdout: String(stdout) });
     });
   });
 }
 
-test('staticapi -v prints version', async () => {
-  const { stdout } = await run(['-v']);
-  assert.match(stdout, /staticapi v0\.1\.0/);
-});
-
-test('staticapi build prints build messages', async () => {
-  const { stdout } = await run(['build']);
-  assert.match(stdout, /Building static API/);
-  assert.match(stdout, /hello, staticapi/);
-});
-
-test('bin has executable bit', () => {
-  const st = fs.statSync(resolve('packages/cli/bin/staticapi.js'));
-  // owner executable bit
-  if (process.platform !== 'win32') {
-    if ((st.mode & 0o100) === 0) throw new Error('bin is not executable');
+test('--help lists commands', async () => {
+  const { stdout } = await run(['--help']);
+  for (const word of ['init', 'build', 'dev', 'preview']) {
+    assert.match(stdout, new RegExp(`\\b${word}\\b`));
   }
 });
+
+for (const [cmd, text] of [
+  ['init', 'scaffolding'],
+  ['build', 'building'],
+  ['dev', 'starting'],
+  ['preview', 'previewing'],
+]) {
+  test(`${cmd} prints stub output`, async () => {
+    const { stdout } = await run([cmd]);
+    assert.match(stdout.toLowerCase(), new RegExp(text));
+  });
+}

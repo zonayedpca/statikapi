@@ -42,6 +42,14 @@ export default [
       'promise/param-names': 'warn',
       // general
       'no-console': 'off',
+      'no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
     },
   },
 

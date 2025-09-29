@@ -1,5 +1,5 @@
 {
-  "name": "@staticapi/cli",
+  "name": "staticapi",
   "version": "0.1.0",
   "type": "module",
   "bin": {
@@ -9,6 +9,7 @@
     "@staticapi/core": "workspace:*"
   },
   "scripts": {
-    "lint": "eslint . --ext .js"
+    "lint": "eslint . --ext .js",
+    "dev": "node bin/staticapi.js"
   }
 }

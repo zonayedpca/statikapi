@@ -6,13 +6,23 @@ export function readFlags(argv = []) {
 
     if (t.startsWith('--')) {
       const [k, v] = t.slice(2).split('=', 2);
-      if (k === 'srcDir' || k === 'outDir') {
-        if (v !== undefined) out[k] = v;
-        else if (argv[i + 1] && !argv[i + 1].startsWith('-')) {
-          out[k] = argv[++i];
-        } else out[k] = ''; // will fail validation as empty string
+      // allow any flag, we’ll read only the ones we need in commands
+      if (v !== undefined) out[k] = coerce(v);
+      else {
+        const next = argv[i + 1];
+        if (next && !next.startsWith('-')) {
+          out[k] = coerce(next);
+          i++;
+        } else out[k] = true; // <- bare flag now boolean true
       }
     }
   }
   return out;
+}
+
+function coerce(v) {
+  if (v === 'true') return true;
+  if (v === 'false') return false;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : v;
 }

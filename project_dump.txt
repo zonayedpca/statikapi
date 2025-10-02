@@ -1,0 +1,1428 @@
+===== FILE: .editorconfig =====
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+===== FILE: .gitignore =====
+# deps
+node_modules
+pnpm-lock.yaml
+
+# build outputs
+dist
+.tmp
+tmp
+coverage
+
+# editors
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+===== FILE: .npmrc =====
+auto-install-peers=true
+strict-peer-dependencies=false
+shared-workspace-lockfile=true
+
+===== FILE: .nvmrc =====
+22
+===== FILE: .vscode/extensions.json =====
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "EditorConfig.EditorConfig"
+  ]
+}
+
+===== FILE: README.md =====
+# Static API — Monorepo
+
+- `packages/core`: shared core logic
+- `packages/cli`: CLI entry (`staticapi`)
+
+## Scripts
+
+- `pnpm -w lint` – run ESLint across all packages
+- `pnpm -w format` – check Prettier formatting
+- `pnpm -w format:fix` – write Prettier fixes
+
+===== FILE: api-out/docs/a/b/index.json =====
+{"doc":"a/b"}
+===== FILE: api-out/docs/guide/index.json =====
+{"doc":"guide"}
+===== FILE: api-out/users/1/index.json =====
+{"user":"1"}
+===== FILE: api-out/users/2/index.json =====
+{"user":"2"}
+===== FILE: eslint.config.js =====
+// eslint.config.js
+import js from '@eslint/js';
+import importPlugin from 'eslint-plugin-import';
+import n from 'eslint-plugin-n';
+import promise from 'eslint-plugin-promise';
+import prettier from 'eslint-config-prettier';
+import globals from 'globals';
+
+export default [
+  // Ignore build & vendor stuff
+  {
+    ignores: ['**/node_modules/**', '**/dist/**', '**/coverage/**', 'tmp', '.tmp'],
+  },
+
+  // Base rules
+  js.configs.recommended,
+
+  // Monorepo base (Node + ESM)
+  {
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: 'module',
+      globals: {
+        ...globals.node, // <-- gives you process, console, __dirname, etc.
+      },
+    },
+    plugins: {
+      import: importPlugin,
+      n,
+      promise,
+    },
+    rules: {
+      // import
+      'import/first': 'error',
+      'import/newline-after-import': 'warn',
+      'import/no-duplicates': 'warn',
+      // node (workspace imports can confuse this; enable later if desired)
+      'n/no-missing-import': 'off',
+      'n/no-unsupported-features/es-syntax': 'off',
+      // promise
+      'promise/no-return-wrap': 'error',
+      'promise/param-names': 'warn',
+      // general
+      'no-console': 'off',
+      'no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
+    },
+  },
+
+  // CLI bin tweaks (shebang)
+  {
+    files: ['packages/cli/bin/**'],
+    rules: {
+      'n/shebang': 'off',
+    },
+  },
+
+  // CommonJS override for *.cjs files (e.g., prettier.config.cjs)
+  {
+    files: ['**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        ...globals.node, // gives 'module', 'require', etc.
+      },
+    },
+  },
+
+  // Keep Prettier last
+  prettier,
+];
+
+===== FILE: package.json =====
+{
+  "name": "@staticapi/monorepo",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "lint": "eslint . --ext .js,.mjs,.cjs",
+    "format": "prettier . --check",
+    "format:fix": "prettier . --write",
+    "test": "node --test",
+    "test:watch": "node --test --watch"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9",
+    "eslint": "^9.36.0",
+    "eslint-config-prettier": "^9.1.2",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-n": "^17.23.1",
+    "eslint-plugin-promise": "^6.6.0",
+    "globals": "^16.4.0",
+    "prettier": "^3.3.3",
+    "staticapi": "workspace:*"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
+
+===== FILE: packages/cli/bin/staticapi.js =====
+#!/usr/bin/env node
+import { run } from '../src/index.js';
+
+// pass argv explicitly
+const code = await run(process.argv.slice(2));
+
+// let stdout/stderr flush; still returns non-zero on failure
+process.exitCode = Number.isInteger(code) ? code : 0;
+
+===== FILE: packages/cli/package.json =====
+{
+  "name": "staticapi",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "staticapi": "bin/staticapi.js"
+  },
+  "dependencies": {
+    "@staticapi/core": "workspace:*"
+  },
+  "scripts": {
+    "lint": "eslint . --ext .js",
+    "dev": "node bin/staticapi.js"
+  }
+}
+
+===== FILE: packages/cli/src/build/routeOutPath.js =====
+import path from 'node:path';
+
+/** Map a route to an output JSON file (index.json style). Static routes only. */
+export function routeToOutPath({ outAbs, route }) {
+  // '/' -> index.json, '/users' -> users/index.json, '/blog/archive' -> blog/archive/index.json
+  const rel = route === '/' ? 'index.json' : route.slice(1) + '/index.json';
+  return path.join(outAbs, rel);
+}
+
+===== FILE: packages/cli/src/commands/build.js =====
+import { readFlags } from '../util/readFlags.js'; // from Task 3
+import { loadConfig } from '../config/loadConfig.js'; // from Task 3
+import { ConfigError } from '../config/validate.js'; // from Task 3
+import { mapRoutes } from '../router/mapRoutes.js'; // from Task 4
+import { loadModuleValue } from '../loader/loadModuleValue.js'; // from Task 5
+import { loadPaths } from '../loader/loadPaths.js';
+
+import { emptyDir, writeFileEnsured } from '../util/fsx.js';
+import { routeToOutPath } from '../build/routeOutPath.js';
+import { formatBytes } from '../util/bytes.js';
+
+function toConcrete(routePattern, segTokens, segs) {
+  // segTokens: ['users', ':id'] or ['docs','*slug']
+  // segs: ['1'] or ['a','b']
+  let idx = 0;
+  const parts = routePattern.split('/').map((p) => {
+    if (p.startsWith(':')) return segs[idx++] ?? '';
+    if (p.startsWith('*')) return segs.slice(idx).join('/');
+    return p;
+  });
+  const concrete = parts.join('/').replace(/\/+/g, '/');
+  return concrete;
+}
+
+function toParams(segTokens, concreteRoute) {
+  const concreteSegs = concreteRoute.split('/').filter(Boolean);
+  const params = {};
+  let j = 0;
+  for (let i = 0; i < segTokens.length; i++) {
+    const tok = segTokens[i];
+    if (tok.startsWith(':')) {
+      params[tok.slice(1)] = concreteSegs[i] ?? '';
+    } else if (tok.startsWith('*')) {
+      params[tok.slice(1)] = concreteSegs.slice(i);
+      break;
+    }
+  }
+  return params;
+}
+
+export default async function buildCmd(argv) {
+  const t0 = Date.now();
+  try {
+    const flags = readFlags(argv);
+    const { config } = await loadConfig({ flags });
+
+    const pretty = flags.pretty === true || flags.minify === false;
+    const space = pretty ? 2 : 0;
+
+    // keep legacy-friendly stub line so the old test passes
+    console.log('staticapi build → building JSON endpoints (MVP)');
+
+    // discover routes
+    const routes = await mapRoutes({ srcAbs: config.paths.srcAbs });
+
+    // MVP: only handle static routes (dynamic/catch-all in next task)
+    const staticRoutes = routes.filter((r) => r.type === 'static');
+    const dynRoutes = routes.filter((r) => r.type === 'dynamic');
+    const catRoutes = routes.filter((r) => r.type === 'catchall');
+
+    // prepare outDir (clean, then write)
+    await emptyDir(config.paths.outAbs);
+
+    let fileCount = 0;
+    let byteCount = 0;
+    let skippedDynamic = 0;
+
+    for (const r of staticRoutes) {
+      const val = await loadModuleValue(r.file);
+      const json = JSON.stringify(val, null, space) + (pretty ? '\n' : '');
+      const outFile = routeToOutPath({ outAbs: config.paths.outAbs, route: r.route });
+      await writeFileEnsured(outFile, json);
+      fileCount++;
+      byteCount += Buffer.byteLength(json);
+    }
+
+    // helper: materialize a concrete route from tokens + param segments
+    async function emitConcreteRoute(r, segs) {
+      const concreteRoute = toConcrete(r.route, r.segments, segs);
+      const params = toParams(r.segments, concreteRoute);
+      const val = await loadModuleValue(r.file, { params });
+      const json = JSON.stringify(val, null, space) + (pretty ? '\n' : '');
+      const outFile = routeToOutPath({ outAbs: config.paths.outAbs, route: concreteRoute });
+      await writeFileEnsured(outFile, json);
+      fileCount++;
+      byteCount += Buffer.byteLength(json);
+    }
+
+    // dynamic: expect [['val'], ...] from loadPaths()
+    for (const r of dynRoutes) {
+      const list = await loadPaths(r.file, r);
+      if (!list) {
+        skippedDynamic++;
+        continue;
+      }
+      const seen = new Set();
+      for (const segs of list) {
+        const concrete = toConcrete(r.route, r.segments, segs);
+        if (seen.has(concrete)) continue;
+        seen.add(concrete);
+        await emitConcreteRoute(r, segs);
+      }
+    }
+
+    // catch-all: expect [['a','b'], ['guide'], ...]
+    for (const r of catRoutes) {
+      const list = await loadPaths(r.file, r);
+      if (!list) {
+        skippedDynamic++;
+        continue;
+      }
+      const seen = new Set();
+      for (const segs of list) {
+        const concrete = toConcrete(r.route, r.segments, segs);
+        if (seen.has(concrete)) continue;
+        seen.add(concrete);
+        await emitConcreteRoute(r, segs);
+      }
+    }
+
+    const elapsed = Date.now() - t0;
+
+    const extra = skippedDynamic ? `, skipped ${skippedDynamic} dynamic route(s)` : '';
+    console.log(
+      `[staticapi] wrote ${fileCount} file(s), ${formatBytes(byteCount)} in ${elapsed} ms${extra}`
+    );
+    return 0;
+  } catch (err) {
+    if (err instanceof ConfigError) {
+      console.error(`[staticapi] Config error: ${err.message}`);
+      return 1;
+    }
+    // LoaderError already includes file path; show as-is
+    if (err && err.name === 'LoaderError') {
+      console.error(`[staticapi] ${err.message}`);
+      return 1;
+    }
+    console.error('[staticapi] Build failed:', err?.stack || err?.message || err);
+    return 1;
+  }
+}
+
+===== FILE: packages/cli/src/commands/dev.js =====
+export default async function devCmd(_argv) {
+  console.log('staticapi dev → starting dev server (stub)');
+}
+
+===== FILE: packages/cli/src/commands/init.js =====
+export default async function initCmd(_argv) {
+  console.log('staticapi init → scaffolding a new StaticAPI project (stub)');
+}
+
+===== FILE: packages/cli/src/commands/preview.js =====
+export default async function previewCmd(_argv) {
+  console.log('staticapi preview → previewing built JSON (stub)');
+}
+
+===== FILE: packages/cli/src/config/defaults.js =====
+export const DEFAULT_CONFIG = {
+  srcDir: 'src-api',
+  outDir: 'api-out',
+};
+
+===== FILE: packages/cli/src/config/loadConfig.js =====
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { DEFAULT_CONFIG } from './defaults.js';
+import { validateAndNormalize, ConfigError } from './validate.js';
+
+export async function loadConfig({ cwd = process.cwd(), flags = {} } = {}) {
+  const file = path.join(cwd, 'staticapi.config.js');
+  let fromFile = false;
+  let fileCfg = {};
+
+  try {
+    await fs.access(file);
+    fromFile = true;
+    const mod = await import(pathToFileURL(file).href);
+    fileCfg = (mod?.default ?? mod?.config ?? mod) || {};
+    if (typeof fileCfg !== 'object' || fileCfg == null || Array.isArray(fileCfg)) {
+      throw new ConfigError('Config file must export an object (default or named "config")');
+    }
+  } catch (err) {
+    if (err?.code !== 'ENOENT') {
+      const e = err instanceof Error ? err : new Error(String(err));
+      e.message = `Failed to load "staticapi.config.js": ${e.message}`;
+      throw e;
+    }
+    // no config file → fine
+  }
+
+  // Merge: defaults <- file <- flags
+  const merged = {
+    ...DEFAULT_CONFIG,
+    ...fileCfg,
+    ...pickFlags(flags),
+  };
+
+  // Validate & expand absolute paths
+  const finalCfg = validateAndNormalize(merged, { cwd });
+  return { config: finalCfg, source: { fromFile, filePath: file } };
+}
+
+function pickFlags(flags) {
+  const o = {};
+  if (flags.srcDir != null) o.srcDir = String(flags.srcDir);
+  if (flags.outDir != null) o.outDir = String(flags.outDir);
+  return o;
+}
+
+===== FILE: packages/cli/src/config/validate.js =====
+import path from 'node:path';
+
+export class ConfigError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'ConfigError';
+  }
+}
+
+export function validateAndNormalize(userCfg, { cwd = process.cwd() } = {}) {
+  const cfg = { ...userCfg };
+
+  for (const key of ['srcDir', 'outDir']) {
+    if (typeof cfg[key] !== 'string' || !cfg[key].trim()) {
+      throw new ConfigError(`"${key}" must be a non-empty string`);
+    }
+    if (path.isAbsolute(cfg[key])) {
+      throw new ConfigError(`"${key}" must be a relative path. Got absolute: ${cfg[key]}`);
+    }
+    // normalize separators & remove ./ and a/../b
+    const normalized = path.posix.normalize(cfg[key].replaceAll(path.sep, '/'));
+    if (normalized.startsWith('..')) {
+      throw new ConfigError(`"${key}" cannot traverse outside the project: ${normalized}`);
+    }
+    cfg[key] = normalized;
+  }
+
+  if (cfg.srcDir === cfg.outDir) {
+    throw new ConfigError(`"srcDir" and "outDir" must differ (both "${cfg.srcDir}")`);
+  }
+
+  return {
+    ...cfg,
+    paths: {
+      srcAbs: path.join(cwd, cfg.srcDir),
+      outAbs: path.join(cwd, cfg.outDir),
+    },
+  };
+}
+
+===== FILE: packages/cli/src/help.js =====
+export const HELP = `staticapi — Static API generator
+
+Usage:
+  staticapi <command> [options]
+
+Commands:
+  init        Scaffold a new StaticAPI project
+  build       Build static JSON endpoints
+  dev         Start dev mode (watch & rebuild)
+  preview     Serve the built JSON files
+
+Global options:
+  -h, --help      Show help
+  -v, --version   Show version
+
+Examples:
+  staticapi init
+  staticapi build
+  staticapi dev
+  staticapi preview
+`;
+
+===== FILE: packages/cli/src/index.js =====
+import { createRequire } from 'node:module';
+import { HELP } from './help.js';
+import initCmd from './commands/init.js';
+import buildCmd from './commands/build.js';
+import devCmd from './commands/dev.js';
+import previewCmd from './commands/preview.js';
+
+const require = createRequire(import.meta.url);
+const { version } = require('../package.json');
+
+export async function run(argv = process.argv.slice(2)) {
+  const [cmd, ...rest] = argv;
+
+  if (!cmd || cmd === '-h' || cmd === '--help') {
+    console.log(HELP);
+    return 0;
+  }
+
+  if (cmd === '-v' || cmd === '--version') {
+    console.log(`staticapi v${version}`);
+    return 0;
+  }
+
+  switch (cmd) {
+    case 'init':
+      return await initCmd(rest);
+    case 'build':
+      return await buildCmd(rest);
+    case 'dev':
+      return await devCmd(rest);
+    case 'preview':
+      return await previewCmd(rest);
+    default:
+      console.error(`Unknown command: ${cmd}\n`);
+      console.log(HELP);
+      return 1;
+  }
+}
+
+===== FILE: packages/cli/src/loader/errors.js =====
+export class LoaderError extends Error {
+  constructor(file, message) {
+    super(`[module:${file}] ${message}`);
+    this.name = 'LoaderError';
+    this.file = file;
+  }
+}
+
+export class SerializationError extends Error {
+  constructor(message, atPath) {
+    super(`${message}${atPath ? ` at ${atPath}` : ''}`);
+    this.name = 'SerializationError';
+    this.atPath = atPath || '$';
+  }
+}
+
+===== FILE: packages/cli/src/loader/loadModuleValue.js =====
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { LoaderError } from './errors.js';
+import { assertSerializable } from './serializeGuard.js';
+
+/**
+ * Load a module file (ESM or CJS), resolve its value:
+ *  - if it exports `async function data()`, call it (no args) and await.
+ *  - else if default export is a function, call and await.
+ *  - else if default export is a value, use it.
+ * Then verify JSON-serializability.
+ */
+export async function loadModuleValue(fileAbs, args = {}) {
+  const fileInfo = short(fileAbs);
+  let mod;
+  try {
+    mod = await import(pathToFileURL(fileAbs).href);
+  } catch (e) {
+    throw new LoaderError(fileInfo, `Failed to import: ${e.message}`);
+  }
+
+  let producer = null;
+  if (typeof mod?.data === 'function') producer = mod.data;
+  else if (typeof mod?.default === 'function') producer = mod.default;
+
+  let value;
+  try {
+    if (producer) value = await producer(args);
+    else if ('default' in (mod || {})) value = mod.default;
+    else
+      throw new LoaderError(
+        fileInfo,
+        `No export found. Use 'export async function data()' or 'export default <value|function>'.`
+      );
+  } catch (e) {
+    if (e instanceof LoaderError) throw e;
+    throw new LoaderError(fileInfo, `Error executing module: ${e.message}`);
+  }
+
+  try {
+    assertSerializable(value, '$');
+  } catch (e) {
+    throw new LoaderError(fileInfo, `Not JSON-serializable: ${e.message}`);
+  }
+
+  return value;
+}
+
+function short(p) {
+  // Show path relative to repo root for nicer messages
+  try {
+    return path.relative(process.cwd(), p) || p;
+  } catch {
+    return p;
+  }
+}
+
+===== FILE: packages/cli/src/loader/loadPaths.js =====
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { LoaderError } from './errors.js';
+
+export async function loadPaths(fileAbs, { route, type, segments }) {
+  const fileInfo = short(fileAbs);
+  let mod;
+  try {
+    mod = await import(pathToFileURL(fileAbs).href);
+  } catch (e) {
+    throw new LoaderError(fileInfo, `Failed to import for paths(): ${e.message}`);
+  }
+  if (typeof mod?.paths !== 'function') return null;
+
+  let res;
+  try {
+    res = await mod.paths();
+  } catch (e) {
+    throw new LoaderError(fileInfo, `paths() threw: ${e.message}`);
+  }
+  if (!Array.isArray(res)) {
+    throw new LoaderError(fileInfo, `paths() must return an array`);
+  }
+
+  if (type === 'dynamic') {
+    // /users/:id → string[]
+    for (const v of res) {
+      if (typeof v !== 'string')
+        throw new LoaderError(fileInfo, `paths() for ${route} must be string[]`);
+      if (!v)
+        throw new LoaderError(
+          fileInfo,
+          `paths() entry for :${paramName(segments)} cannot be empty`
+        );
+      if (v.includes('/'))
+        throw new LoaderError(
+          fileInfo,
+          `paths() entry for :${paramName(segments)} must not contain '/'`
+        );
+    }
+    return res.map((v) => [v]); // normalize to array-of-segments
+  }
+
+  if (type === 'catchall') {
+    // /docs/*slug → (string | string[])[]
+    const out = [];
+    for (const v of res) {
+      if (typeof v === 'string') {
+        if (!v)
+          throw new LoaderError(
+            fileInfo,
+            `paths() entry for *${paramName(segments)} must be non-empty`
+          );
+        out.push([v]);
+      } else if (Array.isArray(v)) {
+        if (v.length === 0) {
+          throw new LoaderError(
+            fileInfo,
+            `paths() entry for *${paramName(segments)} must be non-empty`
+          );
+        }
+        for (const s of v) {
+          if (typeof s !== 'string' || !s) {
+            throw new LoaderError(
+              fileInfo,
+              `paths() entry for *${paramName(segments)} must contain non-empty strings`
+            );
+          }
+          if (s.includes('/')) {
+            throw new LoaderError(
+              fileInfo,
+              `paths() entry segment for *${paramName(segments)} must not contain '/'`
+            );
+          }
+        }
+        out.push(v);
+      } else {
+        throw new LoaderError(fileInfo, `paths() for ${route} must be (string | string[])[]`);
+      }
+    }
+    return out;
+  }
+
+  // static shouldn't have paths()
+  return null;
+}
+
+function paramName(segTokens) {
+  // segTokens like ['users', ':id'] or ['docs','*slug']
+  const tok = segTokens.find((t) => t.startsWith(':') || t.startsWith('*'));
+  return tok ? tok.slice(1) : 'param';
+}
+
+function short(p) {
+  try {
+    return path.relative(process.cwd(), p) || p;
+  } catch {
+    return p;
+  }
+}
+
+===== FILE: packages/cli/src/loader/serializeGuard.js =====
+import { SerializationError } from './errors.js';
+
+const PLAIN_TAG = '[object Object]';
+
+export function assertSerializable(value, atPath = '$', seen = new WeakSet()) {
+  const t = typeof value;
+
+  if (value === null || t === 'string' || t === 'boolean') return;
+  if (t === 'number') {
+    if (!Number.isFinite(value)) throw new SerializationError('Number must be finite', atPath);
+    return;
+  }
+  if (t === 'bigint') throw new SerializationError('BigInt is not JSON-serializable', atPath);
+  if (t === 'symbol') throw new SerializationError('Symbol is not JSON-serializable', atPath);
+  if (t === 'function') throw new SerializationError('Function is not JSON-serializable', atPath);
+
+  // Objects / Arrays
+  if (typeof value === 'object') {
+    if (seen.has(value)) throw new SerializationError('Circular structure detected', atPath);
+    seen.add(value);
+
+    if (Array.isArray(value)) {
+      for (let i = 0; i < value.length; i++) {
+        assertSerializable(value[i], `${atPath}[${i}]`, seen);
+      }
+      return;
+    }
+
+    // Plain objects only
+    const tag = Object.prototype.toString.call(value);
+    const proto = Object.getPrototypeOf(value);
+    const isPlain = tag === PLAIN_TAG && (proto === Object.prototype || proto === null);
+    if (!isPlain) {
+      const name = (value && value.constructor && value.constructor.name) || tag;
+      throw new SerializationError(`Only plain objects/arrays allowed (got ${name})`, atPath);
+    }
+
+    // No symbol keys
+    if (Object.getOwnPropertySymbols(value).length) {
+      throw new SerializationError('Symbol keys are not JSON-serializable', atPath);
+    }
+
+    for (const k of Object.keys(value)) {
+      assertSerializable(value[k], `${atPath}.${k}`, seen);
+    }
+    return;
+  }
+
+  // Anything else falls through as unsupported
+  throw new SerializationError(`Unsupported type: ${t}`, atPath);
+}
+
+===== FILE: packages/cli/src/router/mapRoutes.js =====
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
+const VALID_EXT = new Set(['.js', '.mjs', '.cjs']);
+
+export async function mapRoutes({ srcAbs }) {
+  const entries = await walk(srcAbs);
+  const routes = [];
+
+  for (const fileAbs of entries) {
+    const rel = path.posix.normalize(fileAbs.replaceAll(path.sep, '/').slice(srcAbs.length + 1));
+    if (rel.startsWith('_')) continue; // ignore underscore roots
+    const ext = path.extname(rel);
+    if (!VALID_EXT.has(ext)) continue;
+
+    const relNoExt = rel.slice(0, -ext.length);
+    // normalize & trim each segment to avoid cases like " _private"
+    const segments = relNoExt
+      .split('/')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    // ignore any path segment starting with '_' (private helpers)
+    // ignore “private” segments (underscore) after trimming
+    if (segments.some((s) => s.startsWith('_'))) continue;
+
+    // Compute route path and type
+    const { route, type, normSegments } = toRoute(segments);
+
+    routes.push({
+      file: fileAbs,
+      route,
+      type, // 'static' | 'dynamic' | 'catchall'
+      segments: normSegments, // normalized tokens for sorting (static or :param or *catch)
+    });
+  }
+
+  // Deterministic sort
+  routes.sort(compareRoutes);
+
+  return routes;
+}
+
+async function walk(dir) {
+  const out = [];
+  const stack = [dir];
+  while (stack.length) {
+    const cur = stack.pop();
+    const items = await fs.readdir(cur, { withFileTypes: true });
+    for (const it of items) {
+      const a = path.join(cur, it.name);
+      if (it.isDirectory()) {
+        stack.push(a);
+      } else if (it.isFile()) {
+        out.push(a);
+      }
+    }
+  }
+  return out;
+}
+
+function toRoute(segments) {
+  // Handle index collapsing: foo/index -> /foo
+  const last = segments[segments.length - 1];
+  const isIndex = last === 'index';
+  const segs = isIndex ? segments.slice(0, -1) : segments;
+
+  // Normalize tokens:
+  //  - static: 'users' stays 'users'
+  //  - dynamic: '[id]' => ':id'
+  //  - catch-all: '[...all]' => '*all'
+  let type = 'static';
+  const normSegments = segs.map((s) => {
+    if (isCatchAll(s)) {
+      type = 'catchall';
+      return '*' + s.slice(4, -1); // [...all] -> *all
+    }
+    if (isDynamic(s)) {
+      if (type !== 'catchall') type = 'dynamic';
+      return ':' + s.slice(1, -1); // [id] -> :id
+    }
+    return s;
+  });
+
+  const route = '/' + normSegments.filter(Boolean).join('/');
+
+  // special case: empty means root (/)
+  const finalRoute = route === '/' ? '/' : route;
+
+  return { route: finalRoute, type, normSegments };
+}
+
+function isDynamic(seg) {
+  return seg.startsWith('[') && seg.endsWith(']') && !seg.startsWith('[...');
+}
+
+function isCatchAll(seg) {
+  return seg.startsWith('[...') && seg.endsWith(']');
+}
+
+// Deterministic sort:
+// 1) static < dynamic < catchall
+// 2) lexicographic by route (so /blog/archive comes before /users)
+// 3) fewer segments as a final tiebreaker
+function compareRoutes(a, b) {
+  const rank = { static: 0, dynamic: 1, catchall: 2 };
+  if (rank[a.type] !== rank[b.type]) return rank[a.type] - rank[b.type];
+  const byRoute = a.route.localeCompare(b.route);
+  if (byRoute !== 0) return byRoute;
+  return a.segments.length - b.segments.length;
+}
+
+===== FILE: packages/cli/src/util/bytes.js =====
+export function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let u = -1;
+  do {
+    n /= 1024;
+    u++;
+  } while (n >= 1024 && u < units.length - 1);
+  return `${n.toFixed(n >= 10 ? 0 : 1)} ${units[u]}`;
+}
+
+===== FILE: packages/cli/src/util/fsx.js =====
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
+export async function ensureDir(p) {
+  await fs.mkdir(p, { recursive: true });
+}
+export async function writeFileEnsured(fileAbs, data) {
+  await ensureDir(path.dirname(fileAbs));
+  await fs.writeFile(fileAbs, data);
+}
+export async function emptyDir(dirAbs) {
+  // non-destructive: create if missing, else clean
+  await ensureDir(dirAbs);
+  const entries = await fs.readdir(dirAbs, { withFileTypes: true });
+  await Promise.all(
+    entries.map(async (e) => {
+      const p = path.join(dirAbs, e.name);
+      if (e.isDirectory()) await fs.rm(p, { recursive: true, force: true });
+      else await fs.rm(p, { force: true });
+    })
+  );
+}
+
+===== FILE: packages/cli/src/util/readFlags.js =====
+export function readFlags(argv = []) {
+  const out = {};
+  for (let i = 0; i < argv.length; i++) {
+    const t = argv[i];
+    if (!t.startsWith('-')) continue;
+
+    if (t.startsWith('--')) {
+      const [k, v] = t.slice(2).split('=', 2);
+      // allow any flag, we’ll read only the ones we need in commands
+      if (v !== undefined) out[k] = coerce(v);
+      else {
+        const next = argv[i + 1];
+        if (next && !next.startsWith('-')) {
+          out[k] = coerce(next);
+          i++;
+        } else out[k] = true; // <- bare flag now boolean true
+      }
+    }
+  }
+  return out;
+}
+
+function coerce(v) {
+  if (v === 'true') return true;
+  if (v === 'false') return false;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : v;
+}
+
+===== FILE: packages/cli/test/_runSync.js =====
+import { execFileSync } from 'node:child_process';
+
+export function runNodeSync(bin, args = []) {
+  try {
+    const stdout = execFileSync(process.execPath, [bin, ...args], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    return { code: 0, stdout, stderr: '' };
+  } catch (e) {
+    return {
+      code: e.status ?? 1,
+      stdout: String(e.stdout ?? ''),
+      stderr: String(e.stderr ?? e.message ?? ''),
+    };
+  }
+}
+
+===== FILE: packages/cli/test/_tmp.js =====
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+export async function makeTmp() {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'staticapi-'));
+  return {
+    cwd: dir,
+    join: (...p) => path.join(dir, ...p),
+    cleanup: () => fs.rm(dir, { recursive: true, force: true }),
+  };
+}
+
+===== FILE: packages/cli/test/build-dynamic.test.js =====
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { makeTmp } from './_tmp.js';
+
+const BIN = path.resolve('packages/cli/bin/staticapi.js');
+
+test('build emits dynamic and catch-all routes via paths()', async (t) => {
+  const tmp = await makeTmp();
+  await fs.mkdir(tmp.join('src-api/users'), { recursive: true });
+  await fs.mkdir(tmp.join('src-api/docs'), { recursive: true });
+
+  await fs.writeFile(
+    tmp.join('src-api/users/[id].js'),
+    `
+export async function paths(){ return ['1','2']; }
+export async function data({ params }){ return { user: params.id }; }
+`
+  );
+  await fs.writeFile(
+    tmp.join('src-api/docs/[...slug].js'),
+    `
+export async function paths(){ return [['a','b'], ['guide']]; }
+export async function data({ params }){ return { doc: params.slug.join('/') }; }
+`
+  );
+
+  const { stdout, stderr, code } = await new Promise((resolve) => {
+    execFile(
+      process.execPath,
+      [BIN, 'build', '--pretty'],
+      { cwd: tmp.cwd, encoding: 'utf8' },
+      (err, stdout, stderr) => resolve({ stdout, stderr, code: err ? (err.code ?? 1) : 0 })
+    );
+  });
+
+  if (code !== 0) {
+    throw new Error(`CLI exited with ${code}\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}`);
+  }
+  assert.match(stdout, /wrote \d+ file/);
+
+  const u1 = JSON.parse(await fs.readFile(tmp.join('api-out/users/1/index.json'), 'utf8'));
+  const u2 = JSON.parse(await fs.readFile(tmp.join('api-out/users/2/index.json'), 'utf8'));
+  const d1 = JSON.parse(await fs.readFile(tmp.join('api-out/docs/a/b/index.json'), 'utf8'));
+  const d2 = JSON.parse(await fs.readFile(tmp.join('api-out/docs/guide/index.json'), 'utf8'));
+  assert.equal(u1.user, '1');
+  assert.equal(u2.user, '2');
+  assert.equal(d1.doc, 'a/b');
+  assert.equal(d2.doc, 'guide');
+
+  t.after(async () => {
+    await tmp.cleanup();
+  });
+});
+
+===== FILE: packages/cli/test/build-invalid-paths.test.js =====
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { makeTmp } from './_tmp.js';
+
+const BIN = path.resolve('packages/cli/bin/staticapi.js');
+
+test('errors on invalid paths() return', async (t) => {
+  const tmp = await makeTmp();
+  await fs.mkdir(tmp.join('src-api/users'), { recursive: true });
+  await fs.writeFile(
+    tmp.join('src-api/users/[id].js'),
+    `
+export async function paths(){ return 123; } // bad: not an array
+export default {}
+`
+  );
+  await expectFail(/paths\(\) must return an array/);
+
+  await fs.writeFile(
+    tmp.join('src-api/users/[id].js'),
+    ` 
+export async function paths(){ return [null]; } // bad entry
+export default {}
+`
+  );
+  await expectFail(/paths\(\) for \/users\/:id must be string\[\]/);
+
+  await fs.writeFile(
+    tmp.join('src-api/users/[id].js'),
+    ` 
+export async function paths(){ return ['']; } // empty
+export default {}
+`
+  );
+  await expectFail(/entry for :id cannot be empty/);
+
+  await fs.writeFile(
+    tmp.join('src-api/users/[id].js'),
+    ` 
+export async function paths(){ return ['a/b']; } // slash
+export default {}
+`
+  );
+  await expectFail(/must not contain '\/'/);
+
+  async function expectFail(rx) {
+    await new Promise((resolve, reject) => {
+      execFile(process.execPath, [BIN, 'build'], { cwd: tmp.cwd }, (err, _s, stderr) => {
+        if (!err) return reject(new Error('Expected failure'));
+        if (!rx.test(String(_s + stderr))) return reject(new Error('Message mismatch'));
+        resolve();
+      });
+    });
+  }
+
+  t.after(async () => {
+    await tmp.cleanup();
+  });
+});
+
+===== FILE: packages/cli/test/build-skip-dynamic.test.js =====
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { makeTmp } from './_tmp.js';
+
+const BIN = path.resolve('packages/cli/bin/staticapi.js');
+
+test('skips dynamic routes without paths()', async (t) => {
+  const tmp = await makeTmp();
+  await fs.mkdir(tmp.join('src-api/users'), { recursive: true });
+  await fs.writeFile(tmp.join('src-api/index.js'), 'export default {ok:true}\n');
+  await fs.writeFile(tmp.join('src-api/users/[id].js'), 'export default {hint:"runtime-only"}\n');
+
+  const out = execFileSync(process.execPath, [BIN, 'build'], {
+    encoding: 'utf8',
+    cwd: tmp.cwd,
+  });
+  assert.match(out, /skipped 1 dynamic route/);
+
+  const root = JSON.parse(await fs.readFile(tmp.join('api-out/index.json'), 'utf8'));
+  assert.equal(root.ok, true);
+
+  await assert.rejects(() => fs.readFile(tmp.join('api-out/users/1/index.json'), 'utf8'));
+
+  t.after(async () => {
+    await fs.rm('src-api', { recursive: true, force: true });
+    await fs.rm('api-out', { recursive: true, force: true });
+    await tmp.cleanup();
+  });
+});
+
+===== FILE: packages/cli/test/build-smoke.test.js =====
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { makeTmp } from './_tmp.js';
+
+const BIN = path.resolve('packages/cli/bin/staticapi.js');
+
+test('build writes static JSON files and prints summary', async (t) => {
+  const tmp = await makeTmp();
+  await fs.mkdir(tmp.join('src-api/blog'), { recursive: true });
+  await fs.writeFile(tmp.join('src-api/index.js'), 'export default {hello:"world"}\n');
+  await fs.writeFile(tmp.join('src-api/blog/archive.js'), 'export default {page:"archive"}\n');
+
+  const stdout = execFileSync(process.execPath, [BIN, 'build'], {
+    encoding: 'utf8',
+    cwd: tmp.cwd,
+  });
+  assert.match(stdout, /wrote \d+ file\(s\), .* in \d+ ms/);
+
+  const a = await fs.readFile(tmp.join('api-out/index.json'), 'utf8');
+  const b = await fs.readFile(tmp.join('api-out/blog/archive/index.json'), 'utf8');
+  assert.equal(JSON.parse(a).hello, 'world');
+  assert.equal(JSON.parse(b).page, 'archive');
+
+  t.after(async () => {
+    await fs.rm('src-api', { recursive: true, force: true });
+    await fs.rm('api-out', { recursive: true, force: true });
+    await tmp.cleanup();
+  });
+});
+
+===== FILE: packages/cli/test/cli.test.js =====
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { resolve } from 'node:path';
+
+const BIN = resolve('packages/cli/bin/staticapi.js');
+
+function run(args = []) {
+  return new Promise((resolve, reject) => {
+    execFile(process.execPath, [BIN, ...args], (err, stdout, stderr) => {
+      if (err)
+        return reject(Object.assign(err, { stdout: String(stdout), stderr: String(stderr) }));
+      resolve({ stdout: String(stdout) });
+    });
+  });
+}
+
+test('--help lists commands', async () => {
+  const { stdout } = await run(['--help']);
+  for (const word of ['init', 'build', 'dev', 'preview']) {
+    assert.match(stdout, new RegExp(`\\b${word}\\b`));
+  }
+});
+
+for (const [cmd, text] of [
+  ['init', 'scaffolding'],
+  ['build', 'building'],
+  ['dev', 'starting'],
+  ['preview', 'previewing'],
+]) {
+  test(`${cmd} prints stub output`, async () => {
+    const { stdout } = await run([cmd]);
+    assert.match(stdout.toLowerCase(), new RegExp(text));
+  });
+}
+
+===== FILE: packages/cli/test/loader.fixture/bad-cycle.js =====
+const a = {};
+a.self = a;
+export default a;
+
+===== FILE: packages/cli/test/loader.fixture/bad-func.js =====
+export default { a: () => 1 };
+
+===== FILE: packages/cli/test/loader.fixture/bad-nonplain.js =====
+export default new Date();
+
+===== FILE: packages/cli/test/loader.fixture/bad-number.js =====
+export default { n: Infinity };
+
+===== FILE: packages/cli/test/loader.fixture/cjs-fn.cjs =====
+module.exports = async function () {
+  return { ok: 5 };
+};
+
+===== FILE: packages/cli/test/loader.fixture/cjs-value.cjs =====
+module.exports = { ok: 4 };
+
+===== FILE: packages/cli/test/loader.fixture/esm-fn-default.js =====
+export default async function () {
+  return { ok: 3 };
+}
+
+===== FILE: packages/cli/test/loader.fixture/esm-fn.js =====
+export async function data() {
+  return { ok: 2 };
+}
+
+===== FILE: packages/cli/test/loader.fixture/esm-value.js =====
+export default { ok: 1 };
+
+===== FILE: packages/cli/test/loader.test.js =====
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import { loadModuleValue } from '../src/loader/loadModuleValue.js';
+
+const FIX = path.resolve('packages/cli/test/loader.fixture');
+
+function f(name) {
+  return path.join(FIX, name);
+}
+
+test('ESM default value', async () => {
+  const v = await loadModuleValue(f('esm-value.js'));
+  assert.deepEqual(v, { ok: 1 });
+});
+
+test('ESM data() function', async () => {
+  const v = await loadModuleValue(f('esm-fn.js'));
+  assert.deepEqual(v, { ok: 2 });
+});
+
+test('ESM default function', async () => {
+  const v = await loadModuleValue(f('esm-fn-default.js'));
+  assert.deepEqual(v, { ok: 3 });
+});
+
+test('CJS default value', async () => {
+  const v = await loadModuleValue(f('cjs-value.cjs'));
+  assert.deepEqual(v, { ok: 4 });
+});
+
+test('CJS default function', async () => {
+  const v = await loadModuleValue(f('cjs-fn.cjs'));
+  assert.deepEqual(v, { ok: 5 });
+});
+
+test('rejects value containing a function', async () => {
+  await assert.rejects(
+    () => loadModuleValue(f('bad-func.js')),
+    /Not JSON-serializable: Function is not JSON-serializable/
+  );
+});
+
+test('rejects circular structures', async () => {
+  await assert.rejects(
+    () => loadModuleValue(f('bad-cycle.js')),
+    /Not JSON-serializable: Circular structure detected/
+  );
+});
+
+test('rejects non-plain objects (e.g., Date)', async () => {
+  await assert.rejects(
+    () => loadModuleValue(f('bad-nonplain.js')),
+    /Not JSON-serializable: Only plain objects\/arrays allowed/
+  );
+});
+
+test('rejects non-finite numbers', async () => {
+  await assert.rejects(
+    () => loadModuleValue(f('bad-number.js')),
+    /Not JSON-serializable: Number must be finite/
+  );
+});
+
+===== FILE: packages/cli/test/router.fixture/src-api/_internal/util.js =====
+export default {};
+
+===== FILE: packages/cli/test/router.fixture/src-api/_private/index.js =====
+export default {};
+
+===== FILE: packages/cli/test/router.fixture/src-api/blog/[slug].js =====
+export default {};
+
+===== FILE: packages/cli/test/router.fixture/src-api/blog/archive.js =====
+export default {};
+
+===== FILE: packages/cli/test/router.fixture/src-api/files/[...all].js =====
+export default {};
+
+===== FILE: packages/cli/test/router.fixture/src-api/index.js =====
+export default {};
+
+===== FILE: packages/cli/test/router.fixture/src-api/users/[id].js =====
+export default {};
+
+===== FILE: packages/cli/test/router.fixture/src-api/users/index.js =====
+export default {};
+
+===== FILE: packages/cli/test/router.test.js =====
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import { mapRoutes } from '../src/router/mapRoutes.js';
+
+const FIX = path.resolve('packages/cli/test/router.fixture/src-api');
+
+test('maps files to routes with stable order', async () => {
+  const routes = await mapRoutes({ srcAbs: FIX });
+
+  const paths = routes.map((r) => r.route);
+
+  // Expect exact, deterministic order:
+  // 1) statics
+  // 2) dynamics
+  // 3) catch-all
+  assert.deepEqual(paths, [
+    '/', // index.js
+    '/blog/archive', // blog/archive.js
+    '/users', // users/index.js
+    '/blog/:slug', // blog/[slug].js
+    '/users/:id', // users/[id].js
+    '/files/*all', // files/[...all].js
+  ]);
+
+  // Types
+  const typeByPath = Object.fromEntries(routes.map((r) => [r.route, r.type]));
+  assert.equal(typeByPath['/'], 'static');
+  assert.equal(typeByPath['/blog/archive'], 'static');
+  assert.equal(typeByPath['/users'], 'static');
+  assert.equal(typeByPath['/blog/:slug'], 'dynamic');
+  assert.equal(typeByPath['/users/:id'], 'dynamic');
+  assert.equal(typeByPath['/files/*all'], 'catchall');
+
+  // Segments sanity (normalized tokens)
+  const check = (p, segs) => assert.deepEqual(routes.find((r) => r.route === p).segments, segs);
+  check('/', []);
+  check('/users', ['users']);
+  check('/blog/:slug', ['blog', ':slug']);
+  check('/files/*all', ['files', '*all']);
+});
+
+test('ignores underscore files/folders and non-js extensions', async () => {
+  const routes = await mapRoutes({ srcAbs: FIX });
+  const paths = routes.map((r) => r.route);
+  // underscore ones are not present
+  assert(!paths.some((p) => p.startsWith('/_')));
+});
+
+===== FILE: packages/core/package.json =====
+{
+  "name": "@staticapi/core",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "node ./scripts/build.js || true",
+    "lint": "eslint . --ext .js",
+    "prepublishOnly": "pnpm build"
+  }
+}
+
+===== FILE: packages/core/src/index.js =====
+export function hello(name = 'world') {
+  return `hello, ${name}`;
+}
+
+===== FILE: packages/core/test/index.test.js =====
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { hello } from '../src/index.js';
+
+test('hello() returns expected greeting', () => {
+  assert.equal(hello('staticapi'), 'hello, staticapi');
+  assert.equal(hello(), 'hello, world');
+});
+
+===== FILE: pnpm-workspace.yaml =====
+packages:
+  - "packages/*"
+
+===== FILE: prettier.config.cjs =====
+/** @type {import('prettier').Config} */
+module.exports = {
+  printWidth: 100,
+  singleQuote: true,
+  semi: true,
+  trailingComma: 'es5',
+};
+
+===== FILE: src-api/docs/[...slug].js =====
+
+export async function paths(){ return [['a','b'], ['guide']]; }
+export async function data({ params }){ return { doc: params.slug.join('/') }; }
+
+===== FILE: src-api/users/[id].js =====
+
+export async function paths(){ return ['1','2']; }
+export async function data({ params }){ return { user: params.id }; }
+

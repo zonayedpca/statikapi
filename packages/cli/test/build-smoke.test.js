@@ -25,8 +25,6 @@ test('build writes static JSON files and prints summary', async (t) => {
   assert.equal(JSON.parse(b).page, 'archive');
 
   t.after(async () => {
-    await fs.rm('src-api', { recursive: true, force: true });
-    await fs.rm('api-out', { recursive: true, force: true });
     await tmp.cleanup();
   });
 });

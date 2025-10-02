@@ -25,8 +25,6 @@ test('skips dynamic routes without paths()', async (t) => {
   await assert.rejects(() => fs.readFile(tmp.join('api-out/users/1/index.json'), 'utf8'));
 
   t.after(async () => {
-    await fs.rm('src-api', { recursive: true, force: true });
-    await fs.rm('api-out', { recursive: true, force: true });
     await tmp.cleanup();
   });
 });

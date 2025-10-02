@@ -3,5 +3,5 @@ export async function paths() {
 }
 
 export async function data({ params }) {
-  return { id: params.id };
+  return { id: params.id, extra: 'value!' };
 }

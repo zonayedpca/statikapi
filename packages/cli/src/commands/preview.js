@@ -21,6 +21,23 @@ export default async function previewCmd(argv) {
   const autoOpen = flags.open === true;
 
   const { config } = await loadConfig({ flags });
+
+  const uiDir = flags.uiDir ? path.resolve(String(flags.uiDir)) : null;
+  const hasUi = uiDir && fss.existsSync(uiDir);
+
+  const MIME = {
+    '.html': 'text/html; charset=utf-8',
+    '.js': 'application/javascript; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.svg': 'image/svg+xml',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.ico': 'image/x-icon',
+    '.map': 'application/json',
+  };
+
   const outDir = config.paths.outAbs;
   const manifestPath = path.join(outDir, '.staticapi', 'manifest.json');
 
@@ -139,6 +156,33 @@ if (initial) showRoute(initial);
  `;
   }
 
+  async function tryServeFrom(rootDir, reqPath, { spaFallback = null } = {}) {
+    const target = path.normalize(path.join(rootDir, reqPath.replace(/^\/+/, '')));
+    if (!target.startsWith(rootDir)) return null; // path traversal guard
+    try {
+      const st = await fs.stat(target);
+      if (st.isDirectory()) {
+        const idx = path.join(target, 'index.html');
+        const buf = await fs.readFile(idx);
+        return { buf, ctype: MIME['.html'] };
+      }
+      const buf = await fs.readFile(target);
+      const ext = path.extname(target).toLowerCase();
+      return { buf, ctype: MIME[ext] || 'application/octet-stream' };
+    } catch {
+      if (spaFallback) {
+        try {
+          const fallback = path.join(rootDir, spaFallback);
+          const buf = await fs.readFile(fallback);
+          return { buf, ctype: MIME['.html'] };
+        } catch {
+          /* ignore */
+        }
+      }
+      return null;
+    }
+  }
+
   const server = http.createServer(async (req, res) => {
     // Always use our configured host:port to build an absolute URL for parsing.
     // Using req.headers.host can double-append the port (e.g., 127.0.0.1:8788:8788).
@@ -152,7 +196,18 @@ if (initial) showRoute(initial);
     const pathname = url.pathname;
 
     // UI shell
+    // UI root
     if (pathname === '/_ui' || pathname === '/ui' || pathname === '/ui/') {
+      if (hasUi) {
+        const served = await tryServeFrom(uiDir, 'index.html', { spaFallback: null });
+        if (served) {
+          return send(res, 200, served.buf, {
+            'Content-Type': served.ctype,
+            'Cache-Control': 'no-store',
+          });
+        }
+      }
+      // fallback to minimal HTML shell if no built UI
       const html = htmlShell();
       return send(res, 200, html, { 'Content-Type': 'text/html; charset=utf-8' });
     }
@@ -188,6 +243,26 @@ if (initial) showRoute(initial);
       });
       fss.createReadStream(fileAbs).pipe(res);
       return;
+    }
+
+    // Serve built UI (if provided)
+    // We do this AFTER helper endpoints so they keep working.
+    if (hasUi && (pathname.startsWith('/_ui') || pathname.startsWith('/ui'))) {
+      // map /_ui or /ui to the UI dist
+      // strip leading /_ui or /ui
+      const rel = pathname.replace(/^\/_?ui\/?/, ''); // e.g. "/_ui/assets/app.js" -> "assets/app.js"
+      // empty path → index.html
+      const reqPath = rel === '' ? 'index.html' : rel;
+
+      const served = await tryServeFrom(uiDir, reqPath, { spaFallback: 'index.html' });
+      if (served) {
+        return send(res, 200, served.buf, {
+          'Content-Type': served.ctype,
+          'Cache-Control': 'no-store',
+        });
+      }
+      // If we couldn't serve a file, return 404 (helpers already handled above)
+      return notFound(res);
     }
 
     // Static serve from api-out (best-effort)

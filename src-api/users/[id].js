@@ -1,3 +1,7 @@
+export async function paths() {
+  return ['1', '2', '3'];
+}
 
-export async function paths(){ return ['1','2']; }
-export async function data({ params }){ return { user: params.id }; }
+export async function data({ params }) {
+  return { id: params.id };
+}

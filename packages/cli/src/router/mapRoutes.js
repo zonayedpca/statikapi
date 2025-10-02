@@ -9,23 +9,9 @@ export async function mapRoutes({ srcAbs }) {
 
   for (const fileAbs of entries) {
     const rel = path.posix.normalize(fileAbs.replaceAll(path.sep, '/').slice(srcAbs.length + 1));
-    if (rel.startsWith('_')) continue; // ignore underscore roots
-    const ext = path.extname(rel);
-    if (!VALID_EXT.has(ext)) continue;
-
-    const relNoExt = rel.slice(0, -ext.length);
-    // normalize & trim each segment to avoid cases like " _private"
-    const segments = relNoExt
-      .split('/')
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    // ignore any path segment starting with '_' (private helpers)
-    // ignore “private” segments (underscore) after trimming
-    if (segments.some((s) => s.startsWith('_'))) continue;
-
-    // Compute route path and type
-    const { route, type, normSegments } = toRoute(segments);
+    const info = fileToRoute({ srcAbs, fileAbs });
+    if (!info) continue;
+    const { route, type, normSegments } = info;
 
     routes.push({
       file: fileAbs,
@@ -57,6 +43,24 @@ async function walk(dir) {
     }
   }
   return out;
+}
+
+/** Map a single file to route metadata, or null if ignored. */
+export function fileToRoute({ srcAbs, fileAbs }) {
+  const rel = path.posix.normalize(fileAbs.replaceAll(path.sep, '/').slice(srcAbs.length + 1));
+  if (!rel || rel.startsWith('_')) return null; // ignore underscore roots
+  const ext = path.extname(rel);
+  if (!VALID_EXT.has(ext)) return null;
+
+  const relNoExt = rel.slice(0, -ext.length);
+  const segments = relNoExt
+    .split('/')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (segments.some((s) => s.startsWith('_'))) return null;
+
+  const { route, type, normSegments } = toRoute(segments);
+  return { route, type, normSegments };
 }
 
 function toRoute(segments) {

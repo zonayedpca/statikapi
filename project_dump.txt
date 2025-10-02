@@ -33,15 +33,7 @@ shared-workspace-lockfile=true
 
 ===== FILE: .nvmrc =====
 22
-===== FILE: .vscode/extensions.json =====
-{
-  "recommendations": [
-    "dbaeumer.vscode-eslint",
-    "esbenp.prettier-vscode",
-    "EditorConfig.EditorConfig"
-  ]
-}
-
+===== FILE: .vscode/extensions.json [binary skipped] =====
 ===== FILE: README.md =====
 # Static API — Monorepo
 
@@ -54,14 +46,10 @@ shared-workspace-lockfile=true
 - `pnpm -w format` – check Prettier formatting
 - `pnpm -w format:fix` – write Prettier fixes
 
-===== FILE: api-out/docs/a/b/index.json =====
-{"doc":"a/b"}
-===== FILE: api-out/docs/guide/index.json =====
-{"doc":"guide"}
-===== FILE: api-out/users/1/index.json =====
-{"user":"1"}
-===== FILE: api-out/users/2/index.json =====
-{"user":"2"}
+===== FILE: api-out/docs/a/b/index.json [binary skipped] =====
+===== FILE: api-out/docs/guide/index.json [binary skipped] =====
+===== FILE: api-out/users/1/index.json [binary skipped] =====
+===== FILE: api-out/users/2/index.json [binary skipped] =====
 ===== FILE: eslint.config.js =====
 // eslint.config.js
 import js from '@eslint/js';
@@ -141,38 +129,7 @@ export default [
   prettier,
 ];
 
-===== FILE: package.json =====
-{
-  "name": "@staticapi/monorepo",
-  "private": true,
-  "type": "module",
-  "version": "0.1.0",
-  "workspaces": [
-    "packages/*"
-  ],
-  "scripts": {
-    "lint": "eslint . --ext .js,.mjs,.cjs",
-    "format": "prettier . --check",
-    "format:fix": "prettier . --write",
-    "test": "node --test",
-    "test:watch": "node --test --watch"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9",
-    "eslint": "^9.36.0",
-    "eslint-config-prettier": "^9.1.2",
-    "eslint-plugin-import": "^2.32.0",
-    "eslint-plugin-n": "^17.23.1",
-    "eslint-plugin-promise": "^6.6.0",
-    "globals": "^16.4.0",
-    "prettier": "^3.3.3",
-    "staticapi": "workspace:*"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
-}
-
+===== FILE: package.json [binary skipped] =====
 ===== FILE: packages/cli/bin/staticapi.js =====
 #!/usr/bin/env node
 import { run } from '../src/index.js';
@@ -183,23 +140,7 @@ const code = await run(process.argv.slice(2));
 // let stdout/stderr flush; still returns non-zero on failure
 process.exitCode = Number.isInteger(code) ? code : 0;
 
-===== FILE: packages/cli/package.json =====
-{
-  "name": "staticapi",
-  "version": "0.1.0",
-  "type": "module",
-  "bin": {
-    "staticapi": "bin/staticapi.js"
-  },
-  "dependencies": {
-    "@staticapi/core": "workspace:*"
-  },
-  "scripts": {
-    "lint": "eslint . --ext .js",
-    "dev": "node bin/staticapi.js"
-  }
-}
-
+===== FILE: packages/cli/package.json [binary skipped] =====
 ===== FILE: packages/cli/src/build/routeOutPath.js =====
 import path from 'node:path';
 
@@ -961,6 +902,8 @@ import path from 'node:path';
 
 export async function makeTmp() {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'staticapi-'));
+  // Ensure .js files in this temp workspace are treated as ESM
+  await fs.writeFile(path.join(dir, 'package.json'), JSON.stringify({ type: 'module' }), 'utf8');
   return {
     cwd: dir,
     join: (...p) => path.join(dir, ...p),
@@ -1118,8 +1061,6 @@ test('skips dynamic routes without paths()', async (t) => {
   await assert.rejects(() => fs.readFile(tmp.join('api-out/users/1/index.json'), 'utf8'));
 
   t.after(async () => {
-    await fs.rm('src-api', { recursive: true, force: true });
-    await fs.rm('api-out', { recursive: true, force: true });
     await tmp.cleanup();
   });
 });
@@ -1152,8 +1093,6 @@ test('build writes static JSON files and prints summary', async (t) => {
   assert.equal(JSON.parse(b).page, 'archive');
 
   t.after(async () => {
-    await fs.rm('src-api', { recursive: true, force: true });
-    await fs.rm('api-out', { recursive: true, force: true });
     await tmp.cleanup();
   });
 });
@@ -1369,25 +1308,7 @@ test('ignores underscore files/folders and non-js extensions', async () => {
   assert(!paths.some((p) => p.startsWith('/_')));
 });
 
-===== FILE: packages/core/package.json =====
-{
-  "name": "@staticapi/core",
-  "version": "0.1.0",
-  "type": "module",
-  "main": "dist/index.js",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js"
-    }
-  },
-  "files": ["dist"],
-  "scripts": {
-    "build": "node ./scripts/build.js || true",
-    "lint": "eslint . --ext .js",
-    "prepublishOnly": "pnpm build"
-  }
-}
-
+===== FILE: packages/core/package.json [binary skipped] =====
 ===== FILE: packages/core/src/index.js =====
 export function hello(name = 'world') {
   return `hello, ${name}`;

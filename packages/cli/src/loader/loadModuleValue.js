@@ -11,10 +11,14 @@ import { assertSerializable } from './serializeGuard.js';
  * Then verify JSON-serializability.
  */
 export async function loadModuleValue(fileAbs, args = {}) {
+  const fresh = args?.__fresh === true; // dev watcher sets this
+
   const fileInfo = short(fileAbs);
   let mod;
   try {
-    mod = await import(pathToFileURL(fileAbs).href);
+    const u = new URL(pathToFileURL(fileAbs).href);
+    if (fresh) u.search = `v=${Date.now()}-${Math.random()}`;
+    mod = await import(u.href);
   } catch (e) {
     throw new LoaderError(fileInfo, `Failed to import: ${e.message}`);
   }

@@ -6,7 +6,8 @@
     "staticapi": "bin/staticapi.js"
   },
   "dependencies": {
-    "@staticapi/core": "workspace:*"
+    "@staticapi/core": "workspace:*",
+    "chokidar": "^3.6.0"
   },
   "scripts": {
     "lint": "eslint . --ext .js",

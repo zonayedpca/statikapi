@@ -2,11 +2,13 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { LoaderError } from './errors.js';
 
-export async function loadPaths(fileAbs, { route, type, segments }) {
+export async function loadPaths(fileAbs, { route, type, segments }, { fresh = false } = {}) {
   const fileInfo = short(fileAbs);
   let mod;
   try {
-    mod = await import(pathToFileURL(fileAbs).href);
+    const u = new URL(pathToFileURL(fileAbs).href);
+    if (fresh) u.search = `v=${Date.now()}-${Math.random()}`;
+    mod = await import(u.href);
   } catch (e) {
     throw new LoaderError(fileInfo, `Failed to import for paths(): ${e.message}`);
   }

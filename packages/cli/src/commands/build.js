@@ -67,7 +67,7 @@ export default async function buildCmd(argv) {
     let fileCount = 0;
     let byteCount = 0;
     let skippedDynamic = 0;
-    const manifest = [];
+    const manifest = []; // array of unified entries
 
     const digest = (s) => crypto.createHash('sha1').update(s).digest('hex');
     const relSrc = (abs) => {
@@ -78,16 +78,29 @@ export default async function buildCmd(argv) {
       }
     };
 
-    async function recordEntry({ route, srcFile, outFile, json }) {
+    const relOut = (abs) => {
+      try {
+        return path.relative(process.cwd(), abs).replaceAll(path.sep, '/') || abs;
+      } catch {
+        return abs;
+      }
+    };
+
+    async function pushManifest({ route, srcFile, outFile, json }) {
       const st = await fs.stat(outFile).catch(() => null);
-      manifest.push({
+      const entry = {
+        // stable field order
         route,
-        filePath: relSrc(srcFile),
+        outFile: relOut(outFile),
+        srcFile: relSrc(srcFile),
+        // backward-compat (old tests read filePath → output path)
+        filePath: relOut(outFile),
         bytes: Buffer.byteLength(json),
         mtime: st ? st.mtimeMs : Date.now(),
         hash: digest(json),
         revalidate: null,
-      });
+      };
+      manifest.push(entry);
     }
 
     for (const r of staticRoutes) {
@@ -97,19 +110,8 @@ export default async function buildCmd(argv) {
       await writeFileEnsured(outFile, json);
       fileCount++;
       byteCount += Buffer.byteLength(json);
-      {
-        const relOut = path.relative(process.cwd(), outFile).replaceAll(path.sep, '/');
-        const stat = await fs.stat(outFile);
-        const hash = crypto.createHash('sha1').update(json).digest('hex');
-        manifest.push({
-          route: r.route,
-          filePath: relOut, // <-- OUTPUT path
-          bytes: Buffer.byteLength(json),
-          mtime: stat.mtimeMs,
-          hash,
-        });
-      }
-      await recordEntry({ route: r.route, srcFile: r.file, outFile, json });
+
+      await pushManifest({ route: r.route, srcFile: r.file, outFile, json });
     }
 
     // helper: materialize a concrete route from tokens + param segments
@@ -122,19 +124,8 @@ export default async function buildCmd(argv) {
       await writeFileEnsured(outFile, json);
       fileCount++;
       byteCount += Buffer.byteLength(json);
-      {
-        const relOut = path.relative(process.cwd(), outFile).replaceAll(path.sep, '/');
-        const stat = await fs.stat(outFile);
-        const hash = crypto.createHash('sha1').update(json).digest('hex');
-        manifest.push({
-          route: concreteRoute,
-          filePath: relOut, // <-- OUTPUT path
-          bytes: Buffer.byteLength(json),
-          mtime: stat.mtimeMs,
-          hash,
-        });
-      }
-      await recordEntry({ route: concreteRoute, srcFile: r.file, outFile, json });
+
+      await pushManifest({ route: concreteRoute, srcFile: r.file, outFile, json });
     }
 
     // dynamic: expect [['val'], ...] from loadPaths()
@@ -169,29 +160,15 @@ export default async function buildCmd(argv) {
       }
     }
 
-    // Write manifest (sorted for determinism)
+    // Write manifest once (sorted for determinism)
     const manifestPath = path.join(config.paths.outAbs, '.staticapi', 'manifest.json');
-    const manifestJson =
-      JSON.stringify(
-        manifest.sort((a, b) => a.route.localeCompare(b.route)),
-        null,
-        pretty ? 2 : 0
-      ) + (pretty ? '\n' : '');
+    const sorted = manifest.sort((a, b) => a.route.localeCompare(b.route));
+    const manifestJson = JSON.stringify(sorted, null, pretty ? 2 : 0) + (pretty ? '\n' : '');
     await writeFileEnsured(manifestPath, manifestJson);
     byteCount += Buffer.byteLength(manifestJson);
     fileCount++;
 
     const elapsed = Date.now() - t0;
-
-    // write manifest
-    {
-      const metaDir = path.join(config.paths.outAbs, '.staticapi');
-      const manifestPath = path.join(metaDir, 'manifest.json');
-      await writeFileEnsured(
-        manifestPath,
-        JSON.stringify(manifest, null, space) + (pretty ? '\n' : '')
-      );
-    }
 
     const extra = skippedDynamic ? `, skipped ${skippedDynamic} dynamic route(s)` : '';
     console.log(

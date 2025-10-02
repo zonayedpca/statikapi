@@ -61,6 +61,13 @@ export default async function devCmd(argv) {
       return abs;
     }
   };
+  const relOut = (abs) => {
+    try {
+      return path.relative(process.cwd(), abs).replaceAll(path.sep, '/') || abs;
+    } catch {
+      return abs;
+    }
+  };
   async function writeManifest() {
     const list = Array.from(manifestByRoute.values()).sort((a, b) =>
       a.route.localeCompare(b.route)
@@ -70,14 +77,19 @@ export default async function devCmd(argv) {
   }
   async function upsertManifest({ route, srcFile, outFile, json }) {
     const st = await fs.stat(outFile).catch(() => null);
-    manifestByRoute.set(route, {
+
+    const entry = {
+      // stable field order + unified schema
       route,
-      filePath: relSrc(srcFile),
+      outFile: relOut(outFile),
+      srcFile: relSrc(srcFile),
+      filePath: relOut(outFile), // backward-compat alias
       bytes: Buffer.byteLength(json),
       mtime: st ? st.mtimeMs : Date.now(),
       hash: digest(json),
       revalidate: null,
-    });
+    };
+    manifestByRoute.set(route, entry);
   }
   function deleteFromManifest(route) {
     manifestByRoute.delete(route);

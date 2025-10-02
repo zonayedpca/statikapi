@@ -46,6 +46,7 @@ shared-workspace-lockfile=true
 - `pnpm -w format` – check Prettier formatting
 - `pnpm -w format:fix` – write Prettier fixes
 
+===== FILE: api-out/.staticapi/manifest.json [binary skipped] =====
 ===== FILE: api-out/docs/a/b/index.json [binary skipped] =====
 ===== FILE: api-out/docs/guide/index.json [binary skipped] =====
 ===== FILE: api-out/index.json [binary skipped] =====
@@ -160,6 +161,9 @@ import { ConfigError } from '../config/validate.js'; // from Task 3
 import { mapRoutes } from '../router/mapRoutes.js'; // from Task 4
 import { loadModuleValue } from '../loader/loadModuleValue.js'; // from Task 5
 import { loadPaths } from '../loader/loadPaths.js';
+import path from 'node:path';
+import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
 
 import { emptyDir, writeFileEnsured } from '../util/fsx.js';
 import { routeToOutPath } from '../build/routeOutPath.js';
@@ -220,6 +224,28 @@ export default async function buildCmd(argv) {
     let fileCount = 0;
     let byteCount = 0;
     let skippedDynamic = 0;
+    const manifest = [];
+
+    const digest = (s) => crypto.createHash('sha1').update(s).digest('hex');
+    const relSrc = (abs) => {
+      try {
+        return path.relative(process.cwd(), abs) || abs;
+      } catch {
+        return abs;
+      }
+    };
+
+    async function recordEntry({ route, srcFile, outFile, json }) {
+      const st = await fs.stat(outFile).catch(() => null);
+      manifest.push({
+        route,
+        filePath: relSrc(srcFile),
+        bytes: Buffer.byteLength(json),
+        mtime: st ? st.mtimeMs : Date.now(),
+        hash: digest(json),
+        revalidate: null,
+      });
+    }
 
     for (const r of staticRoutes) {
       const val = await loadModuleValue(r.file);
@@ -228,6 +254,19 @@ export default async function buildCmd(argv) {
       await writeFileEnsured(outFile, json);
       fileCount++;
       byteCount += Buffer.byteLength(json);
+      {
+        const relOut = path.relative(process.cwd(), outFile).replaceAll(path.sep, '/');
+        const stat = await fs.stat(outFile);
+        const hash = crypto.createHash('sha1').update(json).digest('hex');
+        manifest.push({
+          route: r.route,
+          filePath: relOut, // <-- OUTPUT path
+          bytes: Buffer.byteLength(json),
+          mtime: stat.mtimeMs,
+          hash,
+        });
+      }
+      await recordEntry({ route: r.route, srcFile: r.file, outFile, json });
     }
 
     // helper: materialize a concrete route from tokens + param segments
@@ -240,6 +279,19 @@ export default async function buildCmd(argv) {
       await writeFileEnsured(outFile, json);
       fileCount++;
       byteCount += Buffer.byteLength(json);
+      {
+        const relOut = path.relative(process.cwd(), outFile).replaceAll(path.sep, '/');
+        const stat = await fs.stat(outFile);
+        const hash = crypto.createHash('sha1').update(json).digest('hex');
+        manifest.push({
+          route: concreteRoute,
+          filePath: relOut, // <-- OUTPUT path
+          bytes: Buffer.byteLength(json),
+          mtime: stat.mtimeMs,
+          hash,
+        });
+      }
+      await recordEntry({ route: concreteRoute, srcFile: r.file, outFile, json });
     }
 
     // dynamic: expect [['val'], ...] from loadPaths()
@@ -274,7 +326,29 @@ export default async function buildCmd(argv) {
       }
     }
 
+    // Write manifest (sorted for determinism)
+    const manifestPath = path.join(config.paths.outAbs, '.staticapi', 'manifest.json');
+    const manifestJson =
+      JSON.stringify(
+        manifest.sort((a, b) => a.route.localeCompare(b.route)),
+        null,
+        pretty ? 2 : 0
+      ) + (pretty ? '\n' : '');
+    await writeFileEnsured(manifestPath, manifestJson);
+    byteCount += Buffer.byteLength(manifestJson);
+    fileCount++;
+
     const elapsed = Date.now() - t0;
+
+    // write manifest
+    {
+      const metaDir = path.join(config.paths.outAbs, '.staticapi');
+      const manifestPath = path.join(metaDir, 'manifest.json');
+      await writeFileEnsured(
+        manifestPath,
+        JSON.stringify(manifest, null, space) + (pretty ? '\n' : '')
+      );
+    }
 
     const extra = skippedDynamic ? `, skipped ${skippedDynamic} dynamic route(s)` : '';
     console.log(
@@ -300,6 +374,7 @@ export default async function buildCmd(argv) {
 import chokidar from 'chokidar';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
 import { readFlags } from '../util/readFlags.js';
 import { loadConfig } from '../config/loadConfig.js';
 import { mapRoutes, fileToRoute } from '../router/mapRoutes.js';
@@ -349,12 +424,45 @@ export default async function devCmd(argv) {
   // Cache of outputs per source file (for deletions on subsequent rebuilds)
   const lastEmitted = new Map(); // fileAbs -> Set<concreteRoute>
 
+  // Manifest state
+  const manifestByRoute = new Map(); // route -> entry
+  const digest = (s) => crypto.createHash('sha1').update(s).digest('hex');
+  const relSrc = (abs) => {
+    try {
+      return path.relative(process.cwd(), abs) || abs;
+    } catch {
+      return abs;
+    }
+  };
+  async function writeManifest() {
+    const list = Array.from(manifestByRoute.values()).sort((a, b) =>
+      a.route.localeCompare(b.route)
+    );
+    const json = JSON.stringify(list, null, 2) + '\n';
+    await writeFileEnsured(path.join(config.paths.outAbs, '.staticapi', 'manifest.json'), json);
+  }
+  async function upsertManifest({ route, srcFile, outFile, json }) {
+    const st = await fs.stat(outFile).catch(() => null);
+    manifestByRoute.set(route, {
+      route,
+      filePath: relSrc(srcFile),
+      bytes: Buffer.byteLength(json),
+      mtime: st ? st.mtimeMs : Date.now(),
+      hash: digest(json),
+      revalidate: null,
+    });
+  }
+  function deleteFromManifest(route) {
+    manifestByRoute.delete(route);
+  }
+
   async function emitStatic(r, { fresh = false } = {}) {
     const val = await loadModuleValue(r.file, { __fresh: fresh });
     const json = JSON.stringify(val, null, 2) + '\n';
     const outFile = routeToOutPath({ outAbs: config.paths.outAbs, route: r.route });
     await writeFileEnsured(outFile, json);
     lastEmitted.set(r.file, new Set([r.route]));
+    await upsertManifest({ route: r.route, srcFile: r.file, outFile, json });
     return 1;
   }
 
@@ -378,6 +486,7 @@ export default async function devCmd(argv) {
       const outFile = routeToOutPath({ outAbs: config.paths.outAbs, route: concrete });
       await writeFileEnsured(outFile, json);
       emittedRoutes.add(concrete);
+      await upsertManifest({ route: concrete, srcFile: r.file, outFile, json });
       written++;
     }
     // Delete stale outputs from this file (not present anymore)
@@ -390,6 +499,7 @@ export default async function devCmd(argv) {
         } catch {
           // ignore
         }
+        deleteFromManifest(oldRoute);
       }
     }
     lastEmitted.set(r.file, emittedRoutes);
@@ -423,10 +533,12 @@ export default async function devCmd(argv) {
           } catch {
             // ignore
           }
+          deleteFromManifest(route);
         }
         lastEmitted.delete(fileAbs);
       }
       console.log(`[staticapi] (ignored or unmapped)`);
+      await writeManifest();
       return;
     }
 
@@ -440,6 +552,7 @@ export default async function devCmd(argv) {
         const extra = skipped ? `, skipped ${skipped}` : '';
         console.log(`[staticapi] wrote ${written} file(s) for ${r.route}${extra}`);
       }
+      await writeManifest();
     } catch (err) {
       // Friendly error (already formatted in loaders), just print
       console.error(`[staticapi] ${err?.message || err}`);
@@ -454,6 +567,7 @@ export default async function devCmd(argv) {
     if (r.type === 'static') await emitStatic(r);
     else await emitDynamic(r);
   }
+  await writeManifest();
   console.log(`[staticapi] ready. Watching ${path.relative(process.cwd(), config.paths.srcAbs)}/`);
 
   const watcher = chokidar.watch(config.paths.srcAbs, {
@@ -1416,6 +1530,69 @@ test('rejects non-finite numbers', async () => {
   );
 });
 
+===== FILE: packages/cli/test/manifest-smoke.test.js =====
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { makeTmp } from './_tmp.js';
+
+const BIN = path.resolve('packages/cli/bin/staticapi.js');
+
+test('build writes a manifest with basic fields', async (t) => {
+  const tmp = await makeTmp();
+
+  // ensure src-api exists
+  await fs.mkdir(tmp.join('src-api'), { recursive: true });
+
+  // minimal API
+  await fs.writeFile(tmp.join('src-api/index.js'), 'export default {ok:true}\n');
+
+  // run build
+  execFileSync(process.execPath, [BIN, 'build'], {
+    encoding: 'utf8',
+    cwd: tmp.cwd,
+  });
+
+  // read manifest
+  const manifestPath = tmp.join('api-out/.staticapi/manifest.json');
+  const raw = await fs.readFile(manifestPath, 'utf8');
+  let list;
+  try {
+    list = JSON.parse(raw);
+  } catch {
+    throw new Error(`manifest is not valid JSON:\n${raw}`);
+  }
+
+  // basic structure checks
+  assert(Array.isArray(list), 'manifest should be an array');
+  assert(list.length >= 1, 'manifest should contain at least one entry');
+
+  // ensure root route is present and fields look sane
+  const root = list.find((e) => e.route === '/');
+  assert(root, 'manifest should include entry for "/"');
+
+  // required fields
+  for (const k of ['route', 'filePath', 'bytes', 'mtime', 'hash']) {
+    assert.ok(k in root, `manifest entry missing "${k}"`);
+  }
+
+  assert.equal(typeof root.route, 'string');
+  assert.equal(typeof root.filePath, 'string');
+  assert.equal(typeof root.bytes, 'number');
+  assert.ok(['number', 'string'].includes(typeof root.mtime));
+  assert.equal(typeof root.hash, 'string');
+  assert.ok(root.hash.length > 0, 'hash should be non-empty');
+
+  // filePath should point into api-out and end with index.json
+  assert.match(root.filePath.replaceAll(path.sep, '/'), /^api-out\/.*index\.json$/);
+
+  t.after(async () => {
+    await tmp.cleanup();
+  });
+});
+
 ===== FILE: packages/cli/test/router.fixture/src-api/_internal/util.js =====
 export default {};
 
@@ -1533,6 +1710,6 @@ export async function paths() {
 }
 
 export async function data({ params }) {
-  return { id: params.id, extra: 'info' };
+  return { id: params.id };
 }
 

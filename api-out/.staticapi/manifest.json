@@ -1,1 +1,72 @@
-[{"route":"/","filePath":"api-out/index.json","bytes":18,"mtime":1759386950013.3564,"hash":"883ce71eccc8845da3b0b25442b758c15f5cfda3"},{"route":"/","filePath":"src-api/index.js","bytes":18,"mtime":1759386950013.3564,"hash":"883ce71eccc8845da3b0b25442b758c15f5cfda3","revalidate":null},{"route":"/docs/a/b","filePath":"api-out/docs/a/b/index.json","bytes":13,"mtime":1759386950015.8528,"hash":"8fec46eead8e6c97c9d9a8b4dd51f676b7e5667b"},{"route":"/docs/a/b","filePath":"src-api/docs/[...slug].js","bytes":13,"mtime":1759386950015.8528,"hash":"8fec46eead8e6c97c9d9a8b4dd51f676b7e5667b","revalidate":null},{"route":"/docs/guide","filePath":"api-out/docs/guide/index.json","bytes":15,"mtime":1759386950016.1018,"hash":"2ffc0a185760fe6075351f782f86e7209a428493"},{"route":"/docs/guide","filePath":"src-api/docs/[...slug].js","bytes":15,"mtime":1759386950016.1018,"hash":"2ffc0a185760fe6075351f782f86e7209a428493","revalidate":null},{"route":"/users/1","filePath":"api-out/users/1/index.json","bytes":10,"mtime":1759386950014.6912,"hash":"83c5c7d03ba6e4232c238ddac7ad49ddafd08394"},{"route":"/users/1","filePath":"src-api/users/[id].js","bytes":10,"mtime":1759386950014.6912,"hash":"83c5c7d03ba6e4232c238ddac7ad49ddafd08394","revalidate":null},{"route":"/users/2","filePath":"api-out/users/2/index.json","bytes":10,"mtime":1759386950015.0146,"hash":"bcac4af18a8ef626f0aba3ea9a6f94e7598bac2e"},{"route":"/users/2","filePath":"src-api/users/[id].js","bytes":10,"mtime":1759386950015.0146,"hash":"bcac4af18a8ef626f0aba3ea9a6f94e7598bac2e","revalidate":null},{"route":"/users/3","filePath":"api-out/users/3/index.json","bytes":10,"mtime":1759386950015.2573,"hash":"95f9b92ddb0606522db42d3eae74a2cb05fdf967"},{"route":"/users/3","filePath":"src-api/users/[id].js","bytes":10,"mtime":1759386950015.2573,"hash":"95f9b92ddb0606522db42d3eae74a2cb05fdf967","revalidate":null}]
+[
+  {
+    "route": "/",
+    "outFile": "api-out/index.json",
+    "srcFile": "src-api/index.js",
+    "filePath": "api-out/index.json",
+    "bytes": 24,
+    "mtime": 1759389580529.7466,
+    "hash": "b798bc9b51acd355c6a4298a07227128aef6a238",
+    "revalidate": null
+  },
+  {
+    "route": "/docs/a/b",
+    "outFile": "api-out/docs/a/b/index.json",
+    "srcFile": "src-api/docs/[...slug].js",
+    "filePath": "api-out/docs/a/b/index.json",
+    "bytes": 19,
+    "mtime": 1759389580531.8694,
+    "hash": "eace1f12dce1e7c87c8f42c53da30ac8a8948647",
+    "revalidate": null
+  },
+  {
+    "route": "/docs/guide",
+    "outFile": "api-out/docs/guide/index.json",
+    "srcFile": "src-api/docs/[...slug].js",
+    "filePath": "api-out/docs/guide/index.json",
+    "bytes": 21,
+    "mtime": 1759389580532.1245,
+    "hash": "f75feaa47f3ec12315bb5b6ce3d5cbc2858144ab",
+    "revalidate": null
+  },
+  {
+    "route": "/users/1",
+    "outFile": "api-out/users/1/index.json",
+    "srcFile": "src-api/users/[id].js",
+    "filePath": "api-out/users/1/index.json",
+    "bytes": 16,
+    "mtime": 1759389589906.749,
+    "hash": "039844f5bd811824157974e031292a86505cf0af",
+    "revalidate": null
+  },
+  {
+    "route": "/users/2",
+    "outFile": "api-out/users/2/index.json",
+    "srcFile": "src-api/users/[id].js",
+    "filePath": "api-out/users/2/index.json",
+    "bytes": 16,
+    "mtime": 1759389589908.4775,
+    "hash": "92b817010802e090bb390c94c30b4647c86ca66b",
+    "revalidate": null
+  },
+  {
+    "route": "/users/3",
+    "outFile": "api-out/users/3/index.json",
+    "srcFile": "src-api/users/[id].js",
+    "filePath": "api-out/users/3/index.json",
+    "bytes": 16,
+    "mtime": 1759389589910.165,
+    "hash": "4cc9fc08710fa9e005804fa7c1620d23455360f8",
+    "revalidate": null
+  },
+  {
+    "route": "/users/4",
+    "outFile": "api-out/users/4/index.json",
+    "srcFile": "src-api/users/[id].js",
+    "filePath": "api-out/users/4/index.json",
+    "bytes": 16,
+    "mtime": 1759389589912.1265,
+    "hash": "762ec74131ff62bba85222f307b76c9931aff0e3",
+    "revalidate": null
+  }
+]

@@ -10,7 +10,7 @@ import { assertSerializable } from './serializeGuard.js';
  *  - else if default export is a value, use it.
  * Then verify JSON-serializability.
  */
-export async function loadModuleValue(fileAbs) {
+export async function loadModuleValue(fileAbs, args = {}) {
   const fileInfo = short(fileAbs);
   let mod;
   try {
@@ -25,7 +25,7 @@ export async function loadModuleValue(fileAbs) {
 
   let value;
   try {
-    if (producer) value = await producer();
+    if (producer) value = await producer(args);
     else if ('default' in (mod || {})) value = mod.default;
     else
       throw new LoaderError(

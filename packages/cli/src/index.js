@@ -23,17 +23,13 @@ export async function run(argv = process.argv.slice(2)) {
 
   switch (cmd) {
     case 'init':
-      await initCmd(rest);
-      return 0;
+      return await initCmd(rest);
     case 'build':
-      await buildCmd(rest);
-      return 0;
+      return await buildCmd(rest);
     case 'dev':
-      await devCmd(rest);
-      return 0;
+      return await devCmd(rest);
     case 'preview':
-      await previewCmd(rest);
-      return 0;
+      return await previewCmd(rest);
     default:
       console.error(`Unknown command: ${cmd}\n`);
       console.log(HELP);

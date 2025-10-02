@@ -4,6 +4,9 @@ import { ConfigError } from '../config/validate.js'; // from Task 3
 import { mapRoutes } from '../router/mapRoutes.js'; // from Task 4
 import { loadModuleValue } from '../loader/loadModuleValue.js'; // from Task 5
 import { loadPaths } from '../loader/loadPaths.js';
+import path from 'node:path';
+import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
 
 import { emptyDir, writeFileEnsured } from '../util/fsx.js';
 import { routeToOutPath } from '../build/routeOutPath.js';
@@ -64,6 +67,28 @@ export default async function buildCmd(argv) {
     let fileCount = 0;
     let byteCount = 0;
     let skippedDynamic = 0;
+    const manifest = [];
+
+    const digest = (s) => crypto.createHash('sha1').update(s).digest('hex');
+    const relSrc = (abs) => {
+      try {
+        return path.relative(process.cwd(), abs) || abs;
+      } catch {
+        return abs;
+      }
+    };
+
+    async function recordEntry({ route, srcFile, outFile, json }) {
+      const st = await fs.stat(outFile).catch(() => null);
+      manifest.push({
+        route,
+        filePath: relSrc(srcFile),
+        bytes: Buffer.byteLength(json),
+        mtime: st ? st.mtimeMs : Date.now(),
+        hash: digest(json),
+        revalidate: null,
+      });
+    }
 
     for (const r of staticRoutes) {
       const val = await loadModuleValue(r.file);
@@ -72,6 +97,7 @@ export default async function buildCmd(argv) {
       await writeFileEnsured(outFile, json);
       fileCount++;
       byteCount += Buffer.byteLength(json);
+      await recordEntry({ route: r.route, srcFile: r.file, outFile, json });
     }
 
     // helper: materialize a concrete route from tokens + param segments
@@ -84,6 +110,7 @@ export default async function buildCmd(argv) {
       await writeFileEnsured(outFile, json);
       fileCount++;
       byteCount += Buffer.byteLength(json);
+      await recordEntry({ route: concreteRoute, srcFile: r.file, outFile, json });
     }
 
     // dynamic: expect [['val'], ...] from loadPaths()
@@ -117,6 +144,18 @@ export default async function buildCmd(argv) {
         await emitConcreteRoute(r, segs);
       }
     }
+
+    // Write manifest (sorted for determinism)
+    const manifestPath = path.join(config.paths.outAbs, '.staticapi', 'manifest.json');
+    const manifestJson =
+      JSON.stringify(
+        manifest.sort((a, b) => a.route.localeCompare(b.route)),
+        null,
+        pretty ? 2 : 0
+      ) + (pretty ? '\n' : '');
+    await writeFileEnsured(manifestPath, manifestJson);
+    byteCount += Buffer.byteLength(manifestJson);
+    fileCount++;
 
     const elapsed = Date.now() - t0;
 

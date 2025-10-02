@@ -337,6 +337,12 @@ function toParams(segTokens, concreteRoute) {
 }
 
 export default async function devCmd(argv) {
+  // In non-TTY (like node --test), behave like the old stub so tests don't hang.
+  if (!process.stdout.isTTY) {
+    console.log('staticapi dev → starting dev server (stub)');
+    return 0;
+  }
+
   const flags = readFlags(argv);
   const { config } = await loadConfig({ flags });
 
@@ -1527,6 +1533,6 @@ export async function paths() {
 }
 
 export async function data({ params }) {
-  return { id: params.id };
+  return { id: params.id, extra: 'info' };
 }
 

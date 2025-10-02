@@ -1,6 +1,7 @@
 import chokidar from 'chokidar';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
 import { readFlags } from '../util/readFlags.js';
 import { loadConfig } from '../config/loadConfig.js';
 import { mapRoutes, fileToRoute } from '../router/mapRoutes.js';
@@ -50,12 +51,45 @@ export default async function devCmd(argv) {
   // Cache of outputs per source file (for deletions on subsequent rebuilds)
   const lastEmitted = new Map(); // fileAbs -> Set<concreteRoute>
 
+  // Manifest state
+  const manifestByRoute = new Map(); // route -> entry
+  const digest = (s) => crypto.createHash('sha1').update(s).digest('hex');
+  const relSrc = (abs) => {
+    try {
+      return path.relative(process.cwd(), abs) || abs;
+    } catch {
+      return abs;
+    }
+  };
+  async function writeManifest() {
+    const list = Array.from(manifestByRoute.values()).sort((a, b) =>
+      a.route.localeCompare(b.route)
+    );
+    const json = JSON.stringify(list, null, 2) + '\n';
+    await writeFileEnsured(path.join(config.paths.outAbs, '.staticapi', 'manifest.json'), json);
+  }
+  async function upsertManifest({ route, srcFile, outFile, json }) {
+    const st = await fs.stat(outFile).catch(() => null);
+    manifestByRoute.set(route, {
+      route,
+      filePath: relSrc(srcFile),
+      bytes: Buffer.byteLength(json),
+      mtime: st ? st.mtimeMs : Date.now(),
+      hash: digest(json),
+      revalidate: null,
+    });
+  }
+  function deleteFromManifest(route) {
+    manifestByRoute.delete(route);
+  }
+
   async function emitStatic(r, { fresh = false } = {}) {
     const val = await loadModuleValue(r.file, { __fresh: fresh });
     const json = JSON.stringify(val, null, 2) + '\n';
     const outFile = routeToOutPath({ outAbs: config.paths.outAbs, route: r.route });
     await writeFileEnsured(outFile, json);
     lastEmitted.set(r.file, new Set([r.route]));
+    await upsertManifest({ route: r.route, srcFile: r.file, outFile, json });
     return 1;
   }
 
@@ -79,6 +113,7 @@ export default async function devCmd(argv) {
       const outFile = routeToOutPath({ outAbs: config.paths.outAbs, route: concrete });
       await writeFileEnsured(outFile, json);
       emittedRoutes.add(concrete);
+      await upsertManifest({ route: concrete, srcFile: r.file, outFile, json });
       written++;
     }
     // Delete stale outputs from this file (not present anymore)
@@ -91,6 +126,7 @@ export default async function devCmd(argv) {
         } catch {
           // ignore
         }
+        deleteFromManifest(oldRoute);
       }
     }
     lastEmitted.set(r.file, emittedRoutes);
@@ -124,10 +160,12 @@ export default async function devCmd(argv) {
           } catch {
             // ignore
           }
+          deleteFromManifest(route);
         }
         lastEmitted.delete(fileAbs);
       }
       console.log(`[staticapi] (ignored or unmapped)`);
+      await writeManifest();
       return;
     }
 
@@ -141,6 +179,7 @@ export default async function devCmd(argv) {
         const extra = skipped ? `, skipped ${skipped}` : '';
         console.log(`[staticapi] wrote ${written} file(s) for ${r.route}${extra}`);
       }
+      await writeManifest();
     } catch (err) {
       // Friendly error (already formatted in loaders), just print
       console.error(`[staticapi] ${err?.message || err}`);
@@ -155,6 +194,7 @@ export default async function devCmd(argv) {
     if (r.type === 'static') await emitStatic(r);
     else await emitDynamic(r);
   }
+  await writeManifest();
   console.log(`[staticapi] ready. Watching ${path.relative(process.cwd(), config.paths.srcAbs)}/`);
 
   const watcher = chokidar.watch(config.paths.srcAbs, {

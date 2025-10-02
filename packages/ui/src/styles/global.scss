@@ -1,0 +1,13 @@
+@use './variables' as *;
+
+:root {
+  color-scheme: light dark;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+.app {
+  background: $panel-bg;
+}

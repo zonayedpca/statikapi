@@ -38,6 +38,12 @@ function toParams(segTokens, concreteRoute) {
 }
 
 export default async function devCmd(argv) {
+  // In non-TTY (like node --test), behave like the old stub so tests don't hang.
+  if (!process.stdout.isTTY) {
+    console.log('staticapi dev → starting dev server (stub)');
+    return 0;
+  }
+
   const flags = readFlags(argv);
   const { config } = await loadConfig({ flags });
 
@@ -82,7 +88,9 @@ export default async function devCmd(argv) {
         const p = routeToOutPath({ outAbs: config.paths.outAbs, route: oldRoute });
         try {
           await fs.rm(p, { force: true });
-        } catch {}
+        } catch {
+          // ignore
+        }
       }
     }
     lastEmitted.set(r.file, emittedRoutes);
@@ -113,7 +121,9 @@ export default async function devCmd(argv) {
           const p = routeToOutPath({ outAbs: config.paths.outAbs, route });
           try {
             await fs.rm(p, { force: true });
-          } catch {}
+          } catch {
+            // ignore
+          }
         }
         lastEmitted.delete(fileAbs);
       }

@@ -25,7 +25,7 @@ function toConcrete(routePattern, segTokens, segs) {
 function toParams(segTokens, concreteRoute) {
   const concreteSegs = concreteRoute.split('/').filter(Boolean);
   const params = {};
-  let j = 0;
+
   for (let i = 0; i < segTokens.length; i++) {
     const tok = segTokens[i];
     if (tok.startsWith(':')) {

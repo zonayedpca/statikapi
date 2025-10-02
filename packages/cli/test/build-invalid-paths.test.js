@@ -1,5 +1,4 @@
 import { test } from 'node:test';
-import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';

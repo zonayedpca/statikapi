@@ -48,8 +48,10 @@ shared-workspace-lockfile=true
 
 ===== FILE: api-out/docs/a/b/index.json [binary skipped] =====
 ===== FILE: api-out/docs/guide/index.json [binary skipped] =====
+===== FILE: api-out/index.json [binary skipped] =====
 ===== FILE: api-out/users/1/index.json [binary skipped] =====
 ===== FILE: api-out/users/2/index.json [binary skipped] =====
+===== FILE: api-out/users/3/index.json [binary skipped] =====
 ===== FILE: eslint.config.js =====
 // eslint.config.js
 import js from '@eslint/js';
@@ -179,7 +181,7 @@ function toConcrete(routePattern, segTokens, segs) {
 function toParams(segTokens, concreteRoute) {
   const concreteSegs = concreteRoute.split('/').filter(Boolean);
   const params = {};
-  let j = 0;
+
   for (let i = 0; i < segTokens.length; i++) {
     const tok = segTokens[i];
     if (tok.startsWith(':')) {
@@ -295,8 +297,174 @@ export default async function buildCmd(argv) {
 }
 
 ===== FILE: packages/cli/src/commands/dev.js =====
-export default async function devCmd(_argv) {
-  console.log('staticapi dev → starting dev server (stub)');
+import chokidar from 'chokidar';
+import path from 'node:path';
+import fs from 'node:fs/promises';
+import { readFlags } from '../util/readFlags.js';
+import { loadConfig } from '../config/loadConfig.js';
+import { mapRoutes, fileToRoute } from '../router/mapRoutes.js';
+import { routeToOutPath } from '../build/routeOutPath.js';
+import { writeFileEnsured } from '../util/fsx.js';
+import { loadModuleValue } from '../loader/loadModuleValue.js';
+import { loadPaths } from '../loader/loadPaths.js';
+
+function clearScreen() {
+  process.stdout.write('\x1Bc'); // ANSI "clear screen"
+}
+
+function toConcrete(routePattern, segTokens, segs) {
+  let idx = 0;
+  const parts = routePattern.split('/').map((p) => {
+    if (p.startsWith(':')) return segs[idx++] ?? '';
+    if (p.startsWith('*')) return segs.slice(idx).join('/');
+    return p;
+  });
+  return parts.join('/').replace(/\/+/g, '/');
+}
+
+function toParams(segTokens, concreteRoute) {
+  const concreteSegs = concreteRoute.split('/').filter(Boolean);
+  const params = {};
+  for (let i = 0; i < segTokens.length; i++) {
+    const tok = segTokens[i];
+    if (tok.startsWith(':')) params[tok.slice(1)] = concreteSegs[i] ?? '';
+    else if (tok.startsWith('*')) {
+      params[tok.slice(1)] = concreteSegs.slice(i);
+      break;
+    }
+  }
+  return params;
+}
+
+export default async function devCmd(argv) {
+  const flags = readFlags(argv);
+  const { config } = await loadConfig({ flags });
+
+  // Cache of outputs per source file (for deletions on subsequent rebuilds)
+  const lastEmitted = new Map(); // fileAbs -> Set<concreteRoute>
+
+  async function emitStatic(r, { fresh = false } = {}) {
+    const val = await loadModuleValue(r.file, { __fresh: fresh });
+    const json = JSON.stringify(val, null, 2) + '\n';
+    const outFile = routeToOutPath({ outAbs: config.paths.outAbs, route: r.route });
+    await writeFileEnsured(outFile, json);
+    lastEmitted.set(r.file, new Set([r.route]));
+    return 1;
+  }
+
+  async function emitDynamic(r, { fresh = false } = {}) {
+    const list = await loadPaths(r.file, r, { fresh });
+    if (!list) {
+      // no paths() -> nothing to emit
+      lastEmitted.set(r.file, new Set());
+      return { written: 0, skipped: 1 };
+    }
+    const seen = new Set();
+    const emittedRoutes = new Set();
+    let written = 0;
+    for (const segs of list) {
+      const concrete = toConcrete(r.route, r.segments, segs);
+      if (seen.has(concrete)) continue;
+      seen.add(concrete);
+      const params = toParams(r.segments, concrete);
+      const val = await loadModuleValue(r.file, { params, __fresh: fresh });
+      const json = JSON.stringify(val, null, 2) + '\n';
+      const outFile = routeToOutPath({ outAbs: config.paths.outAbs, route: concrete });
+      await writeFileEnsured(outFile, json);
+      emittedRoutes.add(concrete);
+      written++;
+    }
+    // Delete stale outputs from this file (not present anymore)
+    const prev = lastEmitted.get(r.file) || new Set();
+    for (const oldRoute of prev) {
+      if (!emittedRoutes.has(oldRoute)) {
+        const p = routeToOutPath({ outAbs: config.paths.outAbs, route: oldRoute });
+        try {
+          await fs.rm(p, { force: true });
+        } catch {
+          // ignore
+        }
+      }
+    }
+    lastEmitted.set(r.file, emittedRoutes);
+    return { written, skipped: 0 };
+  }
+
+  function shouldHandle(fileAbs) {
+    const rel = path.posix.normalize(
+      fileAbs.replaceAll(path.sep, '/').slice(config.paths.srcAbs.length + 1)
+    );
+    if (!rel) return false;
+    if (rel.startsWith('_')) return false;
+    const ext = path.extname(rel);
+    return ext === '.js' || ext === '.mjs' || ext === '.cjs';
+  }
+
+  async function buildOne(fileAbs, kind) {
+    if (!shouldHandle(fileAbs)) return;
+    const info = fileToRoute({ srcAbs: config.paths.srcAbs, fileAbs });
+    clearScreen();
+    console.log(`staticapi dev → ${kind}: ${path.relative(process.cwd(), fileAbs)}`);
+
+    if (!info) {
+      // File is ignored or no longer maps; delete prior outputs if any
+      const prev = lastEmitted.get(fileAbs);
+      if (prev) {
+        for (const route of prev) {
+          const p = routeToOutPath({ outAbs: config.paths.outAbs, route });
+          try {
+            await fs.rm(p, { force: true });
+          } catch {
+            // ignore
+          }
+        }
+        lastEmitted.delete(fileAbs);
+      }
+      console.log(`[staticapi] (ignored or unmapped)`);
+      return;
+    }
+
+    const r = { file: fileAbs, route: info.route, type: info.type, segments: info.normSegments };
+    try {
+      if (r.type === 'static') {
+        const files = await emitStatic(r, { fresh: true });
+        console.log(`[staticapi] wrote ${files} file(s) for ${r.route}`);
+      } else {
+        const { written, skipped } = await emitDynamic(r, { fresh: true });
+        const extra = skipped ? `, skipped ${skipped}` : '';
+        console.log(`[staticapi] wrote ${written} file(s) for ${r.route}${extra}`);
+      }
+    } catch (err) {
+      // Friendly error (already formatted in loaders), just print
+      console.error(`[staticapi] ${err?.message || err}`);
+    }
+  }
+
+  // Initial full build (re-uses existing build pipeline for correctness)
+  clearScreen();
+  console.log('staticapi dev → initial build…');
+  const routes = await mapRoutes({ srcAbs: config.paths.srcAbs });
+  for (const r of routes) {
+    if (r.type === 'static') await emitStatic(r);
+    else await emitDynamic(r);
+  }
+  console.log(`[staticapi] ready. Watching ${path.relative(process.cwd(), config.paths.srcAbs)}/`);
+
+  const watcher = chokidar.watch(config.paths.srcAbs, {
+    ignoreInitial: true,
+    ignored: (p) => path.basename(p).startsWith('_'),
+  });
+  watcher.on('add', (p) => buildOne(p, 'add'));
+  watcher.on('change', (p) => buildOne(p, 'change'));
+  watcher.on('unlink', (p) => buildOne(p, 'unlink'));
+
+  // Keep process alive until SIGINT
+  await new Promise((resolve) => {
+    const stop = () => watcher.close().then(resolve).catch(resolve);
+    process.on('SIGINT', stop);
+    process.on('SIGTERM', stop);
+  });
+  return 0;
 }
 
 ===== FILE: packages/cli/src/commands/init.js =====
@@ -498,10 +666,14 @@ import { assertSerializable } from './serializeGuard.js';
  * Then verify JSON-serializability.
  */
 export async function loadModuleValue(fileAbs, args = {}) {
+  const fresh = args?.__fresh === true; // dev watcher sets this
+
   const fileInfo = short(fileAbs);
   let mod;
   try {
-    mod = await import(pathToFileURL(fileAbs).href);
+    const u = new URL(pathToFileURL(fileAbs).href);
+    if (fresh) u.search = `v=${Date.now()}-${Math.random()}`;
+    mod = await import(u.href);
   } catch (e) {
     throw new LoaderError(fileInfo, `Failed to import: ${e.message}`);
   }
@@ -547,11 +719,13 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { LoaderError } from './errors.js';
 
-export async function loadPaths(fileAbs, { route, type, segments }) {
+export async function loadPaths(fileAbs, { route, type, segments }, { fresh = false } = {}) {
   const fileInfo = short(fileAbs);
   let mod;
   try {
-    mod = await import(pathToFileURL(fileAbs).href);
+    const u = new URL(pathToFileURL(fileAbs).href);
+    if (fresh) u.search = `v=${Date.now()}-${Math.random()}`;
+    mod = await import(u.href);
   } catch (e) {
     throw new LoaderError(fileInfo, `Failed to import for paths(): ${e.message}`);
   }
@@ -708,24 +882,9 @@ export async function mapRoutes({ srcAbs }) {
   const routes = [];
 
   for (const fileAbs of entries) {
-    const rel = path.posix.normalize(fileAbs.replaceAll(path.sep, '/').slice(srcAbs.length + 1));
-    if (rel.startsWith('_')) continue; // ignore underscore roots
-    const ext = path.extname(rel);
-    if (!VALID_EXT.has(ext)) continue;
-
-    const relNoExt = rel.slice(0, -ext.length);
-    // normalize & trim each segment to avoid cases like " _private"
-    const segments = relNoExt
-      .split('/')
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    // ignore any path segment starting with '_' (private helpers)
-    // ignore “private” segments (underscore) after trimming
-    if (segments.some((s) => s.startsWith('_'))) continue;
-
-    // Compute route path and type
-    const { route, type, normSegments } = toRoute(segments);
+    const info = fileToRoute({ srcAbs, fileAbs });
+    if (!info) continue;
+    const { route, type, normSegments } = info;
 
     routes.push({
       file: fileAbs,
@@ -757,6 +916,24 @@ async function walk(dir) {
     }
   }
   return out;
+}
+
+/** Map a single file to route metadata, or null if ignored. */
+export function fileToRoute({ srcAbs, fileAbs }) {
+  const rel = path.posix.normalize(fileAbs.replaceAll(path.sep, '/').slice(srcAbs.length + 1));
+  if (!rel || rel.startsWith('_')) return null; // ignore underscore roots
+  const ext = path.extname(rel);
+  if (!VALID_EXT.has(ext)) return null;
+
+  const relNoExt = rel.slice(0, -ext.length);
+  const segments = relNoExt
+    .split('/')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (segments.some((s) => s.startsWith('_'))) return null;
+
+  const { route, type, normSegments } = toRoute(segments);
+  return { route, type, normSegments };
 }
 
 function toRoute(segments) {
@@ -971,7 +1148,6 @@ export async function data({ params }){ return { doc: params.slug.join('/') }; }
 
 ===== FILE: packages/cli/test/build-invalid-paths.test.js =====
 import { test } from 'node:test';
-import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
@@ -1342,8 +1518,15 @@ module.exports = {
 export async function paths(){ return [['a','b'], ['guide']]; }
 export async function data({ params }){ return { doc: params.slug.join('/') }; }
 
-===== FILE: src-api/users/[id].js =====
+===== FILE: src-api/index.js =====
+export default { hello: 'world!' };
 
-export async function paths(){ return ['1','2']; }
-export async function data({ params }){ return { user: params.id }; }
+===== FILE: src-api/users/[id].js =====
+export async function paths() {
+  return ['1', '2', '3'];
+}
+
+export async function data({ params }) {
+  return { id: params.id };
+}
 

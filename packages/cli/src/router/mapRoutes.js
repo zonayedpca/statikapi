@@ -8,7 +8,6 @@ export async function mapRoutes({ srcAbs }) {
   const routes = [];
 
   for (const fileAbs of entries) {
-    const rel = path.posix.normalize(fileAbs.replaceAll(path.sep, '/').slice(srcAbs.length + 1));
     const info = fileToRoute({ srcAbs, fileAbs });
     if (!info) continue;
     const { route, type, normSegments } = info;

@@ -97,6 +97,18 @@ export default async function buildCmd(argv) {
       await writeFileEnsured(outFile, json);
       fileCount++;
       byteCount += Buffer.byteLength(json);
+      {
+        const relOut = path.relative(process.cwd(), outFile).replaceAll(path.sep, '/');
+        const stat = await fs.stat(outFile);
+        const hash = crypto.createHash('sha1').update(json).digest('hex');
+        manifest.push({
+          route: r.route,
+          filePath: relOut, // <-- OUTPUT path
+          bytes: Buffer.byteLength(json),
+          mtime: stat.mtimeMs,
+          hash,
+        });
+      }
       await recordEntry({ route: r.route, srcFile: r.file, outFile, json });
     }
 
@@ -110,6 +122,18 @@ export default async function buildCmd(argv) {
       await writeFileEnsured(outFile, json);
       fileCount++;
       byteCount += Buffer.byteLength(json);
+      {
+        const relOut = path.relative(process.cwd(), outFile).replaceAll(path.sep, '/');
+        const stat = await fs.stat(outFile);
+        const hash = crypto.createHash('sha1').update(json).digest('hex');
+        manifest.push({
+          route: concreteRoute,
+          filePath: relOut, // <-- OUTPUT path
+          bytes: Buffer.byteLength(json),
+          mtime: stat.mtimeMs,
+          hash,
+        });
+      }
       await recordEntry({ route: concreteRoute, srcFile: r.file, outFile, json });
     }
 
@@ -158,6 +182,16 @@ export default async function buildCmd(argv) {
     fileCount++;
 
     const elapsed = Date.now() - t0;
+
+    // write manifest
+    {
+      const metaDir = path.join(config.paths.outAbs, '.staticapi');
+      const manifestPath = path.join(metaDir, 'manifest.json');
+      await writeFileEnsured(
+        manifestPath,
+        JSON.stringify(manifest, null, space) + (pretty ? '\n' : '')
+      );
+    }
 
     const extra = skippedDynamic ? `, skipped ${skippedDynamic} dynamic route(s)` : '';
     console.log(

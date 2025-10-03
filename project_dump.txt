@@ -51,10 +51,15 @@ shared-workspace-lockfile=true
 ===== FILE: api-out/docs/guide/index.json [binary skipped] =====
 ===== FILE: api-out/index.json [binary skipped] =====
 ===== FILE: api-out/users/1/index.json [binary skipped] =====
+===== FILE: api-out/users/10/index.json [binary skipped] =====
 ===== FILE: api-out/users/2/index.json [binary skipped] =====
 ===== FILE: api-out/users/3/index.json [binary skipped] =====
 ===== FILE: api-out/users/4/index.json [binary skipped] =====
 ===== FILE: api-out/users/5/index.json [binary skipped] =====
+===== FILE: api-out/users/6/index.json [binary skipped] =====
+===== FILE: api-out/users/7/index.json [binary skipped] =====
+===== FILE: api-out/users/8/index.json [binary skipped] =====
+===== FILE: api-out/users/9/index.json [binary skipped] =====
 ===== FILE: eslint.config.js =====
 // eslint.config.js
 import js from '@eslint/js';
@@ -400,6 +405,21 @@ export default async function devCmd(argv) {
   const flags = readFlags(argv);
   const { config } = await loadConfig({ flags });
 
+  // Where to notify preview
+  const previewHost = String(flags.previewHost ?? '127.0.0.1');
+  const previewPort = Number.isFinite(flags.previewPort) ? Number(flags.previewPort) : 8788;
+  const notifyOrigin = `http://${previewHost}:${previewPort}`;
+
+  async function notifyChanged(route) {
+    try {
+      // Node 18+ has global fetch
+      const u = `${notifyOrigin}/_ui/changed?route=${encodeURIComponent(route)}`;
+      await fetch(u, { method: 'POST' }).catch(() => {});
+    } catch {
+      // Ignore if preview isn't running
+    }
+  }
+
   // Cache of outputs per source file (for deletions on subsequent rebuilds)
   const lastEmitted = new Map(); // fileAbs -> Set<concreteRoute>
 
@@ -431,7 +451,6 @@ export default async function devCmd(argv) {
     const st = await fs.stat(outFile).catch(() => null);
 
     const entry = {
-      // stable field order + unified schema
       route,
       outFile: relOut(outFile),
       srcFile: relSrc(srcFile),
@@ -454,13 +473,14 @@ export default async function devCmd(argv) {
     await writeFileEnsured(outFile, json);
     lastEmitted.set(r.file, new Set([r.route]));
     await upsertManifest({ route: r.route, srcFile: r.file, outFile, json });
+    // notify UI
+    await notifyChanged(r.route);
     return 1;
   }
 
   async function emitDynamic(r, { fresh = false } = {}) {
     const list = await loadPaths(r.file, r, { fresh });
     if (!list) {
-      // no paths() -> nothing to emit
       lastEmitted.set(r.file, new Set());
       return { written: 0, skipped: 1 };
     }
@@ -494,6 +514,12 @@ export default async function devCmd(argv) {
       }
     }
     lastEmitted.set(r.file, emittedRoutes);
+
+    // notify UI for all emitted routes
+    for (const route of emittedRoutes) {
+      await notifyChanged(route);
+    }
+
     return { written, skipped: 0 };
   }
 
@@ -545,12 +571,11 @@ export default async function devCmd(argv) {
       }
       await writeManifest();
     } catch (err) {
-      // Friendly error (already formatted in loaders), just print
       console.error(`[staticapi] ${err?.message || err}`);
     }
   }
 
-  // Initial full build (re-uses existing build pipeline for correctness)
+  // Initial full build
   clearScreen();
   console.log('staticapi dev → initial build…');
   const routes = await mapRoutes({ srcAbs: config.paths.srcAbs });
@@ -658,8 +683,24 @@ export default async function previewCmd(argv) {
     }
   }
 
+  // --- SSE: subscribers/broadcast ---
+  const clients = new Set(); // Set<http.ServerResponse>
+  function sseSend(res, data) {
+    // default "message" event with one data line
+    res.write(`data: ${data}\n\n`);
+  }
+  function broadcast(data) {
+    for (const res of clients) {
+      try {
+        sseSend(res, data);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
   function htmlShell() {
-    // Minimal SPA shell; we’ll fully populate in the next task.
+    // Minimal SPA shell
     return `<!doctype html>
  <html lang="en">
  <meta charset="utf-8">
@@ -738,6 +779,20 @@ window.addEventListener('hashchange', () => {
 await loadManifest();
 const initial = decodeURIComponent(location.hash.slice(1));
 if (initial) showRoute(initial);
+
+// Live reload (SSE)
+const es = new EventSource('/_ui/events');
+es.onmessage = async (ev) => {
+  const msg = String(ev.data || '');
+  if (msg.startsWith('changed:')) {
+    const route = msg.slice('changed:'.length);
+    try { await loadManifest(); } catch {}
+    const current = decodeURIComponent(location.hash.slice(1));
+    if (current && route && current === route) {
+      showRoute(route);
+    }
+  }
+};
  </script>
  `;
   }
@@ -770,8 +825,6 @@ if (initial) showRoute(initial);
   }
 
   const server = http.createServer(async (req, res) => {
-    // Always use our configured host:port to build an absolute URL for parsing.
-    // Using req.headers.host can double-append the port (e.g., 127.0.0.1:8788:8788).
     const base = `http://${host}:${port}`;
     let url;
     try {
@@ -781,7 +834,39 @@ if (initial) showRoute(initial);
     }
     const pathname = url.pathname;
 
-    // UI shell
+    // --- SSE subscription ---
+    if (pathname === '/_ui/events') {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-store',
+        Connection: 'keep-alive',
+      });
+      res.write(': connected\n\n'); // comment line
+      clients.add(res);
+
+      // keepalive pings
+      const ping = setInterval(() => {
+        try {
+          res.write(': ping\n\n');
+        } catch {
+          // ignore write errors
+        }
+      }, 30000);
+
+      req.on('close', () => {
+        clearInterval(ping);
+        clients.delete(res);
+      });
+      return;
+    }
+
+    // Internal notify hook (used by dev watcher)
+    if (pathname === '/_ui/changed') {
+      const route = url.searchParams.get('route') || '';
+      broadcast(`changed:${route}`);
+      return send(res, 204, '');
+    }
+
     // UI root
     if (pathname === '/_ui' || pathname === '/ui' || pathname === '/ui/') {
       if (hasUi) {
@@ -793,7 +878,6 @@ if (initial) showRoute(initial);
           });
         }
       }
-      // fallback to minimal HTML shell if no built UI
       const html = htmlShell();
       return send(res, 200, html, { 'Content-Type': 'text/html; charset=utf-8' });
     }
@@ -820,7 +904,6 @@ if (initial) showRoute(initial);
       }
       const fileAbs = routeToOutPath({ outAbs: outDir, route });
       if (!fss.existsSync(fileAbs)) return notFound(res, `No file for route: ${route}`);
-      // stream
       res.writeHead(200, {
         'Content-Type': 'application/json; charset=utf-8',
         'X-StaticAPI-Route': route,
@@ -832,12 +915,8 @@ if (initial) showRoute(initial);
     }
 
     // Serve built UI (if provided)
-    // We do this AFTER helper endpoints so they keep working.
     if (hasUi && (pathname.startsWith('/_ui') || pathname.startsWith('/ui'))) {
-      // map /_ui or /ui to the UI dist
-      // strip leading /_ui or /ui
-      const rel = pathname.replace(/^\/_?ui\/?/, ''); // e.g. "/_ui/assets/app.js" -> "assets/app.js"
-      // empty path → index.html
+      const rel = pathname.replace(/^\/_?ui\/?/, '');
       const reqPath = rel === '' ? 'index.html' : rel;
 
       const served = await tryServeFrom(uiDir, reqPath, { spaFallback: 'index.html' });
@@ -847,18 +926,15 @@ if (initial) showRoute(initial);
           'Cache-Control': 'no-store',
         });
       }
-      // If we couldn't serve a file, return 404 (helpers already handled above)
       return notFound(res);
     }
 
     // Static serve from api-out (best-effort)
-    // Prevent path traversal
     const safe = path.normalize(path.join(outDir, pathname));
     if (!safe.startsWith(outDir)) return notFound(res);
     try {
       const stat = await fs.stat(safe);
       if (stat.isDirectory()) {
-        // If directory, try index.json
         const idx = path.join(safe, 'index.json');
         const s2 = await fs.readFile(idx);
         return send(res, 200, s2, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -2053,14 +2129,13 @@ export default function App() {
     return () => removeEventListener('hashchange', onHash);
   }, []);
 
-  useEffect(() => {
-    if (!active) return;
+  function fetchAndShow(route) {
+    if (!route) return;
     setLoading(true);
-    getRoute(active)
+    getRoute(route)
       .then(({ text, headers }) => {
         setRawText(text);
         setHeaders(headers || {});
-        // Try parse JSON for Tree/Pretty
         try {
           setJsonVal(JSON.parse(text));
         } catch {
@@ -2073,6 +2148,34 @@ export default function App() {
         setHeaders({});
       })
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    if (!active) return;
+    fetchAndShow(active);
+  }, [active]);
+
+  // Live reload via SSE
+  useEffect(() => {
+    const es = new EventSource('/_ui/events');
+    es.onmessage = async (ev) => {
+      const msg = String(ev.data || '');
+      if (msg.startsWith('changed:')) {
+        const route = msg.slice('changed:'.length);
+        try {
+          const list = await getManifest();
+          setManifest(list);
+        } catch {}
+        if (route && route === active) {
+          fetchAndShow(active);
+        }
+      }
+    };
+    es.onerror = () => {
+      // browser will retry automatically; no-op
+    };
+    return () => es.close();
+    // Include `active` so when it changes we rebind handler that compares current route
   }, [active]);
 
   const filtered = useMemo(() => {
@@ -2097,7 +2200,6 @@ export default function App() {
   // keyboard: up/down to change highlight, Enter to pick
   useEffect(() => {
     const onKey = (e) => {
-      // Only react when focus is on the search input or inside the list
       const inScope =
         document.activeElement === inputRef.current ||
         (listRef.current && listRef.current.contains(document.activeElement));
@@ -2136,7 +2238,6 @@ export default function App() {
   function formatDate(ms) {
     const d = new Date(ms);
     if (isNaN(d)) return '—';
-    // Short & local
     return d.toLocaleString();
   }
 
@@ -2540,6 +2641,11 @@ export default defineConfig({
     proxy: {
       '/ui/index': 'http://127.0.0.1:8788',
       '/_ui/file': 'http://127.0.0.1:8788',
+      '/_ui/events': {
+        target: 'http://127.0.0.1:8788',
+        changeOrigin: false,
+        ws: false,
+      },
     },
   },
   build: {
@@ -2571,10 +2677,10 @@ export default { hello: 'world!' };
 
 ===== FILE: src-api/users/[id].js =====
 export async function paths() {
-  return ['1', '2', '3', '4', '5'];
+  return ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
 }
 
 export async function data({ params }) {
-  return { id: params.id, extra: 'value!' };
+  return { id: params.id, extra: 'value' };
 }
 

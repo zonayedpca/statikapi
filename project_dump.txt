@@ -53,6 +53,8 @@ shared-workspace-lockfile=true
 ===== FILE: api-out/users/1/index.json [binary skipped] =====
 ===== FILE: api-out/users/2/index.json [binary skipped] =====
 ===== FILE: api-out/users/3/index.json [binary skipped] =====
+===== FILE: api-out/users/4/index.json [binary skipped] =====
+===== FILE: api-out/users/5/index.json [binary skipped] =====
 ===== FILE: eslint.config.js =====
 // eslint.config.js
 import js from '@eslint/js';
@@ -2017,7 +2019,7 @@ module.exports = {
 };
 
 ===== FILE: packages/ui/src/App.jsx =====
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getManifest, getRouteText } from './api.js';
 
 export default function App() {
@@ -2026,6 +2028,9 @@ export default function App() {
   const [active, setActive] = useState('');
   const [content, setContent] = useState('Select a route…');
   const [loading, setLoading] = useState(false);
+  const [hi, setHi] = useState(0); // highlight index in filtered list
+  const listRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     getManifest().then(setManifest).catch(console.error);
@@ -2062,10 +2067,75 @@ export default function App() {
     return manifest.filter((m) => (m.route || '').toLowerCase().includes(q));
   }, [manifest, query]);
 
+  // keep highlight index within bounds whenever filter changes
+  useEffect(() => {
+    setHi((i) => {
+      if (!filtered.length) return 0;
+      return Math.min(Math.max(i, 0), filtered.length - 1);
+    });
+  }, [filtered]);
+
   const pick = (route) => {
     setActive(route);
     location.hash = encodeURIComponent(route);
   };
+
+  // keyboard: up/down to change highlight, Enter to pick
+  useEffect(() => {
+    const onKey = (e) => {
+      // Only react when focus is on the search input or inside the list
+      const inScope =
+        document.activeElement === inputRef.current ||
+        (listRef.current && listRef.current.contains(document.activeElement));
+      if (!inScope) return;
+      if (!filtered.length) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHi((i) => Math.min(i + 1, filtered.length - 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHi((i) => Math.max(i - 1, 0));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const r = filtered[hi]?.route;
+        if (r) pick(r);
+      }
+    };
+    addEventListener('keydown', onKey);
+    return () => removeEventListener('keydown', onKey);
+  }, [filtered, hi]);
+
+  function formatBytes(n) {
+    if (!Number.isFinite(n)) return '—';
+    if (n < 1024) return `${n} B`;
+    const units = ['KB', 'MB', 'GB'];
+    let u = -1;
+    let v = n;
+    do {
+      v /= 1024;
+      u++;
+    } while (v >= 1024 && u < units.length - 1);
+    const f = v >= 10 ? 0 : 1;
+    return `${v.toFixed(f)} ${units[u]}`;
+  }
+
+  function formatDate(ms) {
+    const d = new Date(ms);
+    if (isNaN(d)) return '—';
+    // Short & local
+    return d.toLocaleString();
+  }
+
+  function Badge({ children, title }) {
+    return (
+      <span
+        className="inline-block text-[11px] px-2 py-0.5 rounded bg-black/10 dark:bg-white/10 mr-2"
+        title={title}
+      >
+        {children}
+      </span>
+    );
+  }
 
   return (
     <div className="app grid grid-cols-[20rem_1fr] h-screen">
@@ -2076,26 +2146,51 @@ export default function App() {
         </header>
 
         <input
+          ref={inputRef}
           className="w-full border rounded px-2 py-1 mb-2"
           placeholder="Filter routes…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
 
-        <nav className="space-y-1">
-          {filtered.map((e) => (
-            <button
-              key={e.route}
-              onClick={() => pick(e.route)}
-              className={
-                'w-full text-left px-3 py-2 rounded hover:bg-black/10 ' +
-                (active === e.route ? 'bg-black/10' : '')
-              }
-              title={`${e.bytes} bytes • ${(e.hash || '').slice(0, 7)}`}
-            >
-              {e.route}
-            </button>
-          ))}
+        <nav
+          ref={listRef}
+          className="space-y-1"
+          role="listbox"
+          aria-label="Endpoints"
+          aria-activedescendant={
+            filtered[hi]?.route ? `route-${cssId(filtered[hi].route)}` : undefined
+          }
+        >
+          {filtered.map((e, idx) => {
+            const isActive = active === e.route;
+            const isHilited = idx === hi;
+            return (
+              <button
+                key={e.route}
+                id={`route-${cssId(e.route)}`}
+                role="option"
+                aria-selected={isHilited}
+                onClick={() => pick(e.route)}
+                className={[
+                  'w-full text-left px-3 py-2 rounded outline-none',
+                  'hover:bg-black/10 focus:ring-2 focus:ring-black/20 dark:focus:ring-white/20',
+                  isHilited ? 'bg-black/10 dark:bg-white/10' : '',
+                  isActive ? 'ring-1 ring-black/20 dark:ring-white/20' : '',
+                ].join(' ')}
+                title={`bytes: ${e.bytes} • hash: ${(e.hash || '').slice(0, 7)}`}
+              >
+                <div className="font-mono text-sm">{e.route}</div>
+                <div className="mt-1 text-[12px] text-black/70 dark:text-white/70">
+                  <Badge title={`${e.bytes} bytes`}>{formatBytes(e.bytes)}</Badge>
+                  <Badge title={`Modified: ${formatDate(e.mtime)}`}>{formatDate(e.mtime)}</Badge>
+                  <Badge title="Revalidate seconds">
+                    revalidate: {e.revalidate == null ? '—' : String(e.revalidate)}
+                  </Badge>
+                </div>
+              </button>
+            );
+          })}
           {!filtered.length && <div className="text-xs opacity-70">No routes match “{query}”.</div>}
         </nav>
       </aside>
@@ -2116,6 +2211,10 @@ export default function App() {
       </section>
     </div>
   );
+}
+
+function cssId(s) {
+  return s.replace(/[^a-zA-Z0-9-_:.]/g, '_');
 }
 
 ===== FILE: packages/ui/src/api.js =====
@@ -2225,7 +2324,7 @@ export default { hello: 'world!' };
 
 ===== FILE: src-api/users/[id].js =====
 export async function paths() {
-  return ['1', '2', '3'];
+  return ['1', '2', '3', '4', '5'];
 }
 
 export async function data({ params }) {

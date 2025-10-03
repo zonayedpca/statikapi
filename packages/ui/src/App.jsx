@@ -1,15 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { getManifest, getRouteText } from './api.js';
+import { getManifest, getRoute } from './api.js';
+import JsonTree from './components/JsonTree.jsx';
 
 export default function App() {
   const [manifest, setManifest] = useState([]);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState('');
-  const [content, setContent] = useState('Select a route…');
+  const [rawText, setRawText] = useState('Select a route…');
+  const [jsonVal, setJsonVal] = useState(null);
+  const [headers, setHeaders] = useState({});
   const [loading, setLoading] = useState(false);
   const [hi, setHi] = useState(0); // highlight index in filtered list
   const listRef = useRef(null);
   const inputRef = useRef(null);
+  const [tab, setTab] = useState('tree'); // 'tree' | 'pretty' | 'raw'
 
   useEffect(() => {
     getManifest().then(setManifest).catch(console.error);
@@ -29,15 +33,22 @@ export default function App() {
   useEffect(() => {
     if (!active) return;
     setLoading(true);
-    getRouteText(active)
-      .then((txt) => {
+    getRoute(active)
+      .then(({ text, headers }) => {
+        setRawText(text);
+        setHeaders(headers || {});
+        // Try parse JSON for Tree/Pretty
         try {
-          setContent(JSON.stringify(JSON.parse(txt), null, 2));
+          setJsonVal(JSON.parse(text));
         } catch {
-          setContent(txt);
+          setJsonVal(null);
         }
       })
-      .catch((e) => setContent(String(e)))
+      .catch((e) => {
+        setRawText(String(e));
+        setJsonVal(null);
+        setHeaders({});
+      })
       .finally(() => setLoading(false));
   }, [active]);
 
@@ -56,6 +67,7 @@ export default function App() {
 
   const pick = (route) => {
     setActive(route);
+    setTab('tree');
     location.hash = encodeURIComponent(route);
   };
 
@@ -115,6 +127,37 @@ export default function App() {
       </span>
     );
   }
+
+  function CopyButton({ getText }) {
+    const [ok, setOk] = useState(false);
+    return (
+      <button
+        className="text-xs px-2 py-1 border rounded hover:bg-black/10"
+        onClick={async () => {
+          try {
+            const txt = getText();
+            await navigator.clipboard.writeText(txt);
+            setOk(true);
+            setTimeout(() => setOk(false), 1200);
+          } catch {
+            /* ignore */
+          }
+        }}
+        title="Copy JSON to clipboard"
+      >
+        {ok ? 'Copied!' : 'Copy'}
+      </button>
+    );
+  }
+
+  const prettyText = useMemo(() => {
+    if (jsonVal == null) return rawText ?? '';
+    try {
+      return JSON.stringify(jsonVal, null, 2);
+    } catch {
+      return rawText ?? '';
+    }
+  }, [jsonVal, rawText]);
 
   return (
     <div className="app grid grid-cols-[20rem_1fr] h-screen">
@@ -184,7 +227,48 @@ export default function App() {
               <span className="font-mono">{active}</span>
               {loading && <span className="opacity-70 ml-2">loading…</span>}
             </div>
-            <pre className="whitespace-pre-wrap break-words bg-black/5 p-3 rounded">{content}</pre>
+            {/* Headers row */}
+            <div className="mb-2 text-[12px] flex items-center gap-2 flex-wrap">
+              <Badge title="Content-Type">{headers['content-type'] || '—'}</Badge>
+              <Badge title="ETag">{headers.etag || '—'}</Badge>
+              <Badge title="Cache-Control">{headers['cache-control'] || '—'}</Badge>
+              <div className="ml-auto">
+                <CopyButton getText={() => prettyText} />
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="mb-2 flex gap-2">
+              {['tree', 'pretty', 'raw'].map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTab(t)}
+                  className={[
+                    'text-sm px-3 py-1 rounded border',
+                    tab === t ? 'bg-black/10' : 'hover:bg-black/10',
+                  ].join(' ')}
+                >
+                  {t === 'tree' ? 'Tree' : t === 'pretty' ? 'Pretty' : 'Raw'}
+                </button>
+              ))}
+            </div>
+
+            {/* Viewer */}
+            <div className="bg-black/5 p-3 rounded overflow-auto">
+              {tab === 'tree' ? (
+                jsonVal != null ? (
+                  <JsonTree data={jsonVal} />
+                ) : (
+                  <div className="text-sm opacity-70">
+                    Not valid JSON — showing Raw/Pretty instead.
+                  </div>
+                )
+              ) : tab === 'pretty' ? (
+                <pre className="whitespace-pre text-sm">{prettyText}</pre>
+              ) : (
+                <pre className="whitespace-pre text-sm">{rawText}</pre>
+              )}
+            </div>
           </>
         )}
       </section>

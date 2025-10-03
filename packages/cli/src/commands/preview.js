@@ -72,8 +72,24 @@ export default async function previewCmd(argv) {
     }
   }
 
+  // --- SSE: subscribers/broadcast ---
+  const clients = new Set(); // Set<http.ServerResponse>
+  function sseSend(res, data) {
+    // default "message" event with one data line
+    res.write(`data: ${data}\n\n`);
+  }
+  function broadcast(data) {
+    for (const res of clients) {
+      try {
+        sseSend(res, data);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
   function htmlShell() {
-    // Minimal SPA shell; we’ll fully populate in the next task.
+    // Minimal SPA shell
     return `<!doctype html>
  <html lang="en">
  <meta charset="utf-8">
@@ -152,6 +168,20 @@ window.addEventListener('hashchange', () => {
 await loadManifest();
 const initial = decodeURIComponent(location.hash.slice(1));
 if (initial) showRoute(initial);
+
+// Live reload (SSE)
+const es = new EventSource('/_ui/events');
+es.onmessage = async (ev) => {
+  const msg = String(ev.data || '');
+  if (msg.startsWith('changed:')) {
+    const route = msg.slice('changed:'.length);
+    try { await loadManifest(); } catch {}
+    const current = decodeURIComponent(location.hash.slice(1));
+    if (current && route && current === route) {
+      showRoute(route);
+    }
+  }
+};
  </script>
  `;
   }
@@ -184,8 +214,6 @@ if (initial) showRoute(initial);
   }
 
   const server = http.createServer(async (req, res) => {
-    // Always use our configured host:port to build an absolute URL for parsing.
-    // Using req.headers.host can double-append the port (e.g., 127.0.0.1:8788:8788).
     const base = `http://${host}:${port}`;
     let url;
     try {
@@ -195,7 +223,39 @@ if (initial) showRoute(initial);
     }
     const pathname = url.pathname;
 
-    // UI shell
+    // --- SSE subscription ---
+    if (pathname === '/_ui/events') {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-store',
+        Connection: 'keep-alive',
+      });
+      res.write(': connected\n\n'); // comment line
+      clients.add(res);
+
+      // keepalive pings
+      const ping = setInterval(() => {
+        try {
+          res.write(': ping\n\n');
+        } catch {
+          // ignore write errors
+        }
+      }, 30000);
+
+      req.on('close', () => {
+        clearInterval(ping);
+        clients.delete(res);
+      });
+      return;
+    }
+
+    // Internal notify hook (used by dev watcher)
+    if (pathname === '/_ui/changed') {
+      const route = url.searchParams.get('route') || '';
+      broadcast(`changed:${route}`);
+      return send(res, 204, '');
+    }
+
     // UI root
     if (pathname === '/_ui' || pathname === '/ui' || pathname === '/ui/') {
       if (hasUi) {
@@ -207,7 +267,6 @@ if (initial) showRoute(initial);
           });
         }
       }
-      // fallback to minimal HTML shell if no built UI
       const html = htmlShell();
       return send(res, 200, html, { 'Content-Type': 'text/html; charset=utf-8' });
     }
@@ -234,7 +293,6 @@ if (initial) showRoute(initial);
       }
       const fileAbs = routeToOutPath({ outAbs: outDir, route });
       if (!fss.existsSync(fileAbs)) return notFound(res, `No file for route: ${route}`);
-      // stream
       res.writeHead(200, {
         'Content-Type': 'application/json; charset=utf-8',
         'X-StaticAPI-Route': route,
@@ -246,12 +304,8 @@ if (initial) showRoute(initial);
     }
 
     // Serve built UI (if provided)
-    // We do this AFTER helper endpoints so they keep working.
     if (hasUi && (pathname.startsWith('/_ui') || pathname.startsWith('/ui'))) {
-      // map /_ui or /ui to the UI dist
-      // strip leading /_ui or /ui
-      const rel = pathname.replace(/^\/_?ui\/?/, ''); // e.g. "/_ui/assets/app.js" -> "assets/app.js"
-      // empty path → index.html
+      const rel = pathname.replace(/^\/_?ui\/?/, '');
       const reqPath = rel === '' ? 'index.html' : rel;
 
       const served = await tryServeFrom(uiDir, reqPath, { spaFallback: 'index.html' });
@@ -261,18 +315,15 @@ if (initial) showRoute(initial);
           'Cache-Control': 'no-store',
         });
       }
-      // If we couldn't serve a file, return 404 (helpers already handled above)
       return notFound(res);
     }
 
     // Static serve from api-out (best-effort)
-    // Prevent path traversal
     const safe = path.normalize(path.join(outDir, pathname));
     if (!safe.startsWith(outDir)) return notFound(res);
     try {
       const stat = await fs.stat(safe);
       if (stat.isDirectory()) {
-        // If directory, try index.json
         const idx = path.join(safe, 'index.json');
         const s2 = await fs.readFile(idx);
         return send(res, 200, s2, { 'Content-Type': 'application/json; charset=utf-8' });

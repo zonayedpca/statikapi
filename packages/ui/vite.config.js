@@ -10,6 +10,11 @@ export default defineConfig({
     proxy: {
       '/ui/index': 'http://127.0.0.1:8788',
       '/_ui/file': 'http://127.0.0.1:8788',
+      '/_ui/events': {
+        target: 'http://127.0.0.1:8788',
+        changeOrigin: false,
+        ws: false,
+      },
     },
   },
   build: {

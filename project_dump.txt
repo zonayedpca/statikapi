@@ -2022,6 +2022,8 @@ module.exports = {
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getManifest, getRoute } from './api.js';
 import JsonTree from './components/JsonTree.jsx';
+import Snippets from './components/Snippets.jsx';
+import CopyButton from './components/CopyButton.jsx';
 
 export default function App() {
   const [manifest, setManifest] = useState([]);
@@ -2149,28 +2151,6 @@ export default function App() {
     );
   }
 
-  function CopyButton({ getText }) {
-    const [ok, setOk] = useState(false);
-    return (
-      <button
-        className="text-xs px-2 py-1 border rounded hover:bg-black/10"
-        onClick={async () => {
-          try {
-            const txt = getText();
-            await navigator.clipboard.writeText(txt);
-            setOk(true);
-            setTimeout(() => setOk(false), 1200);
-          } catch {
-            /* ignore */
-          }
-        }}
-        title="Copy JSON to clipboard"
-      >
-        {ok ? 'Copied!' : 'Copy'}
-      </button>
-    );
-  }
-
   const prettyText = useMemo(() => {
     if (jsonVal == null) return rawText ?? '';
     try {
@@ -2254,7 +2234,7 @@ export default function App() {
               <Badge title="ETag">{headers.etag || '—'}</Badge>
               <Badge title="Cache-Control">{headers['cache-control'] || '—'}</Badge>
               <div className="ml-auto">
-                <CopyButton getText={() => prettyText} />
+                <CopyButton getText={() => prettyText} label="Copy JSON" title="Copy JSON" />
               </div>
             </div>
 
@@ -2290,6 +2270,8 @@ export default function App() {
                 <pre className="whitespace-pre text-sm">{rawText}</pre>
               )}
             </div>
+            {/* Snippets */}
+            <Snippets route={active} />
           </>
         )}
       </section>
@@ -2319,6 +2301,33 @@ export async function getRoute(route) {
     'cache-control': res.headers.get('cache-control'),
   };
   return { text, headers };
+}
+
+===== FILE: packages/ui/src/components/CopyButton.jsx =====
+// packages/ui/src/components/CopyButton.jsx
+import React, { useState } from 'react';
+
+export default function CopyButton({ getText, label = 'Copy', title }) {
+  const [ok, setOk] = useState(false);
+  async function onCopy() {
+    try {
+      const txt = typeof getText === 'function' ? getText() : String(getText ?? '');
+      await navigator.clipboard.writeText(txt);
+      setOk(true);
+      setTimeout(() => setOk(false), 1200);
+    } catch {
+      /* ignore */
+    }
+  }
+  return (
+    <button
+      className="text-xs px-2 py-1 border rounded hover:bg-black/10"
+      onClick={onCopy}
+      title={title || label}
+    >
+      {ok ? 'Copied!' : label}
+    </button>
+  );
 }
 
 ===== FILE: packages/ui/src/components/JsonTree.jsx =====
@@ -2388,6 +2397,38 @@ function formatScalar(v) {
   return String(v);
 }
 
+===== FILE: packages/ui/src/components/Snippets.jsx =====
+// packages/ui/src/components/Snippets.jsx
+import React, { useMemo } from 'react';
+import CopyButton from './CopyButton.jsx';
+import { makeSnippets } from '../lib/snippets.js';
+
+export default function Snippets({ route }) {
+  const { curl, browser, node, url } = useMemo(() => makeSnippets(route), [route]);
+
+  const Block = ({ title, code, getText }) => (
+    <div className="border rounded mb-3 overflow-hidden">
+      <div className="px-3 py-2 flex items-center justify-between bg-black/5">
+        <div className="text-xs font-medium">{title}</div>
+        <CopyButton getText={getText || (() => code)} label="Copy" title={`Copy ${title}`} />
+      </div>
+      <pre className="p-3 text-xs whitespace-pre-wrap break-words">{code}</pre>
+    </div>
+  );
+
+  return (
+    <div className="mt-4">
+      <div className="mb-2 text-sm">
+        <span className="opacity-70">Absolute URL:</span> <code className="font-mono">{url}</code>
+      </div>
+
+      <Block title="curl" code={curl} />
+      <Block title="Browser fetch" code={browser} />
+      <Block title="Node fetch" code={node} />
+    </div>
+  );
+}
+
 ===== FILE: packages/ui/src/index.css =====
 @tailwind base;
 @tailwind components;
@@ -2399,6 +2440,54 @@ function formatScalar(v) {
   }
 }
  
+===== FILE: packages/ui/src/lib/snippets.js =====
+// packages/ui/src/lib/snippets.js
+
+function getOrigin() {
+  // Avoid touching `window` at import time; work in any env.
+  if (typeof globalThis !== 'undefined' && globalThis.location && globalThis.location.origin) {
+    return globalThis.location.origin;
+  }
+  // Fallback (kept empty so snippets still copy valid code; the UI runs in-browser anyway)
+  return '';
+}
+
+/** Build an absolute endpoint URL for a given route (e.g., "/users/1"). */
+export function endpointUrl(route, originOverride) {
+  const origin = originOverride || getOrigin();
+  return origin + route;
+}
+
+/** Return snippet strings for curl, browser fetch, and Node (built-in) fetch. */
+export function makeSnippets(route, { origin } = {}) {
+  const url = endpointUrl(route, origin);
+  const q = JSON.stringify(url); // safe in JS strings
+
+  const curl = `curl -sS -H "Accept: application/json" ${q}`;
+
+  const browser = `fetch(${q}, {
+  headers: { Accept: 'application/json' },
+  cache: 'no-store'
+})
+  .then(r => r.json())
+  .then(console.log)
+  .catch(console.error);`;
+
+  const node = `// Node 18+ has global fetch
+const res = await fetch(${q}, {
+  headers: { Accept: 'application/json' }
+});
+if (!res.ok) throw new Error('HTTP ' + res.status);
+const json = await res.json();
+console.log(json);
+
+// If you prefer Undici instead:
+// import { fetch } from 'undici'; // npm i undici
+`;
+
+  return { curl, browser, node, url };
+}
+
 ===== FILE: packages/ui/src/main.jsx =====
 import React from 'react';
 import { createRoot } from 'react-dom/client';

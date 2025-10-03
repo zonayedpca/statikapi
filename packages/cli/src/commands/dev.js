@@ -48,6 +48,21 @@ export default async function devCmd(argv) {
   const flags = readFlags(argv);
   const { config } = await loadConfig({ flags });
 
+  // Where to notify preview
+  const previewHost = String(flags.previewHost ?? '127.0.0.1');
+  const previewPort = Number.isFinite(flags.previewPort) ? Number(flags.previewPort) : 8788;
+  const notifyOrigin = `http://${previewHost}:${previewPort}`;
+
+  async function notifyChanged(route) {
+    try {
+      // Node 18+ has global fetch
+      const u = `${notifyOrigin}/_ui/changed?route=${encodeURIComponent(route)}`;
+      await fetch(u, { method: 'POST' }).catch(() => {});
+    } catch {
+      // Ignore if preview isn't running
+    }
+  }
+
   // Cache of outputs per source file (for deletions on subsequent rebuilds)
   const lastEmitted = new Map(); // fileAbs -> Set<concreteRoute>
 
@@ -79,7 +94,6 @@ export default async function devCmd(argv) {
     const st = await fs.stat(outFile).catch(() => null);
 
     const entry = {
-      // stable field order + unified schema
       route,
       outFile: relOut(outFile),
       srcFile: relSrc(srcFile),
@@ -102,13 +116,14 @@ export default async function devCmd(argv) {
     await writeFileEnsured(outFile, json);
     lastEmitted.set(r.file, new Set([r.route]));
     await upsertManifest({ route: r.route, srcFile: r.file, outFile, json });
+    // notify UI
+    await notifyChanged(r.route);
     return 1;
   }
 
   async function emitDynamic(r, { fresh = false } = {}) {
     const list = await loadPaths(r.file, r, { fresh });
     if (!list) {
-      // no paths() -> nothing to emit
       lastEmitted.set(r.file, new Set());
       return { written: 0, skipped: 1 };
     }
@@ -142,6 +157,12 @@ export default async function devCmd(argv) {
       }
     }
     lastEmitted.set(r.file, emittedRoutes);
+
+    // notify UI for all emitted routes
+    for (const route of emittedRoutes) {
+      await notifyChanged(route);
+    }
+
     return { written, skipped: 0 };
   }
 
@@ -193,12 +214,11 @@ export default async function devCmd(argv) {
       }
       await writeManifest();
     } catch (err) {
-      // Friendly error (already formatted in loaders), just print
       console.error(`[staticapi] ${err?.message || err}`);
     }
   }
 
-  // Initial full build (re-uses existing build pipeline for correctness)
+  // Initial full build
   clearScreen();
   console.log('staticapi dev → initial build…');
   const routes = await mapRoutes({ srcAbs: config.paths.srcAbs });

@@ -32,14 +32,13 @@ export default function App() {
     return () => removeEventListener('hashchange', onHash);
   }, []);
 
-  useEffect(() => {
-    if (!active) return;
+  function fetchAndShow(route) {
+    if (!route) return;
     setLoading(true);
-    getRoute(active)
+    getRoute(route)
       .then(({ text, headers }) => {
         setRawText(text);
         setHeaders(headers || {});
-        // Try parse JSON for Tree/Pretty
         try {
           setJsonVal(JSON.parse(text));
         } catch {
@@ -52,6 +51,34 @@ export default function App() {
         setHeaders({});
       })
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    if (!active) return;
+    fetchAndShow(active);
+  }, [active]);
+
+  // Live reload via SSE
+  useEffect(() => {
+    const es = new EventSource('/_ui/events');
+    es.onmessage = async (ev) => {
+      const msg = String(ev.data || '');
+      if (msg.startsWith('changed:')) {
+        const route = msg.slice('changed:'.length);
+        try {
+          const list = await getManifest();
+          setManifest(list);
+        } catch {}
+        if (route && route === active) {
+          fetchAndShow(active);
+        }
+      }
+    };
+    es.onerror = () => {
+      // browser will retry automatically; no-op
+    };
+    return () => es.close();
+    // Include `active` so when it changes we rebind handler that compares current route
   }, [active]);
 
   const filtered = useMemo(() => {
@@ -76,7 +103,6 @@ export default function App() {
   // keyboard: up/down to change highlight, Enter to pick
   useEffect(() => {
     const onKey = (e) => {
-      // Only react when focus is on the search input or inside the list
       const inScope =
         document.activeElement === inputRef.current ||
         (listRef.current && listRef.current.contains(document.activeElement));
@@ -115,7 +141,6 @@ export default function App() {
   function formatDate(ms) {
     const d = new Date(ms);
     if (isNaN(d)) return '—';
-    // Short & local
     return d.toLocaleString();
   }
 

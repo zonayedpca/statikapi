@@ -53,7 +53,6 @@ shared-workspace-lockfile=true
 ===== FILE: api-out/users/1/index.json [binary skipped] =====
 ===== FILE: api-out/users/2/index.json [binary skipped] =====
 ===== FILE: api-out/users/3/index.json [binary skipped] =====
-===== FILE: api-out/users/4/index.json [binary skipped] =====
 ===== FILE: eslint.config.js =====
 // eslint.config.js
 import js from '@eslint/js';
@@ -606,6 +605,23 @@ export default async function previewCmd(argv) {
   const autoOpen = flags.open === true;
 
   const { config } = await loadConfig({ flags });
+
+  const uiDir = flags.uiDir ? path.resolve(String(flags.uiDir)) : null;
+  const hasUi = uiDir && fss.existsSync(uiDir);
+
+  const MIME = {
+    '.html': 'text/html; charset=utf-8',
+    '.js': 'application/javascript; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.svg': 'image/svg+xml',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.ico': 'image/x-icon',
+    '.map': 'application/json',
+  };
+
   const outDir = config.paths.outAbs;
   const manifestPath = path.join(outDir, '.staticapi', 'manifest.json');
 
@@ -724,6 +740,33 @@ if (initial) showRoute(initial);
  `;
   }
 
+  async function tryServeFrom(rootDir, reqPath, { spaFallback = null } = {}) {
+    const target = path.normalize(path.join(rootDir, reqPath.replace(/^\/+/, '')));
+    if (!target.startsWith(rootDir)) return null; // path traversal guard
+    try {
+      const st = await fs.stat(target);
+      if (st.isDirectory()) {
+        const idx = path.join(target, 'index.html');
+        const buf = await fs.readFile(idx);
+        return { buf, ctype: MIME['.html'] };
+      }
+      const buf = await fs.readFile(target);
+      const ext = path.extname(target).toLowerCase();
+      return { buf, ctype: MIME[ext] || 'application/octet-stream' };
+    } catch {
+      if (spaFallback) {
+        try {
+          const fallback = path.join(rootDir, spaFallback);
+          const buf = await fs.readFile(fallback);
+          return { buf, ctype: MIME['.html'] };
+        } catch {
+          /* ignore */
+        }
+      }
+      return null;
+    }
+  }
+
   const server = http.createServer(async (req, res) => {
     // Always use our configured host:port to build an absolute URL for parsing.
     // Using req.headers.host can double-append the port (e.g., 127.0.0.1:8788:8788).
@@ -737,7 +780,18 @@ if (initial) showRoute(initial);
     const pathname = url.pathname;
 
     // UI shell
+    // UI root
     if (pathname === '/_ui' || pathname === '/ui' || pathname === '/ui/') {
+      if (hasUi) {
+        const served = await tryServeFrom(uiDir, 'index.html', { spaFallback: null });
+        if (served) {
+          return send(res, 200, served.buf, {
+            'Content-Type': served.ctype,
+            'Cache-Control': 'no-store',
+          });
+        }
+      }
+      // fallback to minimal HTML shell if no built UI
       const html = htmlShell();
       return send(res, 200, html, { 'Content-Type': 'text/html; charset=utf-8' });
     }
@@ -773,6 +827,26 @@ if (initial) showRoute(initial);
       });
       fss.createReadStream(fileAbs).pipe(res);
       return;
+    }
+
+    // Serve built UI (if provided)
+    // We do this AFTER helper endpoints so they keep working.
+    if (hasUi && (pathname.startsWith('/_ui') || pathname.startsWith('/ui'))) {
+      // map /_ui or /ui to the UI dist
+      // strip leading /_ui or /ui
+      const rel = pathname.replace(/^\/_?ui\/?/, ''); // e.g. "/_ui/assets/app.js" -> "assets/app.js"
+      // empty path → index.html
+      const reqPath = rel === '' ? 'index.html' : rel;
+
+      const served = await tryServeFrom(uiDir, reqPath, { spaFallback: 'index.html' });
+      if (served) {
+        return send(res, 200, served.buf, {
+          'Content-Type': served.ctype,
+          'Cache-Control': 'no-store',
+        });
+      }
+      // If we couldn't serve a file, return 404 (helpers already handled above)
+      return notFound(res);
     }
 
     // Static serve from api-out (best-effort)
@@ -1920,6 +1994,214 @@ test('hello() returns expected greeting', () => {
   assert.equal(hello(), 'hello, world');
 });
 
+===== FILE: packages/ui/index.html =====
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StaticAPI UI</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+===== FILE: packages/ui/package.json [binary skipped] =====
+===== FILE: packages/ui/postcss.config.cjs =====
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+};
+
+===== FILE: packages/ui/src/App.jsx =====
+import React, { useEffect, useMemo, useState } from 'react';
+import { getManifest, getRouteText } from './api.js';
+
+export default function App() {
+  const [manifest, setManifest] = useState([]);
+  const [query, setQuery] = useState('');
+  const [active, setActive] = useState('');
+  const [content, setContent] = useState('Select a route…');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    getManifest().then(setManifest).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    const init = decodeURIComponent(location.hash.slice(1));
+    if (init) setActive(init);
+    const onHash = () => {
+      const h = decodeURIComponent(location.hash.slice(1));
+      if (h) setActive(h);
+    };
+    addEventListener('hashchange', onHash);
+    return () => removeEventListener('hashchange', onHash);
+  }, []);
+
+  useEffect(() => {
+    if (!active) return;
+    setLoading(true);
+    getRouteText(active)
+      .then((txt) => {
+        try {
+          setContent(JSON.stringify(JSON.parse(txt), null, 2));
+        } catch {
+          setContent(txt);
+        }
+      })
+      .catch((e) => setContent(String(e)))
+      .finally(() => setLoading(false));
+  }, [active]);
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase();
+    return manifest.filter((m) => (m.route || '').toLowerCase().includes(q));
+  }, [manifest, query]);
+
+  const pick = (route) => {
+    setActive(route);
+    location.hash = encodeURIComponent(route);
+  };
+
+  return (
+    <div className="app grid grid-cols-[20rem_1fr] h-screen">
+      <aside className="border-r p-3 overflow-auto">
+        <header className="flex items-center justify-between mb-2">
+          <h1 className="font-semibold">StaticAPI</h1>
+          <div className="text-xs opacity-70">{manifest.length} routes</div>
+        </header>
+
+        <input
+          className="w-full border rounded px-2 py-1 mb-2"
+          placeholder="Filter routes…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+
+        <nav className="space-y-1">
+          {filtered.map((e) => (
+            <button
+              key={e.route}
+              onClick={() => pick(e.route)}
+              className={
+                'w-full text-left px-3 py-2 rounded hover:bg-black/10 ' +
+                (active === e.route ? 'bg-black/10' : '')
+              }
+              title={`${e.bytes} bytes • ${(e.hash || '').slice(0, 7)}`}
+            >
+              {e.route}
+            </button>
+          ))}
+          {!filtered.length && <div className="text-xs opacity-70">No routes match “{query}”.</div>}
+        </nav>
+      </aside>
+
+      <section className="p-3 overflow-auto">
+        {!active ? (
+          <div className="text-sm opacity-70">Select a route from the left to view its JSON.</div>
+        ) : (
+          <>
+            <div className="mb-2 text-sm">
+              <span className="opacity-70">Viewing:</span>{' '}
+              <span className="font-mono">{active}</span>
+              {loading && <span className="opacity-70 ml-2">loading…</span>}
+            </div>
+            <pre className="whitespace-pre-wrap break-words bg-black/5 p-3 rounded">{content}</pre>
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+
+===== FILE: packages/ui/src/api.js =====
+export async function getManifest() {
+  const res = await fetch('/ui/index', { cache: 'no-store' });
+  if (!res.ok) throw new Error(`manifest failed: ${res.status}`);
+  return res.json();
+}
+
+export async function getRouteText(route) {
+  const res = await fetch('/_ui/file?route=' + encodeURIComponent(route), { cache: 'no-store' });
+  if (!res.ok) throw new Error(`route ${route} failed: ${res.status}`);
+  return res.text();
+}
+
+===== FILE: packages/ui/src/index.css =====
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .scroll-smooth {
+    scroll-behavior: smooth;
+  }
+}
+ 
+===== FILE: packages/ui/src/main.jsx =====
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App.jsx';
+import './index.css';
+import './styles/global.scss';
+
+createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+===== FILE: packages/ui/src/styles/_variables.scss =====
+$brand: #7c3aed;
+$panel-bg: rgba(0, 0, 0, 0.03);
+
+===== FILE: packages/ui/src/styles/global.scss =====
+@use './variables' as *;
+
+:root {
+  color-scheme: light dark;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+.app {
+  background: $panel-bg;
+}
+===== FILE: packages/ui/tailwind.config.js =====
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{js,jsx}'],
+  theme: { extend: {} },
+  plugins: [],
+};
+
+===== FILE: packages/ui/vite.config.js =====
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  base: '/_ui/',
+  server: {
+    port: 5173,
+    open: false,
+    proxy: {
+      '/ui/index': 'http://127.0.0.1:8788',
+      '/_ui/file': 'http://127.0.0.1:8788',
+    },
+  },
+  build: {
+    outDir: 'dist',
+    sourcemap: true,
+  },
+});
+
 ===== FILE: pnpm-workspace.yaml =====
 packages:
   - "packages/*"
@@ -1947,6 +2229,6 @@ export async function paths() {
 }
 
 export async function data({ params }) {
-  return { id: params.id };
+  return { id: params.id, extra: 'value!' };
 }
 

@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getManifest, getRoute } from './api.js';
 import JsonTree from './components/JsonTree.jsx';
+import Snippets from './components/Snippets.jsx';
+import CopyButton from './components/CopyButton.jsx';
 
 export default function App() {
   const [manifest, setManifest] = useState([]);
@@ -128,28 +130,6 @@ export default function App() {
     );
   }
 
-  function CopyButton({ getText }) {
-    const [ok, setOk] = useState(false);
-    return (
-      <button
-        className="text-xs px-2 py-1 border rounded hover:bg-black/10"
-        onClick={async () => {
-          try {
-            const txt = getText();
-            await navigator.clipboard.writeText(txt);
-            setOk(true);
-            setTimeout(() => setOk(false), 1200);
-          } catch {
-            /* ignore */
-          }
-        }}
-        title="Copy JSON to clipboard"
-      >
-        {ok ? 'Copied!' : 'Copy'}
-      </button>
-    );
-  }
-
   const prettyText = useMemo(() => {
     if (jsonVal == null) return rawText ?? '';
     try {
@@ -233,7 +213,7 @@ export default function App() {
               <Badge title="ETag">{headers.etag || '—'}</Badge>
               <Badge title="Cache-Control">{headers['cache-control'] || '—'}</Badge>
               <div className="ml-auto">
-                <CopyButton getText={() => prettyText} />
+                <CopyButton getText={() => prettyText} label="Copy JSON" title="Copy JSON" />
               </div>
             </div>
 
@@ -269,6 +249,8 @@ export default function App() {
                 <pre className="whitespace-pre text-sm">{rawText}</pre>
               )}
             </div>
+            {/* Snippets */}
+            <Snippets route={active} />
           </>
         )}
       </section>

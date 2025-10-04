@@ -154,6 +154,7 @@ export default async function devCmd(argv) {
           // ignore
         }
         deleteFromManifest(oldRoute);
+        await notifyChanged(oldRoute);
       }
     }
     lastEmitted.set(r.file, emittedRoutes);
@@ -194,6 +195,7 @@ export default async function devCmd(argv) {
             // ignore
           }
           deleteFromManifest(route);
+          await notifyChanged(route);
         }
         lastEmitted.delete(fileAbs);
       }

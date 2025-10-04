@@ -51,15 +51,12 @@ shared-workspace-lockfile=true
 ===== FILE: api-out/docs/guide/index.json [binary skipped] =====
 ===== FILE: api-out/index.json [binary skipped] =====
 ===== FILE: api-out/users/1/index.json [binary skipped] =====
-===== FILE: api-out/users/10/index.json [binary skipped] =====
 ===== FILE: api-out/users/2/index.json [binary skipped] =====
 ===== FILE: api-out/users/3/index.json [binary skipped] =====
 ===== FILE: api-out/users/4/index.json [binary skipped] =====
 ===== FILE: api-out/users/5/index.json [binary skipped] =====
 ===== FILE: api-out/users/6/index.json [binary skipped] =====
 ===== FILE: api-out/users/7/index.json [binary skipped] =====
-===== FILE: api-out/users/8/index.json [binary skipped] =====
-===== FILE: api-out/users/9/index.json [binary skipped] =====
 ===== FILE: eslint.config.js =====
 // eslint.config.js
 import js from '@eslint/js';
@@ -511,6 +508,7 @@ export default async function devCmd(argv) {
           // ignore
         }
         deleteFromManifest(oldRoute);
+        await notifyChanged(oldRoute);
       }
     }
     lastEmitted.set(r.file, emittedRoutes);
@@ -551,6 +549,7 @@ export default async function devCmd(argv) {
             // ignore
           }
           deleteFromManifest(route);
+          await notifyChanged(route);
         }
         lastEmitted.delete(fileAbs);
       }
@@ -2677,7 +2676,7 @@ export default { hello: 'world!' };
 
 ===== FILE: src-api/users/[id].js =====
 export async function paths() {
-  return ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
+  return ['1', '2', '3', '4', '5', '6', '7'];
 }
 
 export async function data({ params }) {

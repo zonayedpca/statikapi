@@ -7,6 +7,8 @@ dist
 .tmp
 tmp
 coverage
+api-out
+example/**/api-out
 
 # editors
 .DS_Store

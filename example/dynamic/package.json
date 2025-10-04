@@ -1,0 +1,10 @@
+{
+  "name": "example-dynamic",
+  "private": true,
+  "type": "module",
+  "scripts": {
+     "dev": "node ../../packages/cli/bin/staticapi.js dev",
+     "build": "node ../../packages/cli/bin/staticapi.js build --pretty",
+     "preview": "node ../../packages/cli/bin/staticapi.js preview --open"
+  }
+}

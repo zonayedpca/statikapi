@@ -11,4 +11,4 @@ Two tiny projects you can run locally:
 - `pnpm build` — one-off build to `api-out/`
 - `pnpm preview` — serves `api-out` at http://127.0.0.1:8788/_ui
 
-> These examples use the workspace CLI (`@staticapi/cli`), so make sure you ran `pnpm install` at the repo root first.
+> Make sure you’ve run `pnpm install` at the repo root first.

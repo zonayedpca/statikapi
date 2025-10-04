@@ -19,6 +19,8 @@ dist
 .tmp
 tmp
 coverage
+api-out
+example/**/api-out
 
 # editors
 .DS_Store
@@ -46,17 +48,6 @@ shared-workspace-lockfile=true
 - `pnpm -w format` – check Prettier formatting
 - `pnpm -w format:fix` – write Prettier fixes
 
-===== FILE: api-out/.staticapi/manifest.json [binary skipped] =====
-===== FILE: api-out/docs/a/b/index.json [binary skipped] =====
-===== FILE: api-out/docs/guide/index.json [binary skipped] =====
-===== FILE: api-out/index.json [binary skipped] =====
-===== FILE: api-out/users/1/index.json [binary skipped] =====
-===== FILE: api-out/users/2/index.json [binary skipped] =====
-===== FILE: api-out/users/3/index.json [binary skipped] =====
-===== FILE: api-out/users/4/index.json [binary skipped] =====
-===== FILE: api-out/users/5/index.json [binary skipped] =====
-===== FILE: api-out/users/6/index.json [binary skipped] =====
-===== FILE: api-out/users/7/index.json [binary skipped] =====
 ===== FILE: eslint.config.js =====
 // eslint.config.js
 import js from '@eslint/js';
@@ -135,6 +126,107 @@ export default [
   // Keep Prettier last
   prettier,
 ];
+
+===== FILE: example/README.md =====
+# StaticAPI — Examples
+
+Two tiny projects you can run locally:
+
+- `example/basic` — one static endpoint (`/`)
+- `example/dynamic` — dynamic users + catch-all docs
+
+## Common commands (run inside each example)
+
+- `pnpm dev` — watch & rebuild on changes (use with `pnpm preview`)
+- `pnpm build` — one-off build to `api-out/`
+- `pnpm preview` — serves `api-out` at http://127.0.0.1:8788/_ui
+
+> These examples use the workspace CLI (`@staticapi/cli`), so make sure you ran `pnpm install` at the repo root first.
+
+===== FILE: example/basic/README.md =====
+# Example: Basic
+
+A single static endpoint at `/`.
+
+## Run
+
+```
+pnpm dev        # in one terminal (watches src-api and writes to api-out)
+pnpm preview    # in another terminal (opens http://127.0.0.1:8788/_ui)
+
+Or build once:
+
+pnpm build
+pnpm preview
+```
+
+===== FILE: example/basic/package.json [binary skipped] =====
+===== FILE: example/basic/src-api/index.js =====
+export default {
+  project: 'StaticAPI',
+  example: 'basic',
+  timestamp: new Date().toISOString(),
+  message: 'Hello from example/basic!',
+};
+
+===== FILE: example/dynamic/README.md =====
+# Example: Dynamic
+
+Demonstrates:
+
+- `/` (static)
+- `/users/:id` (dynamic via `paths()`)
+- `/docs/*slug` (catch-all via `paths()`)
+
+## Run
+
+```
+pnpm dev        # watches and rebuilds
+pnpm preview    # Preview UI at http://127.0.0.1:8788/_ui
+
+Build once:
+pnpm build
+pnpm preview
+```
+
+===== FILE: example/dynamic/package.json [binary skipped] =====
+===== FILE: example/dynamic/src-api/docs/[...slug].js =====
+export async function paths() {
+  // Builds:
+  //   /docs/a/b
+  //   /docs/guide
+  return [['a', 'b'], ['guide']];
+}
+
+export async function data({ params }) {
+  return {
+    slug: params.slug,
+    path: params.slug.join('/'),
+    kind: params.slug.length > 1 ? 'section' : 'page',
+  };
+}
+
+===== FILE: example/dynamic/src-api/index.js =====
+export default {
+  project: 'StaticAPI',
+  example: 'dynamic',
+  endpoints: ['/users/:id', '/docs/*slug'],
+  note: 'Dynamic slugs are prebuilt from paths()',
+  timestamp: new Date().toISOString(),
+};
+
+===== FILE: example/dynamic/src-api/users/[id].js =====
+export async function paths() {
+  // Build seven concrete routes: /users/1 ... /users/7
+  return ['1', '2', '3', '4', '5', '6', '7'];
+}
+
+export async function data({ params }) {
+  return {
+    id: params.id,
+    role: Number(params.id) % 2 === 0 ? 'editor' : 'viewer',
+  };
+}
 
 ===== FILE: package.json [binary skipped] =====
 ===== FILE: packages/cli/bin/staticapi.js =====
@@ -2656,6 +2748,7 @@ export default defineConfig({
 ===== FILE: pnpm-workspace.yaml =====
 packages:
   - "packages/*"
+  - "example/*"
 
 ===== FILE: prettier.config.cjs =====
 /** @type {import('prettier').Config} */

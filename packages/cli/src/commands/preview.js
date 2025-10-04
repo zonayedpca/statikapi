@@ -22,8 +22,14 @@ export default async function previewCmd(argv) {
 
   const { config } = await loadConfig({ flags });
 
-  const uiDir = flags.uiDir ? path.resolve(String(flags.uiDir)) : null;
+  // --- React UI defaults ---
+  // If user passed --uiDir, we honor it. Otherwise we try repo UI build (packages/ui/dist).
+  const defaultUiDist = path.resolve(process.cwd(), 'packages/ui/dist');
+  const uiDir = flags.uiDir ? path.resolve(String(flags.uiDir)) : defaultUiDist;
   const hasUi = uiDir && fss.existsSync(uiDir);
+  // If there is no built UI, proxy /_ui/* to Vite dev by default.
+  const uiDevHost = String(flags.uiDevHost ?? '127.0.0.1');
+  const uiDevPort = Number.isFinite(flags.uiDevPort) ? Number(flags.uiDevPort) : 5173;
 
   const MIME = {
     '.html': 'text/html; charset=utf-8',
@@ -88,102 +94,38 @@ export default async function previewCmd(argv) {
     }
   }
 
-  function htmlShell() {
-    // Minimal SPA shell
-    return `<!doctype html>
- <html lang="en">
- <meta charset="utf-8">
- <meta name="viewport" content="width=device-width, initial-scale=1">
- <title>StaticAPI Preview</title>
- <style>
-:root { color-scheme: light dark; }
-body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; }
-header { padding: 12px 16px; border-bottom: 1px solid #00000022; }
-main { display: grid; grid-template-columns: 320px 1fr; min-height: calc(100vh - 49px); }
-aside { border-right: 1px solid #00000022; padding: 12px; overflow:auto; }
-section { padding: 12px; }
-.route { display: block; padding: 6px 8px; border-radius: 8px; text-decoration: none; color: inherit; }
-.route:hover { background: #00000010; }
-pre { white-space: pre-wrap; word-break: break-word; background: #00000008; padding: 12px; border-radius: 8px; }
-.muted { opacity: .7; font-size: 12px; }
- </style>
- <header>
-<strong>StaticAPI Preview</strong>
-<span class="muted">— quick viewer</span>
- </header>
- <main>
-<aside>
-  <div id="count" class="muted">Loading manifest…</div>
-  <nav id="list"></nav>
-</aside>
-<section>
-  <div class="muted">Select a route from the left to view its JSON.</div>
-  <pre id="view"></pre>
-</section>
- </main>
- <script type="module">
-const $count = document.getElementById('count');
-const $list = document.getElementById('list');
-const $view = document.getElementById('view');
- 
-async function loadManifest() {
-  const res = await fetch('/ui/index', { cache: 'no-store' });
-  const list = await res.json();
-  $count.textContent = list.length + ' route(s)';
-  $list.innerHTML = '';
-  for (const e of list) {
-    const a = document.createElement('a');
-    a.className = 'route';
-    a.href = '#'+encodeURIComponent(e.route);
-    a.textContent = e.route;
-    a.onclick = (ev) => {
-      ev.preventDefault();
-      showRoute(e.route);
+  // Simple proxy to Vite dev server (only used if no built UI is found)
+  async function proxyUi(req, res, uiPathname) {
+    const httpMod = uiDevHost.startsWith('https')
+      ? await import('node:https')
+      : await import('node:http');
+    const client = uiDevHost.startsWith('https') ? httpMod.default : httpMod.default;
+    const targetPath =
+      uiPathname + (req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '');
+    const opts = {
+      hostname: uiDevHost,
+      port: uiDevPort,
+      method: req.method || 'GET',
+      path: targetPath,
+      headers: req.headers,
     };
-    $list.appendChild(a);
-  }
-}
- 
-async function showRoute(route) {
-  const res = await fetch('/_ui/file?route=' + encodeURIComponent(route), { cache: 'no-store' });
-  if (!res.ok) {
-    $view.textContent = 'Failed to load: ' + route + '\\n' + (await res.text());
-    return;
-  }
-  const txt = await res.text();
-  try {
-    const obj = JSON.parse(txt);
-    $view.textContent = JSON.stringify(obj, null, 2);
-  } catch {
-    $view.textContent = txt;
-  }
-}
- 
-// simple hash-router for convenience
-window.addEventListener('hashchange', () => {
-  const r = decodeURIComponent(location.hash.slice(1));
-  if (r) showRoute(r);
-});
- 
-await loadManifest();
-const initial = decodeURIComponent(location.hash.slice(1));
-if (initial) showRoute(initial);
-
-// Live reload (SSE)
-const es = new EventSource('/_ui/events');
-es.onmessage = async (ev) => {
-  const msg = String(ev.data || '');
-  if (msg.startsWith('changed:')) {
-    const route = msg.slice('changed:'.length);
-    try { await loadManifest(); } catch {}
-    const current = decodeURIComponent(location.hash.slice(1));
-    if (current && route && current === route) {
-      showRoute(route);
-    }
-  }
-};
- </script>
- `;
+    const p = client.request(opts, (up) => {
+      const headers = { ...up.headers };
+      // Always no-store for UI assets
+      headers['cache-control'] = 'no-store';
+      res.writeHead(up.statusCode || 502, headers);
+      up.pipe(res);
+    });
+    p.on('error', () => {
+      const msg = `StaticAPI UI dev server not found at http://${uiDevHost}:${uiDevPort}. Start it with: pnpm -w --filter packages/ui dev`;
+      res.writeHead(502, {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-store',
+      });
+      res.end(msg);
+    });
+    if (req.readable) req.pipe(p);
+    else p.end();
   }
 
   async function tryServeFrom(rootDir, reqPath, { spaFallback = null } = {}) {
@@ -256,7 +198,7 @@ es.onmessage = async (ev) => {
       return send(res, 204, '');
     }
 
-    // UI root
+    // UI root always React: serve built dist if present; otherwise proxy to Vite dev
     if (pathname === '/_ui' || pathname === '/ui' || pathname === '/ui/') {
       if (hasUi) {
         const served = await tryServeFrom(uiDir, 'index.html', { spaFallback: null });
@@ -267,8 +209,7 @@ es.onmessage = async (ev) => {
           });
         }
       }
-      const html = htmlShell();
-      return send(res, 200, html, { 'Content-Type': 'text/html; charset=utf-8' });
+      return proxyUi(req, res, '/_ui/');
     }
 
     // Helper: manifest passthrough
@@ -303,19 +244,21 @@ es.onmessage = async (ev) => {
       return;
     }
 
-    // Serve built UI (if provided)
-    if (hasUi && (pathname.startsWith('/_ui') || pathname.startsWith('/ui'))) {
-      const rel = pathname.replace(/^\/_?ui\/?/, '');
-      const reqPath = rel === '' ? 'index.html' : rel;
-
-      const served = await tryServeFrom(uiDir, reqPath, { spaFallback: 'index.html' });
-      if (served) {
-        return send(res, 200, served.buf, {
-          'Content-Type': served.ctype,
-          'Cache-Control': 'no-store',
-        });
+    // Serve UI assets: built if present, else proxy to Vite dev
+    if (pathname.startsWith('/_ui') || pathname.startsWith('/ui')) {
+      if (hasUi) {
+        const rel = pathname.replace(/^\/_?ui\/?/, '');
+        const reqPath = rel === '' ? 'index.html' : rel;
+        const served = await tryServeFrom(uiDir, reqPath, { spaFallback: 'index.html' });
+        if (served) {
+          return send(res, 200, served.buf, {
+            'Content-Type': served.ctype,
+            'Cache-Control': 'no-store',
+          });
+        }
+        return notFound(res);
       }
-      return notFound(res);
+      return proxyUi(req, res, pathname);
     }
 
     // Static serve from api-out (best-effort)

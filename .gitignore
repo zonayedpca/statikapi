@@ -15,3 +15,6 @@ example/**/api-out
 .idea
 .vscode/*
 !.vscode/extensions.json
+
+# project
+project_dump.txt

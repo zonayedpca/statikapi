@@ -9,7 +9,18 @@ import globals from 'globals';
 export default [
   // Ignore build & vendor stuff
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/coverage/**', 'tmp', '.tmp'],
+    ignores: [
+      '**/node_modules/**',
+      '**/coverage/**',
+      'tmp',
+      '.tmp',
+      // Frontend build outputs (both the UI package and the copy bundled into the CLI)
+      'packages/ui/dist/**',
+      'packages/cli/ui/**', // if you copied UI here
+      'packages/cli/ui-dist/**', // or here, depending on your choice
+      // API build output
+      '**/api-out/**',
+    ],
   },
 
   // Base rules

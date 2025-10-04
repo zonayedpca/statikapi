@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import fss from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { URL } from 'node:url';
+import { URL, fileURLToPath } from 'node:url';
 import { readFlags } from '../util/readFlags.js';
 import { loadConfig } from '../config/loadConfig.js';
 import { routeToOutPath } from '../build/routeOutPath.js';
@@ -23,11 +23,12 @@ export default async function previewCmd(argv) {
   const { config } = await loadConfig({ flags });
 
   // --- React UI defaults ---
-  // If user passed --uiDir, we honor it. Otherwise we try repo UI build (packages/ui/dist).
-  const defaultUiDist = path.resolve(process.cwd(), 'packages/ui/dist');
-  const uiDir = flags.uiDir ? path.resolve(String(flags.uiDir)) : defaultUiDist;
+  // Prefer --uiDir; else use embedded UI inside this package; else proxy to Vite dev.
+  const here = path.dirname(fileURLToPath(import.meta.url)); // .../packages/cli/src/commands
+  const embeddedUi = path.resolve(here, '../../ui'); // .../packages/cli/ui
+  const uiDir = flags.uiDir ? path.resolve(String(flags.uiDir)) : embeddedUi;
   const hasUi = uiDir && fss.existsSync(uiDir);
-  // If there is no built UI, proxy /_ui/* to Vite dev by default.
+
   const uiDevHost = String(flags.uiDevHost ?? '127.0.0.1');
   const uiDevPort = Number.isFinite(flags.uiDevPort) ? Number(flags.uiDevPort) : 5173;
 

@@ -5,12 +5,25 @@
   "bin": {
     "staticapi": "bin/staticapi.js"
   },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
-    "@staticapi/core": "workspace:*",
     "chokidar": "^3.6.0"
   },
+  "files": [
+    "bin",
+    "src",
+    "ui",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "lint": "eslint . --ext .js",
-    "dev": "node bin/staticapi.js"
+    "dev": "node bin/staticapi.js",
+    "prepublishOnly": "node ./scripts/embed-ui.js"
   }
 }

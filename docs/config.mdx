@@ -1,0 +1,39 @@
+# Config
+
+StatikAPI reads `staticapi.config.js` (optional). You can also pass flags to override.
+
+## Example
+
+```js
+// staticapi.config.js
+export default {
+  srcDir: 'src-api',
+  outDir: 'api-out'
+};
+```
+
+**Rules:**
+
+- `srcDir` and `outDir` must be **relative** and **different**.
+- Paths are normalized (no `..` traversal).
+
+## Flags Override
+
+```bash
+staticapi build --srcDir src-api --outDir api-out
+```
+
+## Manifest
+
+Builds write a manifest to:
+
+```
+api-out/.staticapi/manifest.json
+```
+
+Each entry contains:
+
+- `route` – `/users/1`
+- `filePath` – output JSON path
+- `bytes`, `mtime`, `hash`
+- `revalidate` – reserved (currently `null`)

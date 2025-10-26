@@ -1,0 +1,48 @@
+# Getting Started
+
+Welcome to **StatikAPI** — generate static JSON endpoints from simple files.
+
+## Installation
+
+```bash
+pnpm add -D staticapi
+```
+
+Or use via the monorepo `packages/cli`:
+
+```bash
+node packages/cli/bin/staticapi.js build
+```
+
+## Quick Start
+
+Create `src-api/index.js`:
+
+```js
+export default { hello: 'world' };
+```
+
+Build:
+
+```bash
+staticapi build --pretty
+```
+
+Outputs:
+
+```
+api-out/
+└─ index.json
+```
+
+Preview:
+
+```bash
+staticapi preview --open
+```
+
+## What’s Next
+
+- Learn the **CLI** features: see `/docs/cli`
+- Configure paths & output: see `/docs/config`
+- Prebuild **dynamic** routes: see `/docs/advanced/dynamic-routes`

@@ -1,0 +1,7 @@
+{
+  "name": "StatikAPI",
+  "description": "Build static JSON endpoints from filesystem modules.",
+  "version": "0.1.0",
+  "lastUpdated": "2025-10-26T00:00:00.000Z",
+  "repo": "https://github.com/statikapi/statikapi"
+}

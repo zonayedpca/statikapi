@@ -1,0 +1,50 @@
+# CLI
+
+The `staticapi` command has four subcommands.
+
+## Usage
+
+```bash
+staticapi <command> [options]
+```
+
+### `init`
+
+Scaffold a new project (stub for now):
+
+```bash
+staticapi init
+```
+
+### `build`
+
+Build static JSON endpoints to `api-out/`.
+
+```bash
+staticapi build [--pretty] [--srcDir src-api] [--outDir api-out]
+```
+
+- `--pretty`: pretty-print JSON (or use `--minify=false`)
+- `--srcDir`: source folder (default `src-api`)
+- `--outDir`: output folder (default `api-out`)
+
+### `dev`
+
+Watch `src-api` and rebuild on change. Also notifies the preview UI via SSE.
+
+```bash
+staticapi dev [--previewHost 127.0.0.1] [--previewPort 8788]
+```
+
+### `preview`
+
+Serve the built JSON plus the embedded React UI at `/_ui`.
+
+```bash
+staticapi preview [--host 127.0.0.1] [--port 8788] [--open]
+```
+
+## Global Flags
+
+- `-h, --help`
+- `-v, --version`

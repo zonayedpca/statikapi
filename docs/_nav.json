@@ -1,0 +1,11 @@
+[
+  { "title": "Getting Started", "slug": "getting-started" },
+  { "title": "CLI", "slug": "cli" },
+  { "title": "Config", "slug": "config" },
+  {
+    "title": "Advanced",
+    "children": [
+      { "title": "Dynamic Routes", "slug": "advanced/dynamic-routes" }
+    ]
+  }
+]

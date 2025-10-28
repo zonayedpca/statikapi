@@ -18,6 +18,6 @@
   "scripts": {
     "build": "node ./scripts/build.js || true",
     "sync-ui": "rm -rf ui && mkdir -p ui && cp -R ../ui/dist/* ui/",
-    "prepack": "pnpm -w -C packages/ui build && pnpm -C packages/cli sync-ui"
+    "prepack": "pnpm -w --filter @statikapi/ui build && pnpm run sync-ui"
   }
 }

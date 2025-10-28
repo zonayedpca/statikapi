@@ -1,5 +1,5 @@
 {
-  "name": "__NAME__",
+  "name": "APP_NAME",
   "private": true,
   "type": "module",
   "scripts": {

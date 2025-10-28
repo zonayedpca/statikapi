@@ -1,5 +1,6 @@
 export default {
+  project: 'APP_NAME',
   endpoints: ['/users/:id', '/docs/*slug'],
-  project: '__NAME__',
+  note: 'Dynamic routes are prebuilt from paths()',
   generatedAt: new Date().toISOString(),
 };

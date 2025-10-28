@@ -1,5 +1,5 @@
 export default {
+  project: 'APP_NAME',
   hello: 'world',
-  project: '__NAME__',
   generatedAt: new Date().toISOString(),
 };

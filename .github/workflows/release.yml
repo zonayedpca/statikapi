@@ -3,8 +3,8 @@ name: Release (npm)
 on:
   push:
     tags:
-      - 'v*' # e.g., v0.1.0
-  workflow_dispatch: # allow manual runs
+      - 'v*' # e.g. v0.1.0
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,7 +13,6 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,7 +24,7 @@ jobs:
         with:
           node-version: 22
           registry-url: 'https://registry.npmjs.org'
-          cache: 'pnpm'
+          cache: 'pnpm' # cache store for pnpm
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -38,23 +37,48 @@ jobs:
       - name: Test
         run: pnpm -r test
 
+      # Build UI once (CLI prepack will only sync/copy)
       - name: Build UI (so CLI prepack is fast)
         run: pnpm -C packages/ui build
 
-      - name: Set npm auth token
-        run: npm config set //registry.npmjs.org/:_authToken=${NPM_TOKEN}
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # Safety: verify git tag matches package versions
+      - name: Verify versions match tag
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "Tag is: $TAG"
+          jq -r '.version' packages/core/package.json     | grep -x "$TAG"
+          jq -r '.version' packages/cli/package.json      | grep -x "$TAG"
+          jq -r '.version' packages/create-statikapi/package.json | grep -x "$TAG"
+          echo "✔ versions match"
 
-      # Publish order: core → cli → create-statikapi (to satisfy any cross-refs)
+      # Optional: pack dry-run to ensure files are included (bin+ui)
+      - name: Pack dry-run (core)
+        working-directory: packages/core
+        run: npm pack --dry-run
+      - name: Pack dry-run (cli)
+        working-directory: packages/cli
+        run: |
+          npm pack --dry-run
+          tar -tf *.tgz | grep -E 'bin/|ui/' || (echo "ui/ or bin/ missing from tarball" && exit 1)
+      - name: Pack dry-run (create-statikapi)
+        working-directory: packages/create-statikapi
+        run: npm pack --dry-run
+
+      # Publish order: core → cli → create-statikapi
       - name: Publish @statikapi/core
         working-directory: packages/core
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public --provenance
 
       - name: Publish statikapi (CLI)
         working-directory: packages/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public --provenance
 
       - name: Publish create-statikapi
         working-directory: packages/create-statikapi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public --provenance

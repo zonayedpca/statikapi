@@ -11,7 +11,10 @@
     "format": "prettier . --check",
     "format:fix": "prettier . --write",
     "test": "node --test",
-    "test:watch": "node --test --watch"
+    "test:watch": "node --test --watch",
+    "create:build": "pnpm -F create-statikapi build",
+    "create:dev": "pnpm -F create-statikapi dev",
+    "create:pack": "pnpm -F create-statikapi pack"
   },
   "devDependencies": {
     "@eslint/js": "^9",

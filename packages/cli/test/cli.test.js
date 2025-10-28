@@ -23,7 +23,7 @@ test('--help lists commands', async () => {
 });
 
 for (const [cmd, text] of [
-  ['init', 'scaffolding'],
+  ['init', 'to scaffold a new project'],
   ['build', 'building'],
   ['dev', 'starting'],
   ['preview', 'previewing'],

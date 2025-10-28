@@ -1,6 +1,13 @@
 {
   "name": "@statikapi/core",
   "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zonayedpca/statikapi",
+    "directory": "packages/core"
+  },
+  "bugs": { "url": "https://github.com/zonayedpca/statikapi/issues" },
+  "homepage": "https://github.com/zonayedpca/statikapi#readme",
   "type": "module",
   "exports": { ".": { "import": "./src/index.js" } },
   "files": ["src", "README.md", "LICENSE"],

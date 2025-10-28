@@ -1,15 +1,19 @@
 {
   "name": "statikapi",
   "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zonayedpca/statikapi",
+    "directory": "packages/cli"
+  },
+  "bugs": { "url": "https://github.com/zonayedpca/statikapi/issues" },
+  "homepage": "https://github.com/zonayedpca/statikapi#readme",
   "type": "module",
   "bin": { "statikapi": "bin/statikapi.js" },
   "files": ["bin", "dist", "ui", "src", "README.md", "LICENSE"],
   "exports": { ".": { "import": "./src/index.js" } },
   "engines": { "node": ">=18" },
   "license": "MIT",
-  "repository": "github:<YOUR_ORG>/<YOUR_REPO>",
-  "bugs": { "url": "https://github.com/<YOUR_ORG>/<YOUR_REPO>/issues" },
-  "homepage": "https://github.com/<YOUR_ORG>/<YOUR_REPO>#readme",
   "keywords": ["static", "json", "api", "cli", "ssg"],
   "publishConfig": { "access": "public", "provenance": true },
   "dependencies": {

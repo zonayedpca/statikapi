@@ -31,6 +31,10 @@ jobs:
         with:
           version: 9
 
+      # Add this step as a fallback if pnpm is still not found
+      - name: Install pnpm (manual fallback)
+        run: npm install -g pnpm@9
+
       - name: Install deps
         run: pnpm install --frozen-lockfile
 

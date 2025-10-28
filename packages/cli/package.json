@@ -25,5 +25,6 @@
     "lint": "eslint . --ext .js",
     "dev": "node bin/statikapi.js",
     "prepublishOnly": "node ./scripts/embed-ui.js"
-  }
+  },
+  "license": "MIT"
 }

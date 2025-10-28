@@ -1,4 +1,4 @@
-# Static API — Monorepo
+# Statik API — Monorepo
 
 - `packages/core`: shared core logic
 - `packages/cli`: CLI entry (`statikapi`)

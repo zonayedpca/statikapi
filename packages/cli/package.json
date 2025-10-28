@@ -2,29 +2,22 @@
   "name": "statikapi",
   "version": "0.1.0",
   "type": "module",
-  "bin": {
-    "statikapi": "bin/statikapi.js"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
+  "bin": { "statikapi": "bin/statikapi.js" },
+  "files": ["bin", "dist", "ui", "src", "README.md", "LICENSE"],
+  "exports": { ".": { "import": "./src/index.js" } },
+  "engines": { "node": ">=18" },
+  "license": "MIT",
+  "repository": "github:<YOUR_ORG>/<YOUR_REPO>",
+  "bugs": { "url": "https://github.com/<YOUR_ORG>/<YOUR_REPO>/issues" },
+  "homepage": "https://github.com/<YOUR_ORG>/<YOUR_REPO>#readme",
+  "keywords": ["static", "json", "api", "cli", "ssg"],
+  "publishConfig": { "access": "public", "provenance": true },
   "dependencies": {
     "chokidar": "^3.6.0"
   },
-  "files": [
-    "bin",
-    "src",
-    "ui",
-    "README.md",
-    "LICENSE"
-  ],
   "scripts": {
-    "lint": "eslint . --ext .js",
-    "dev": "node bin/statikapi.js",
-    "prepublishOnly": "node ./scripts/embed-ui.js"
-  },
-  "license": "MIT"
+    "build": "node ./scripts/build.js || true",
+    "sync-ui": "rm -rf ui && mkdir -p ui && cp -R ../ui/dist/* ui/",
+    "prepack": "pnpm -w -C packages/ui build && pnpm -C packages/cli sync-ui"
+  }
 }

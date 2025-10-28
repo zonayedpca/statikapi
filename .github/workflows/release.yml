@@ -1,0 +1,60 @@
+name: Release (npm)
+
+on:
+  push:
+    tags:
+      - 'v*' # e.g., v0.1.0
+  workflow_dispatch: # allow manual runs
+
+permissions:
+  contents: read
+  id-token: write # for npm provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm -r test
+
+      - name: Build UI (so CLI prepack is fast)
+        run: pnpm -C packages/ui build
+
+      - name: Set npm auth token
+        run: npm config set //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Publish order: core → cli → create-statikapi (to satisfy any cross-refs)
+      - name: Publish @statikapi/core
+        working-directory: packages/core
+        run: npm publish --access public --provenance
+
+      - name: Publish statikapi (CLI)
+        working-directory: packages/cli
+        run: npm publish --access public --provenance
+
+      - name: Publish create-statikapi
+        working-directory: packages/create-statikapi
+        run: npm publish --access public --provenance

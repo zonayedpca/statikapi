@@ -2,14 +2,8 @@
   "name": "@statikapi/core",
   "version": "0.1.0",
   "type": "module",
-  "main": "src/index.js",
-  "exports": {
-    ".": {
-      "import": "./src/index.js"
-    }
-  },
-  "files": ["src"],
-  "scripts": {
-    "lint": "eslint . --ext .js"
-  }
+  "exports": { ".": { "import": "./src/index.js" } },
+  "files": ["src", "README.md", "LICENSE"],
+  "license": "MIT",
+  "publishConfig": { "access": "public", "provenance": true }
 }

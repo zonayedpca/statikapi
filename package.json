@@ -10,11 +10,13 @@
     "lint": "eslint . --ext .js,.mjs,.cjs",
     "format": "prettier . --check",
     "format:fix": "prettier . --write",
-    "test": "node --test",
-    "test:watch": "node --test --watch",
+    "test": "pnpm -r test",
+    "test:watch": "pnpm -r test --watch",
+    "build": "pnpm -C packages/ui build",
     "create:build": "pnpm -F create-statikapi build",
     "create:dev": "pnpm -F create-statikapi dev",
-    "create:pack": "pnpm -F create-statikapi pack"
+    "create:pack": "pnpm -F create-statikapi pack",
+    "prepublishOnly": "pnpm -r test"
   },
   "devDependencies": {
     "@eslint/js": "^9",

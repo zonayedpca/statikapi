@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { makeTmp } from './_tmp.js';
 
-const BIN = path.resolve('packages/create-statikapi/bin/create-statikapi.js');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const BIN = path.resolve(__dirname, '../bin/create-statikapi.js');
 
 function runScaffold(cwd, args = []) {
   return new Promise((resolve, reject) => {

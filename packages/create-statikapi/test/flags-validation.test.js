@@ -2,9 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { makeTmp } from './_tmp.js';
 
-const BIN = path.resolve('packages/create-statikapi/bin/create-statikapi.js');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const BIN = path.resolve(__dirname, '../bin/create-statikapi.js');
 
 function run(args = [], opts = {}) {
   return new Promise((resolve) => {

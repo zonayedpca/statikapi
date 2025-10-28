@@ -9,5 +9,6 @@
   "scripts": {
     "test": "node --test"
   },
+  "publishConfig": { "access": "public", "provenance": true },
   "license": "MIT"
 }

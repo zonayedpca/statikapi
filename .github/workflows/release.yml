@@ -13,6 +13,7 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,7 +31,7 @@ jobs:
         with:
           version: 9
 
-      # Add this step as a fallback if pnpm is still not found
+      # Fallback, in case the runner image changes and pnpm isn't on PATH yet
       - name: Install pnpm (manual fallback)
         run: npm install -g pnpm@9
 
@@ -49,20 +50,28 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           echo "Tag is: $TAG"
-          jq -r '.version' packages/core/package.json     | grep -x "$TAG"
-          jq -r '.version' packages/cli/package.json      | grep -x "$TAG"
+          jq -r '.version' packages/core/package.json | grep -x "$TAG"
+          jq -r '.version' packages/cli/package.json | grep -x "$TAG"
           jq -r '.version' packages/create-statikapi/package.json | grep -x "$TAG"
           echo "✔ versions match"
 
-      # Optional: pack dry-run to ensure files are included (bin+ui)
+      # Optional sanity checks before publish
       - name: Pack dry-run (core)
         working-directory: packages/core
         run: npm pack --dry-run
-      - name: Pack dry-run (cli)
+
+      # IMPORTANT: actually pack the CLI (no dry-run), inspect tarball, then delete
+      - name: Pack & verify (cli)
         working-directory: packages/cli
         run: |
-          npm pack --dry-run
-          tar -tf *.tgz | grep -E 'bin/|ui/' || (echo "ui/ or bin/ missing from tarball" && exit 1)
+          PKG="$(npm pack | tail -n1)"
+          echo "Tarball: $PKG"
+          # Check that bin and ui are in the tarball (tarballs are rooted at 'package/')
+          tar -tf "$PKG" | grep -E '^package/bin/statikapi\.js$'
+          tar -tf "$PKG" | grep -E '^package/ui/index\.html$'
+          tar -tf "$PKG" | grep -E '^package/ui/assets/.+'
+          rm -f "$PKG"
+
       - name: Pack dry-run (create-statikapi)
         working-directory: packages/create-statikapi
         run: npm pack --dry-run

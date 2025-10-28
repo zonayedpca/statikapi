@@ -1,6 +1,6 @@
 # deps
 node_modules
-pnpm-lock.yaml
+# pnpm-lock.yaml
 
 # build outputs
 dist

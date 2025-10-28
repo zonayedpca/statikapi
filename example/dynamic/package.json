@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-     "dev": "node ../../packages/cli/bin/staticapi.js dev",
-     "build": "node ../../packages/cli/bin/staticapi.js build --pretty",
-     "preview": "node ../../packages/cli/bin/staticapi.js preview --open"
+     "dev": "node ../../packages/cli/bin/statikapi.js dev",
+     "build": "node ../../packages/cli/bin/statikapi.js build --pretty",
+     "preview": "node ../../packages/cli/bin/statikapi.js preview --open"
   }
 }

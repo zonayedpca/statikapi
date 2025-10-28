@@ -5,7 +5,7 @@ import { DEFAULT_CONFIG } from './defaults.js';
 import { validateAndNormalize, ConfigError } from './validate.js';
 
 export async function loadConfig({ cwd = process.cwd(), flags = {} } = {}) {
-  const file = path.join(cwd, 'staticapi.config.js');
+  const file = path.join(cwd, 'statikapi.config.js');
   let fromFile = false;
   let fileCfg = {};
 
@@ -20,7 +20,7 @@ export async function loadConfig({ cwd = process.cwd(), flags = {} } = {}) {
   } catch (err) {
     if (err?.code !== 'ENOENT') {
       const e = err instanceof Error ? err : new Error(String(err));
-      e.message = `Failed to load "staticapi.config.js": ${e.message}`;
+      e.message = `Failed to load "statikapi.config.js": ${e.message}`;
       throw e;
     }
     // no config file → fine

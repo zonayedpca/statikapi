@@ -1,4 +1,4 @@
-# StaticAPI — Examples
+# StatikAPI — Examples
 
 Two tiny projects you can run locally:
 

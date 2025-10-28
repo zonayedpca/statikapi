@@ -168,7 +168,7 @@ export default function App() {
     <div className="app grid grid-cols-[20rem_1fr] h-screen">
       <aside className="border-r p-3 overflow-auto">
         <header className="flex items-center justify-between mb-2">
-          <h1 className="font-semibold">StaticAPI</h1>
+          <h1 className="font-semibold">StatikAPI</h1>
           <div className="text-xs opacity-70">{manifest.length} routes</div>
         </header>
 

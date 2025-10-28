@@ -1,9 +1,9 @@
 {
-  "name": "staticapi",
+  "name": "statikapi",
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "staticapi": "bin/staticapi.js"
+    "statikapi": "bin/statikapi.js"
   },
   "engines": {
     "node": ">=18"
@@ -23,7 +23,7 @@
   ],
   "scripts": {
     "lint": "eslint . --ext .js",
-    "dev": "node bin/staticapi.js",
+    "dev": "node bin/statikapi.js",
     "prepublishOnly": "node ./scripts/embed-ui.js"
   }
 }

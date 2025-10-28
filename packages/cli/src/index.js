@@ -17,7 +17,7 @@ export async function run(argv = process.argv.slice(2)) {
   }
 
   if (cmd === '-v' || cmd === '--version') {
-    console.log(`staticapi v${version}`);
+    console.log(`statikapi v${version}`);
     return 0;
   }
 

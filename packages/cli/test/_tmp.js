@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 export async function makeTmp() {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'staticapi-'));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'statikapi-'));
   // Ensure .js files in this temp workspace are treated as ESM
   await fs.writeFile(path.join(dir, 'package.json'), JSON.stringify({ type: 'module' }), 'utf8');
   return {

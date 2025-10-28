@@ -51,7 +51,7 @@ export default async function buildCmd(argv) {
     const space = pretty ? 2 : 0;
 
     // keep legacy-friendly stub line so the old test passes
-    console.log('staticapi build → building JSON endpoints (MVP)');
+    console.log('statikapi build → building JSON endpoints (MVP)');
 
     // discover routes
     const routes = await mapRoutes({ srcAbs: config.paths.srcAbs });
@@ -161,7 +161,7 @@ export default async function buildCmd(argv) {
     }
 
     // Write manifest once (sorted for determinism)
-    const manifestPath = path.join(config.paths.outAbs, '.staticapi', 'manifest.json');
+    const manifestPath = path.join(config.paths.outAbs, '.statikapi', 'manifest.json');
     const sorted = manifest.sort((a, b) => a.route.localeCompare(b.route));
     const manifestJson = JSON.stringify(sorted, null, pretty ? 2 : 0) + (pretty ? '\n' : '');
     await writeFileEnsured(manifestPath, manifestJson);
@@ -172,20 +172,20 @@ export default async function buildCmd(argv) {
 
     const extra = skippedDynamic ? `, skipped ${skippedDynamic} dynamic route(s)` : '';
     console.log(
-      `[staticapi] wrote ${fileCount} file(s), ${formatBytes(byteCount)} in ${elapsed} ms${extra}`
+      `[statikapi] wrote ${fileCount} file(s), ${formatBytes(byteCount)} in ${elapsed} ms${extra}`
     );
     return 0;
   } catch (err) {
     if (err instanceof ConfigError) {
-      console.error(`[staticapi] Config error: ${err.message}`);
+      console.error(`[statikapi] Config error: ${err.message}`);
       return 1;
     }
     // LoaderError already includes file path; show as-is
     if (err && err.name === 'LoaderError') {
-      console.error(`[staticapi] ${err.message}`);
+      console.error(`[statikapi] ${err.message}`);
       return 1;
     }
-    console.error('[staticapi] Build failed:', err?.stack || err?.message || err);
+    console.error('[statikapi] Build failed:', err?.stack || err?.message || err);
     return 1;
   }
 }

@@ -1,5 +1,5 @@
 export default {
-  project: 'StaticAPI',
+  project: 'StatikAPI',
   example: 'dynamic',
   endpoints: ['/users/:id', '/docs/*slug'],
   note: 'Dynamic slugs are prebuilt from paths()',

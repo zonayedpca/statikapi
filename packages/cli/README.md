@@ -1,4 +1,4 @@
-# staticapi — Static API generator (CLI)
+# statikapi — Static API generator (CLI)
 
 Build a folder of JSON endpoints from simple files, then preview them in a lightweight UI.
 
@@ -9,21 +9,21 @@ Build a folder of JSON endpoints from simple files, then preview them in a light
 Use without installing (recommended):
 
 ```
-npx staticapi --help
+npx statikapi --help
 
 Or add to a project
-pnpm add -D staticapi
-# npm i -D staticapi
-# yarn add -D staticapi
+pnpm add -D statikapi
+# npm i -D statikapi
+# yarn add -D statikapi
 ```
 
 ## Commands
 
 ```
-staticapi <command> [options]
+statikapi <command> [options]
 
 Commands:
-  init        Scaffold a new StaticAPI project
+  init        Scaffold a new StatikAPI project
   build       Build static JSON endpoints
   dev         Watch & rebuild on changes
   preview     Serve the built JSON files + UI
@@ -43,11 +43,11 @@ echo "export default { hello: 'world' }" > src-api/index.js
 
 # 2) Build
 
-npx staticapi build --pretty
+npx statikapi build --pretty
 
 # 3) Preview (opens http://127.0.0.1:8788/_ui)
 
-npx staticapi preview
+npx statikapi preview
 ```
 
 ## Project layout
@@ -101,7 +101,7 @@ Returned data must be JSON-serializable (plain objects/arrays, finite numbers, n
 
 ## Config
 
-You can optionally add staticapi.config.js in your project root:
+You can optionally add statikapi.config.js in your project root:
 
 ```
 export default {

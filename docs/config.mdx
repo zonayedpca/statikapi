@@ -1,14 +1,14 @@
 # Config
 
-StatikAPI reads `staticapi.config.js` (optional). You can also pass flags to override.
+StatikAPI reads `statikapi.config.js` (optional). You can also pass flags to override.
 
 ## Example
 
 ```js
-// staticapi.config.js
+// statikapi.config.js
 export default {
   srcDir: 'src-api',
-  outDir: 'api-out'
+  outDir: 'api-out',
 };
 ```
 
@@ -20,7 +20,7 @@ export default {
 ## Flags Override
 
 ```bash
-staticapi build --srcDir src-api --outDir api-out
+statikapi build --srcDir src-api --outDir api-out
 ```
 
 ## Manifest
@@ -28,7 +28,7 @@ staticapi build --srcDir src-api --outDir api-out
 Builds write a manifest to:
 
 ```
-api-out/.staticapi/manifest.json
+api-out/.statikapi/manifest.json
 ```
 
 Each entry contains:

@@ -1,3 +1,3 @@
 export default async function initCmd(_argv) {
-  console.log('staticapi init → scaffolding a new StaticAPI project (stub)');
+  console.log('statikapi init → scaffolding a new StatikAPI project (stub)');
 }

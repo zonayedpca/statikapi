@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const BIN = resolve('packages/cli/bin/staticapi.js');
+const BIN = resolve('packages/cli/bin/statikapi.js');
 
 function run(args = []) {
   return new Promise((resolve, reject) => {

@@ -1,7 +1,7 @@
 # Static API — Monorepo
 
 - `packages/core`: shared core logic
-- `packages/cli`: CLI entry (`staticapi`)
+- `packages/cli`: CLI entry (`statikapi`)
 
 ## Scripts
 

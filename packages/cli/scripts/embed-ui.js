@@ -47,17 +47,17 @@ async function copyDir(src, dst) {
   if (!exists(uiDist)) {
     try {
       // Build the UI package from the workspace root
-      execSync('pnpm -w --filter @staticapi/ui build', {
+      execSync('pnpm -w --filter @statikapi/ui build', {
         stdio: 'inherit',
         cwd: path.resolve(cliRoot, '../../'),
       });
     } catch (e) {
-      console.error('[staticapi] Failed to build @staticapi/ui:', e?.message || e);
+      console.error('[statikapi] Failed to build @statikapi/ui:', e?.message || e);
       process.exit(1);
     }
   }
   if (!exists(uiDist)) {
-    console.error('[staticapi] @staticapi/ui build did not produce "dist".');
+    console.error('[statikapi] @statikapi/ui build did not produce "dist".');
     process.exit(1);
   }
 
@@ -67,10 +67,10 @@ async function copyDir(src, dst) {
 
   // 3) drop a tiny readme
   const note = `This folder is generated during publish by packages/cli/scripts/embed-ui.js
-and contains the prebuilt StaticAPI UI that the CLI serves at /_ui.\n`;
+and contains the prebuilt StatikAPI UI that the CLI serves at /_ui.\n`;
   await fsp.writeFile(path.join(dest, 'EMBEDDED_UI_README.txt'), note, 'utf8');
 
-  console.log(`[staticapi] Embedded UI → ${path.relative(process.cwd(), dest)}`);
+  console.log(`[statikapi] Embedded UI → ${path.relative(process.cwd(), dest)}`);
 })().catch((e) => {
   console.error(e);
   process.exit(1);

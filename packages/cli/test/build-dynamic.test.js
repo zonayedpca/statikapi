@@ -5,7 +5,7 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { makeTmp } from './_tmp.js';
 
-const BIN = path.resolve('packages/cli/bin/staticapi.js');
+const BIN = path.resolve('packages/cli/bin/statikapi.js');
 
 test('build emits dynamic and catch-all routes via paths()', async (t) => {
   const tmp = await makeTmp();

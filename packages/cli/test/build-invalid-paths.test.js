@@ -4,7 +4,7 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { makeTmp } from './_tmp.js';
 
-const BIN = path.resolve('packages/cli/bin/staticapi.js');
+const BIN = path.resolve('packages/cli/bin/statikapi.js');
 
 test('errors on invalid paths() return', async (t) => {
   const tmp = await makeTmp();

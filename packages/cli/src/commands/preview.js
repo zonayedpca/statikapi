@@ -11,7 +11,7 @@ import { routeToOutPath } from '../build/routeOutPath.js';
 export default async function previewCmd(argv) {
   // Keep old tests green: in non-TTY (node --test), behave like stub and exit.
   if (!process.stdout.isTTY) {
-    console.log('staticapi preview → previewing built JSON (stub)');
+    console.log('statikapi preview → previewing built JSON (stub)');
     return 0;
   }
 
@@ -46,7 +46,7 @@ export default async function previewCmd(argv) {
   };
 
   const outDir = config.paths.outAbs;
-  const manifestPath = path.join(outDir, '.staticapi', 'manifest.json');
+  const manifestPath = path.join(outDir, '.statikapi', 'manifest.json');
 
   const send = (res, code, body, headers = {}) => {
     const h = {
@@ -118,7 +118,7 @@ export default async function previewCmd(argv) {
       up.pipe(res);
     });
     p.on('error', () => {
-      const msg = `StaticAPI UI dev server not found at http://${uiDevHost}:${uiDevPort}. Start it with: pnpm -w --filter packages/ui dev`;
+      const msg = `StatikAPI UI dev server not found at http://${uiDevHost}:${uiDevPort}. Start it with: pnpm -w --filter packages/ui dev`;
       res.writeHead(502, {
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-store',
@@ -237,8 +237,8 @@ export default async function previewCmd(argv) {
       if (!fss.existsSync(fileAbs)) return notFound(res, `No file for route: ${route}`);
       res.writeHead(200, {
         'Content-Type': 'application/json; charset=utf-8',
-        'X-StaticAPI-Route': route,
-        'X-StaticAPI-File': path.relative(process.cwd(), fileAbs).replaceAll(path.sep, '/'),
+        'X-StatikAPI-Route': route,
+        'X-StatikAPI-File': path.relative(process.cwd(), fileAbs).replaceAll(path.sep, '/'),
         'Cache-Control': 'no-store',
       });
       fss.createReadStream(fileAbs).pipe(res);
@@ -289,7 +289,7 @@ export default async function previewCmd(argv) {
   });
 
   const url = `http://${host}:${port}/_ui`;
-  console.log(`staticapi preview → serving ${path.relative(process.cwd(), outDir) || outDir}`);
+  console.log(`statikapi preview → serving ${path.relative(process.cwd(), outDir) || outDir}`);
   console.log(`open  ${url}`);
 
   if (autoOpen) {

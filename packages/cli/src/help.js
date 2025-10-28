@@ -1,10 +1,10 @@
-export const HELP = `staticapi — Static API generator
+export const HELP = `statikapi — Static API generator
 
 Usage:
-  staticapi <command> [options]
+  statikapi <command> [options]
 
 Commands:
-  init        Scaffold a new StaticAPI project
+  init        Scaffold a new StatikAPI project
   build       Build static JSON endpoints
   dev         Start dev mode (watch & rebuild)
   preview     Serve the built JSON files
@@ -14,8 +14,8 @@ Global options:
   -v, --version   Show version
 
 Examples:
-  staticapi init
-  staticapi build
-  staticapi dev
-  staticapi preview
+  statikapi init
+  statikapi build
+  statikapi dev
+  statikapi preview
 `;

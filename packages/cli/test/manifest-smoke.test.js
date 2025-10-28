@@ -5,7 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { makeTmp } from './_tmp.js';
 
-const BIN = path.resolve('packages/cli/bin/staticapi.js');
+const BIN = path.resolve('packages/cli/bin/statikapi.js');
 
 test('build writes a manifest with basic fields', async (t) => {
   const tmp = await makeTmp();
@@ -23,7 +23,7 @@ test('build writes a manifest with basic fields', async (t) => {
   });
 
   // read manifest
-  const manifestPath = tmp.join('api-out/.staticapi/manifest.json');
+  const manifestPath = tmp.join('api-out/.statikapi/manifest.json');
   const raw = await fs.readFile(manifestPath, 'utf8');
   let list;
   try {

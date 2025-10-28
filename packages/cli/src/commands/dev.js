@@ -41,7 +41,7 @@ function toParams(segTokens, concreteRoute) {
 export default async function devCmd(argv) {
   // In non-TTY (like node --test), behave like the old stub so tests don't hang.
   if (!process.stdout.isTTY) {
-    console.log('staticapi dev → starting dev server (stub)');
+    console.log('statikapi dev → starting dev server (stub)');
     return 0;
   }
 
@@ -88,7 +88,7 @@ export default async function devCmd(argv) {
       a.route.localeCompare(b.route)
     );
     const json = JSON.stringify(list, null, 2) + '\n';
-    await writeFileEnsured(path.join(config.paths.outAbs, '.staticapi', 'manifest.json'), json);
+    await writeFileEnsured(path.join(config.paths.outAbs, '.statikapi', 'manifest.json'), json);
   }
   async function upsertManifest({ route, srcFile, outFile, json }) {
     const st = await fs.stat(outFile).catch(() => null);
@@ -181,7 +181,7 @@ export default async function devCmd(argv) {
     if (!shouldHandle(fileAbs)) return;
     const info = fileToRoute({ srcAbs: config.paths.srcAbs, fileAbs });
     clearScreen();
-    console.log(`staticapi dev → ${kind}: ${path.relative(process.cwd(), fileAbs)}`);
+    console.log(`statikapi dev → ${kind}: ${path.relative(process.cwd(), fileAbs)}`);
 
     if (!info) {
       // File is ignored or no longer maps; delete prior outputs if any
@@ -199,7 +199,7 @@ export default async function devCmd(argv) {
         }
         lastEmitted.delete(fileAbs);
       }
-      console.log(`[staticapi] (ignored or unmapped)`);
+      console.log(`[statikapi] (ignored or unmapped)`);
       await writeManifest();
       return;
     }
@@ -208,28 +208,28 @@ export default async function devCmd(argv) {
     try {
       if (r.type === 'static') {
         const files = await emitStatic(r, { fresh: true });
-        console.log(`[staticapi] wrote ${files} file(s) for ${r.route}`);
+        console.log(`[statikapi] wrote ${files} file(s) for ${r.route}`);
       } else {
         const { written, skipped } = await emitDynamic(r, { fresh: true });
         const extra = skipped ? `, skipped ${skipped}` : '';
-        console.log(`[staticapi] wrote ${written} file(s) for ${r.route}${extra}`);
+        console.log(`[statikapi] wrote ${written} file(s) for ${r.route}${extra}`);
       }
       await writeManifest();
     } catch (err) {
-      console.error(`[staticapi] ${err?.message || err}`);
+      console.error(`[statikapi] ${err?.message || err}`);
     }
   }
 
   // Initial full build
   clearScreen();
-  console.log('staticapi dev → initial build…');
+  console.log('statikapi dev → initial build…');
   const routes = await mapRoutes({ srcAbs: config.paths.srcAbs });
   for (const r of routes) {
     if (r.type === 'static') await emitStatic(r);
     else await emitDynamic(r);
   }
   await writeManifest();
-  console.log(`[staticapi] ready. Watching ${path.relative(process.cwd(), config.paths.srcAbs)}/`);
+  console.log(`[statikapi] ready. Watching ${path.relative(process.cwd(), config.paths.srcAbs)}/`);
 
   const watcher = chokidar.watch(config.paths.srcAbs, {
     ignoreInitial: true,

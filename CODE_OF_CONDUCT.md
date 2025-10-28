@@ -12,7 +12,7 @@ This applies to all project spaces: GitHub issues/PRs, discussions, and any proj
 
 ## Enforcement
 
-- Report incidents to **contact@statikapi.dev**.
+- Report incidents to **contact@statikapi.com**.
 - Maintainers may take any action deemed appropriate, including warnings or bans.
 
 ## Attribution

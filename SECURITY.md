@@ -12,7 +12,7 @@ StatikAPI is currently pre-1.0 and developed in a monorepo. We aim to patch the 
 
 Please **do not** open public issues for security problems.
 
-- Email: **contact@statikapi.dev**
+- Email: **contact@statikapi.com**
 - Include: steps to reproduce, affected version/commit, environment, and impact.
 - You should receive an acknowledgement within 72 hours. We’ll coordinate a private fix and a disclosure timeline with you.
 

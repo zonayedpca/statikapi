@@ -11,6 +11,13 @@ const DEFAULT_PM = 'pnpm';
 const DEFAULT_SRC = 'src-api';
 const DEFAULT_OUT = 'api-out';
 
+// deploy targets
+const DEPLOY_TARGETS = [
+  { title: 'Cloudflare Workers (wrangler.toml)', value: 'cloudflare' },
+  { title: 'Netlify (netlify.toml)', value: 'netlify' },
+  { title: 'GitHub Pages (actions workflow)', value: 'github' },
+];
+
 async function main(argv) {
   const args = parseArgs(argv);
 
@@ -19,7 +26,6 @@ async function main(argv) {
     process.exit(0);
   }
 
-  // Are we allowed to prompt?
   const interactive = process.stdout.isTTY && !args.yes;
 
   // seeds from flags/positionals
@@ -32,6 +38,9 @@ async function main(argv) {
   let srcDir = args['src-dir'] || '';
   let outDir = args['out-dir'] || '';
   let wantGitignore = args['no-gitignore'] ? false : true; // default: true
+
+  // deploy flags (comma-separated OK): e.g. --deploy cloudflare,github
+  let deploy = normalizeDeployArg(args.deploy);
 
   if (interactive) {
     const { default: prompts } = await import('prompts');
@@ -93,6 +102,15 @@ async function main(argv) {
           inactive: 'no',
           initial: wantGitignore ? 1 : 0,
         },
+        // new: deployment multiselect
+        {
+          type: 'multiselect',
+          name: 'deploy',
+          message: 'Where do you plan to deploy? (creates config files)',
+          instructions: false,
+          choices: DEPLOY_TARGETS.map((c) => ({ title: c.title, value: c.value })),
+          hint: 'Space to select, Enter to submit',
+        },
       ].filter(Boolean),
       {
         onCancel: () => {
@@ -108,6 +126,7 @@ async function main(argv) {
     srcDir = answers.srcDir || DEFAULT_SRC;
     outDir = answers.outDir || DEFAULT_OUT;
     wantGitignore = !!answers.gitignore;
+    deploy = deploy.length ? deploy : answers.deploy || [];
   }
 
   // Non-interactive fallbacks & validation
@@ -144,7 +163,7 @@ async function main(argv) {
 
   // Write config if user deviated from defaults
   if (srcDir !== DEFAULT_SRC || outDir !== DEFAULT_OUT) {
-    await writeConfigFile(dest, { srcDir, outDir });
+    await writeStatikConfig(dest, { srcDir, outDir });
   }
 
   // .gitignore (optional, default yes)
@@ -152,10 +171,16 @@ async function main(argv) {
     await writeGitignore(dest, outDir);
   }
 
+  // Deployment configs
+  if (deploy.length) {
+    await writeDeployConfigs(dest, { outDir, appName, deploy });
+  }
+
   console.log(`\nScaffolded ${appName} with "${template}" template.`);
   console.log(`- srcDir: ${srcDir}`);
   console.log(`- outDir: ${outDir}`);
-  console.log(`- .gitignore: ${wantGitignore ? 'yes' : 'no'}\n`);
+  console.log(`- .gitignore: ${wantGitignore ? 'yes' : 'no'}`);
+  console.log(`- deploy: ${deploy.length ? deploy.join(', ') : 'none'}\n`);
 
   if (doInstall) {
     console.log(`Installing dependencies with ${pkgMgr}...`);
@@ -186,13 +211,26 @@ function parseArgs(argv) {
     else if (t === '--package-manager') out['package-manager'] = argv[++i];
     else if (t === '--src-dir') out['src-dir'] = argv[++i];
     else if (t === '--out-dir') out['out-dir'] = argv[++i];
+    else if (t === '--deploy')
+      out.deploy = argv[++i]; // e.g. cloudflare,netlify
     else if (t.startsWith('--template=')) out.template = t.split('=', 2)[1];
     else if (t.startsWith('--package-manager=')) out['package-manager'] = t.split('=', 2)[1];
     else if (t.startsWith('--src-dir=')) out['src-dir'] = t.split('=', 2)[1];
     else if (t.startsWith('--out-dir=')) out['out-dir'] = t.split('=', 2)[1];
+    else if (t.startsWith('--deploy=')) out.deploy = t.split('=', 2)[1];
     else if (!t.startsWith('-')) out._.push(t);
   }
   return out;
+}
+
+function normalizeDeployArg(arg) {
+  if (!arg) return [];
+  if (Array.isArray(arg)) return arg;
+  return String(arg)
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+    .filter((x) => ['cloudflare', 'netlify', 'github'].includes(x));
 }
 
 function printHelp() {
@@ -204,6 +242,7 @@ Usage:
     [--yes] [--no-install] [--no-gitignore]
     [--package-manager pnpm|npm|yarn]
     [--src-dir <dir>] [--out-dir <dir>]
+    [--deploy cloudflare,netlify,github]
 
 Options:
   --template           Which template to use (default: ${DEFAULT_TEMPLATE})
@@ -213,12 +252,14 @@ Options:
   --package-manager    pnpm | npm | yarn (default: ${DEFAULT_PM})
   --src-dir            Source directory for endpoints (default: ${DEFAULT_SRC})
   --out-dir            Output directory for built JSON (default: ${DEFAULT_OUT})
+  --deploy             Comma-separated deployment targets: cloudflare, netlify, github
   --help, -h           Show this help
 
 Examples:
   create-statikapi my-api
   create-statikapi my-api --template dynamic --no-install
   create-statikapi my-api --package-manager npm --src-dir api --out-dir out
+  create-statikapi my-api --deploy cloudflare,github
 `);
 }
 
@@ -254,14 +295,14 @@ async function patchPkgJson(dest, appName) {
   const raw = await fs.readFile(p, 'utf8');
   const json = JSON.parse(raw);
   json.name = appName;
-  // Ensure dev scripts and devDependency on statikapi
   json.type = json.type || 'module';
   json.scripts = {
     dev: 'statikapi dev',
     build: 'statikapi build --pretty',
     preview: 'statikapi preview --open',
+    // tiny helpers for Netlify/GitHub if user wants:
+    'build:api': 'statikapi build',
   };
-  // keep your current CLI version constraint here
   json.devDependencies = { ...(json.devDependencies || {}), statikapi: '^0.1.3' };
   await fs.writeFile(p, JSON.stringify(json, null, 2) + '\n', 'utf8');
 }
@@ -270,15 +311,12 @@ async function ensureSrcDir(dest, srcDir) {
   const defaultSrc = path.join(dest, DEFAULT_SRC);
   const wantedSrc = path.join(dest, srcDir);
   if (srcDir === DEFAULT_SRC) {
-    // ensure exists
     await fs.mkdir(wantedSrc, { recursive: true });
     return;
   }
-  // If template created default dir, move it; otherwise just ensure the requested dir exists
   try {
     const st = await fs.stat(defaultSrc);
     if (st.isDirectory()) {
-      // make parent dirs for wanted path, then move
       await fs.mkdir(path.dirname(wantedSrc), { recursive: true });
       await fs.rename(defaultSrc, wantedSrc);
       return;
@@ -289,8 +327,8 @@ async function ensureSrcDir(dest, srcDir) {
   await fs.mkdir(wantedSrc, { recursive: true });
 }
 
-async function writeConfigFile(dest, { srcDir, outDir }) {
-  const cfgPath = path.join(dest, 'statikapi.config.mjs');
+async function writeStatikConfig(dest, { srcDir, outDir }) {
+  const cfgPath = path.join(dest, 'statikapi.config.js');
   const body = `export default {
   srcDir: ${JSON.stringify(srcDir)},
   outDir: ${JSON.stringify(outDir)},
@@ -309,6 +347,114 @@ coverage
 .DS_Store
 `;
   await fs.writeFile(p, txt, 'utf8');
+}
+
+async function writeDeployConfigs(dest, { outDir, appName, deploy }) {
+  if (deploy.includes('cloudflare')) {
+    await writeWranglerToml(dest, { outDir, appName });
+  }
+  if (deploy.includes('netlify')) {
+    await writeNetlifyToml(dest, { outDir });
+  }
+  if (deploy.includes('github')) {
+    await writeGithubPagesWorkflow(dest, { outDir });
+  }
+}
+
+async function writeWranglerToml(dest, { outDir, appName }) {
+  const p = path.join(dest, 'wrangler.toml');
+  if (!fss.existsSync(p)) {
+    const body = `name = "${sanitizeName(appName)}"
+main = "worker.js" # not used for static assets, but required by some setups
+compatibility_date = "${today()}"
+
+[assets]
+directory = "${outDir}"
+# Optional: specify binding routes or headers via Workers config if needed
+`;
+    await fs.writeFile(p, body, 'utf8');
+    // add a minimal worker stub only if missing
+    const worker = path.join(dest, 'worker.js');
+    if (!fss.existsSync(worker)) {
+      await fs.writeFile(
+        worker,
+        `export default { fetch: () => new Response("StatikAPI on Cloudflare Workers") };`,
+        'utf8'
+      );
+    }
+  }
+}
+
+async function writeNetlifyToml(dest, { outDir }) {
+  const p = path.join(dest, 'netlify.toml');
+  if (!fss.existsSync(p)) {
+    const body = `[build]
+publish = "${outDir}"
+# If you want Netlify to run a build, set a command (we build separately):
+# command = "pnpm build:api"
+`;
+    await fs.writeFile(p, body, 'utf8');
+  }
+}
+
+async function writeGithubPagesWorkflow(dest, { outDir }) {
+  const dir = path.join(dest, '.github', 'workflows');
+  await fs.mkdir(dir, { recursive: true });
+  const p = path.join(dir, 'pages.yml');
+  if (!fss.existsSync(p)) {
+    const body = `name: Deploy (GitHub Pages)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm i -g pnpm@9
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:api
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${JSON.stringify(outDir)}
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: github-pages
+      url: \${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+`;
+    await fs.writeFile(p, body, 'utf8');
+  }
+}
+
+function sanitizeName(s) {
+  return String(s || 'statikapi-app').replace(/[^a-z0-9-_]/gi, '-');
+}
+
+function today() {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
 function pmInstallCommand(pm) {

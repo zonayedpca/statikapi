@@ -205,7 +205,7 @@ async function patchPkgJson(dest, appName) {
     preview: 'statikapi preview --open',
   };
   // keep your current CLI version constraint
-  json.devDependencies = { ...(json.devDependencies || {}), statikapi: '^0.1.1' };
+  json.devDependencies = { ...(json.devDependencies || {}), statikapi: '^0.1.2' };
   await fs.writeFile(p, JSON.stringify(json, null, 2) + '\n', 'utf8');
 }
 

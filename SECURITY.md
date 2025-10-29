@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-StatikAPI is currently v0.1.1 and developed in a monorepo. We aim to patch the latest minor version only.
+StatikAPI is currently v0.1.2 and developed in a monorepo. We aim to patch the latest minor version only.
 
 | Version | Supported |
 | ------- | --------- |

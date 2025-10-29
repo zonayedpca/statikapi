@@ -4,14 +4,16 @@ import fss from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { URL, fileURLToPath } from 'node:url';
-import { readFlags } from '../util/readFlags.js';
+
 import { loadConfig } from '../config/loadConfig.js';
+import { readFlags } from '../util/readFlags.js';
 import { routeToOutPath } from '../build/routeOutPath.js';
 
 export default async function previewCmd(argv) {
   // Keep old tests green: in non-TTY (node --test), behave like stub and exit.
   if (!process.stdout.isTTY) {
     console.log('statikapi preview → previewing built JSON (stub)');
+
     return 0;
   }
 
@@ -53,7 +55,9 @@ export default async function previewCmd(argv) {
       'Cache-Control': 'no-store',
       ...headers,
     };
+
     res.writeHead(code, h);
+
     if (body && (typeof body === 'string' || Buffer.isBuffer(body))) res.end(body);
     else res.end();
   };
@@ -81,10 +85,12 @@ export default async function previewCmd(argv) {
 
   // --- SSE: subscribers/broadcast ---
   const clients = new Set(); // Set<http.ServerResponse>
+
   function sseSend(res, data) {
     // default "message" event with one data line
     res.write(`data: ${data}\n\n`);
   }
+
   function broadcast(data) {
     for (const res of clients) {
       try {

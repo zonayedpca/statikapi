@@ -13,11 +13,13 @@ export async function run(argv = process.argv.slice(2)) {
 
   if (!cmd || cmd === '-h' || cmd === '--help') {
     console.log(HELP);
+
     return 0;
   }
 
   if (cmd === '-v' || cmd === '--version') {
     console.log(`statikapi v${version}`);
+
     return 0;
   }
 

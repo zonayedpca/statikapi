@@ -1,10 +1,12 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import { LoaderError } from './errors.js';
 
 export async function loadPaths(fileAbs, { route, type, segments }, { fresh = false } = {}) {
   const fileInfo = short(fileAbs);
   let mod;
+
   try {
     const u = new URL(pathToFileURL(fileAbs).href);
     if (fresh) u.search = `v=${Date.now()}-${Math.random()}`;
@@ -12,9 +14,11 @@ export async function loadPaths(fileAbs, { route, type, segments }, { fresh = fa
   } catch (e) {
     throw new LoaderError(fileInfo, `Failed to import for paths(): ${e.message}`);
   }
+
   if (typeof mod?.paths !== 'function') return null;
 
   let res;
+
   try {
     res = await mod.paths();
   } catch (e) {
@@ -40,12 +44,14 @@ export async function loadPaths(fileAbs, { route, type, segments }, { fresh = fa
           `paths() entry for :${paramName(segments)} must not contain '/'`
         );
     }
+
     return res.map((v) => [v]); // normalize to array-of-segments
   }
 
   if (type === 'catchall') {
     // /docs/*slug → (string | string[])[]
     const out = [];
+
     for (const v of res) {
       if (typeof v === 'string') {
         if (!v)
@@ -80,6 +86,7 @@ export async function loadPaths(fileAbs, { route, type, segments }, { fresh = fa
         throw new LoaderError(fileInfo, `paths() for ${route} must be (string | string[])[]`);
       }
     }
+
     return out;
   }
 
@@ -90,6 +97,7 @@ export async function loadPaths(fileAbs, { route, type, segments }, { fresh = fa
 function paramName(segTokens) {
   // segTokens like ['users', ':id'] or ['docs','*slug']
   const tok = segTokens.find((t) => t.startsWith(':') || t.startsWith('*'));
+
   return tok ? tok.slice(1) : 'param';
 }
 

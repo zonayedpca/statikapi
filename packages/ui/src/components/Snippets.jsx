@@ -1,4 +1,3 @@
-// packages/ui/src/components/Snippets.jsx
 import React, { useMemo } from 'react';
 import CopyButton from './CopyButton.jsx';
 import { makeSnippets } from '../lib/snippets.js';

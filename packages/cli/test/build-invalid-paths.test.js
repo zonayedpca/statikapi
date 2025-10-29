@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
+
 import { makeTmp } from './_tmp.js';
 
 const BIN = path.resolve('packages/cli/bin/statikapi.js');

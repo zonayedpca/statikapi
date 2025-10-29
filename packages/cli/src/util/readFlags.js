@@ -1,5 +1,6 @@
 export function readFlags(argv = []) {
   const out = {};
+
   for (let i = 0; i < argv.length; i++) {
     const t = argv[i];
     if (!t.startsWith('-')) continue;
@@ -17,12 +18,15 @@ export function readFlags(argv = []) {
       }
     }
   }
+
   return out;
 }
 
 function coerce(v) {
   if (v === 'true') return true;
   if (v === 'false') return false;
+
   const n = Number(v);
+
   return Number.isFinite(n) ? n : v;
 }

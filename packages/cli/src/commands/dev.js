@@ -2,13 +2,14 @@ import chokidar from 'chokidar';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
-import { readFlags } from '../util/readFlags.js';
+
 import { loadConfig } from '../config/loadConfig.js';
-import { mapRoutes, fileToRoute } from '../router/mapRoutes.js';
-import { routeToOutPath } from '../build/routeOutPath.js';
-import { writeFileEnsured } from '../util/fsx.js';
 import { loadModuleValue } from '../loader/loadModuleValue.js';
 import { loadPaths } from '../loader/loadPaths.js';
+import { mapRoutes, fileToRoute } from '../router/mapRoutes.js';
+import { readFlags } from '../util/readFlags.js';
+import { writeFileEnsured } from '../util/fsx.js';
+import { routeToOutPath } from '../build/routeOutPath.js';
 
 function clearScreen() {
   process.stdout.write('\x1Bc'); // ANSI "clear screen"
@@ -16,25 +17,31 @@ function clearScreen() {
 
 function toConcrete(routePattern, segTokens, segs) {
   let idx = 0;
+
   const parts = routePattern.split('/').map((p) => {
     if (p.startsWith(':')) return segs[idx++] ?? '';
     if (p.startsWith('*')) return segs.slice(idx).join('/');
     return p;
   });
+
   return parts.join('/').replace(/\/+/g, '/');
 }
 
 function toParams(segTokens, concreteRoute) {
   const concreteSegs = concreteRoute.split('/').filter(Boolean);
   const params = {};
+
   for (let i = 0; i < segTokens.length; i++) {
     const tok = segTokens[i];
+
     if (tok.startsWith(':')) params[tok.slice(1)] = concreteSegs[i] ?? '';
     else if (tok.startsWith('*')) {
       params[tok.slice(1)] = concreteSegs.slice(i);
+
       break;
     }
   }
+
   return params;
 }
 
@@ -42,6 +49,7 @@ export default async function devCmd(argv) {
   // In non-TTY (like node --test), behave like the old stub so tests don't hang.
   if (!process.stdout.isTTY) {
     console.log('statikapi dev → starting dev server (stub)');
+
     return 0;
   }
 
@@ -57,6 +65,7 @@ export default async function devCmd(argv) {
     try {
       // Node 18+ has global fetch
       const u = `${notifyOrigin}/_ui/changed?route=${encodeURIComponent(route)}`;
+
       await fetch(u, { method: 'POST' }).catch(() => {});
     } catch {
       // Ignore if preview isn't running
@@ -68,6 +77,7 @@ export default async function devCmd(argv) {
 
   // Manifest state
   const manifestByRoute = new Map(); // route -> entry
+
   const digest = (s) => crypto.createHash('sha1').update(s).digest('hex');
   const relSrc = (abs) => {
     try {
@@ -103,6 +113,7 @@ export default async function devCmd(argv) {
       hash: digest(json),
       revalidate: null,
     };
+
     manifestByRoute.set(route, entry);
   }
   function deleteFromManifest(route) {
@@ -143,6 +154,7 @@ export default async function devCmd(argv) {
       await upsertManifest({ route: concrete, srcFile: r.file, outFile, json });
       written++;
     }
+
     // Delete stale outputs from this file (not present anymore)
     const prev = lastEmitted.get(r.file) || new Set();
     for (const oldRoute of prev) {
@@ -174,11 +186,13 @@ export default async function devCmd(argv) {
     if (!rel) return false;
     if (rel.startsWith('_')) return false;
     const ext = path.extname(rel);
+
     return ext === '.js' || ext === '.mjs' || ext === '.cjs';
   }
 
   async function buildOne(fileAbs, kind) {
     if (!shouldHandle(fileAbs)) return;
+
     const info = fileToRoute({ srcAbs: config.paths.srcAbs, fileAbs });
     clearScreen();
     console.log(`statikapi dev → ${kind}: ${path.relative(process.cwd(), fileAbs)}`);
@@ -186,6 +200,7 @@ export default async function devCmd(argv) {
     if (!info) {
       // File is ignored or no longer maps; delete prior outputs if any
       const prev = lastEmitted.get(fileAbs);
+
       if (prev) {
         for (const route of prev) {
           const p = routeToOutPath({ outAbs: config.paths.outAbs, route });
@@ -199,12 +214,15 @@ export default async function devCmd(argv) {
         }
         lastEmitted.delete(fileAbs);
       }
+
       console.log(`[statikapi] (ignored or unmapped)`);
       await writeManifest();
+
       return;
     }
 
     const r = { file: fileAbs, route: info.route, type: info.type, segments: info.normSegments };
+
     try {
       if (r.type === 'static') {
         const files = await emitStatic(r, { fresh: true });
@@ -223,11 +241,14 @@ export default async function devCmd(argv) {
   // Initial full build
   clearScreen();
   console.log('statikapi dev → initial build…');
+
   const routes = await mapRoutes({ srcAbs: config.paths.srcAbs });
+
   for (const r of routes) {
     if (r.type === 'static') await emitStatic(r);
     else await emitDynamic(r);
   }
+
   await writeManifest();
   console.log(`[statikapi] ready. Watching ${path.relative(process.cwd(), config.paths.srcAbs)}/`);
 
@@ -235,6 +256,7 @@ export default async function devCmd(argv) {
     ignoreInitial: true,
     ignored: (p) => path.basename(p).startsWith('_'),
   });
+
   watcher.on('add', (p) => buildOne(p, 'add'));
   watcher.on('change', (p) => buildOne(p, 'change'));
   watcher.on('unlink', (p) => buildOne(p, 'unlink'));
@@ -245,5 +267,6 @@ export default async function devCmd(argv) {
     process.on('SIGINT', stop);
     process.on('SIGTERM', stop);
   });
+
   return 0;
 }

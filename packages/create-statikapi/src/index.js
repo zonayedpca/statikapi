@@ -1,9 +1,9 @@
 import path from 'node:path';
-import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { mkdirp, copy, writeJson, renameInFiles } from './helpers.js';
 import prompts from 'prompts';
 import kleur from 'kleur';
+
+import { mkdirp, copy, writeJson, renameInFiles } from './helpers.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TPL = path.join(__dirname, 'templates');

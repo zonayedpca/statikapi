@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+
 import { loadModuleValue } from '../src/loader/loadModuleValue.js';
 
 const FIX = path.resolve('packages/cli/test/loader.fixture');
@@ -11,26 +12,31 @@ function f(name) {
 
 test('ESM default value', async () => {
   const v = await loadModuleValue(f('esm-value.js'));
+
   assert.deepEqual(v, { ok: 1 });
 });
 
 test('ESM data() function', async () => {
   const v = await loadModuleValue(f('esm-fn.js'));
+
   assert.deepEqual(v, { ok: 2 });
 });
 
 test('ESM default function', async () => {
   const v = await loadModuleValue(f('esm-fn-default.js'));
+
   assert.deepEqual(v, { ok: 3 });
 });
 
 test('CJS default value', async () => {
   const v = await loadModuleValue(f('cjs-value.cjs'));
+
   assert.deepEqual(v, { ok: 4 });
 });
 
 test('CJS default function', async () => {
   const v = await loadModuleValue(f('cjs-fn.cjs'));
+
   assert.deepEqual(v, { ok: 5 });
 });
 

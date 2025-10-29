@@ -1,27 +1,29 @@
-import { readFlags } from '../util/readFlags.js'; // from Task 3
-import { loadConfig } from '../config/loadConfig.js'; // from Task 3
-import { ConfigError } from '../config/validate.js'; // from Task 3
-import { mapRoutes } from '../router/mapRoutes.js'; // from Task 4
-import { loadModuleValue } from '../loader/loadModuleValue.js'; // from Task 5
-import { loadPaths } from '../loader/loadPaths.js';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 
+import { loadConfig } from '../config/loadConfig.js';
+import { ConfigError } from '../config/validate.js';
+import { loadPaths } from '../loader/loadPaths.js';
+import { loadModuleValue } from '../loader/loadModuleValue.js';
+import { mapRoutes } from '../router/mapRoutes.js';
+import { readFlags } from '../util/readFlags.js';
 import { emptyDir, writeFileEnsured } from '../util/fsx.js';
-import { routeToOutPath } from '../build/routeOutPath.js';
 import { formatBytes } from '../util/bytes.js';
+import { routeToOutPath } from '../build/routeOutPath.js';
 
 function toConcrete(routePattern, segTokens, segs) {
   // segTokens: ['users', ':id'] or ['docs','*slug']
   // segs: ['1'] or ['a','b']
   let idx = 0;
+
   const parts = routePattern.split('/').map((p) => {
     if (p.startsWith(':')) return segs[idx++] ?? '';
     if (p.startsWith('*')) return segs.slice(idx).join('/');
     return p;
   });
   const concrete = parts.join('/').replace(/\/+/g, '/');
+
   return concrete;
 }
 
@@ -56,7 +58,6 @@ export default async function buildCmd(argv) {
     // discover routes
     const routes = await mapRoutes({ srcAbs: config.paths.srcAbs });
 
-    // MVP: only handle static routes (dynamic/catch-all in next task)
     const staticRoutes = routes.filter((r) => r.type === 'static');
     const dynRoutes = routes.filter((r) => r.type === 'dynamic');
     const catRoutes = routes.filter((r) => r.type === 'catchall');

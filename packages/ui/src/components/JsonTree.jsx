@@ -1,4 +1,3 @@
-// packages/ui/src/components/JsonTree.jsx
 import React from 'react';
 
 export default function JsonTree({ data }) {

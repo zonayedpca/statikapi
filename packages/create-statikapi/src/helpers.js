@@ -1,5 +1,4 @@
 import fs from 'node:fs/promises';
-import fss from 'node:fs';
 import path from 'node:path';
 
 export async function mkdirp(p) {

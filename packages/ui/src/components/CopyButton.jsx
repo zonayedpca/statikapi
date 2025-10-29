@@ -1,4 +1,3 @@
-// packages/ui/src/components/CopyButton.jsx
 import React, { useState } from 'react';
 
 export default function CopyButton({ getText, label = 'Copy', title }) {

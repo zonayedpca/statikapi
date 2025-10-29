@@ -29,11 +29,14 @@ export async function mapRoutes({ srcAbs }) {
 async function walk(dir) {
   const out = [];
   const stack = [dir];
+
   while (stack.length) {
     const cur = stack.pop();
     const items = await fs.readdir(cur, { withFileTypes: true });
+
     for (const it of items) {
       const a = path.join(cur, it.name);
+
       if (it.isDirectory()) {
         stack.push(a);
       } else if (it.isFile()) {
@@ -41,6 +44,7 @@ async function walk(dir) {
       }
     }
   }
+
   return out;
 }
 
@@ -59,6 +63,7 @@ export function fileToRoute({ srcAbs, fileAbs }) {
   if (segments.some((s) => s.startsWith('_'))) return null;
 
   const { route, type, normSegments } = toRoute(segments);
+
   return { route, type, normSegments };
 }
 
@@ -107,8 +112,12 @@ function isCatchAll(seg) {
 // 3) fewer segments as a final tiebreaker
 function compareRoutes(a, b) {
   const rank = { static: 0, dynamic: 1, catchall: 2 };
+
   if (rank[a.type] !== rank[b.type]) return rank[a.type] - rank[b.type];
+
   const byRoute = a.route.localeCompare(b.route);
+
   if (byRoute !== 0) return byRoute;
+
   return a.segments.length - b.segments.length;
 }

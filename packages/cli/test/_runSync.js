@@ -6,6 +6,7 @@ export function runNodeSync(bin, args = []) {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+
     return { code: 0, stdout, stderr: '' };
   } catch (e) {
     return {

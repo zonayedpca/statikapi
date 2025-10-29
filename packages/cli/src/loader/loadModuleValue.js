@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import { LoaderError } from './errors.js';
 import { assertSerializable } from './serializeGuard.js';
 
@@ -15,6 +16,7 @@ export async function loadModuleValue(fileAbs, args = {}) {
 
   const fileInfo = short(fileAbs);
   let mod;
+
   try {
     const u = new URL(pathToFileURL(fileAbs).href);
     if (fresh) u.search = `v=${Date.now()}-${Math.random()}`;

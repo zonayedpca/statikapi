@@ -1,6 +1,7 @@
 export async function getManifest() {
   const res = await fetch('/ui/index', { cache: 'no-store' });
   if (!res.ok) throw new Error(`manifest failed: ${res.status}`);
+
   return res.json();
 }
 

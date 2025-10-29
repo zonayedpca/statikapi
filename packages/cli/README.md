@@ -157,4 +157,4 @@ pnpm -C example/dynamic preview
 
 License
 
-ISC – see LICENSE
+MIT – see LICENSE

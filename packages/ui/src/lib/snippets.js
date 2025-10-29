@@ -1,10 +1,9 @@
-// packages/ui/src/lib/snippets.js
-
 function getOrigin() {
   // Avoid touching `window` at import time; work in any env.
   if (typeof globalThis !== 'undefined' && globalThis.location && globalThis.location.origin) {
     return globalThis.location.origin;
   }
+
   // Fallback (kept empty so snippets still copy valid code; the UI runs in-browser anyway)
   return '';
 }

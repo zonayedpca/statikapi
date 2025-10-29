@@ -15,12 +15,14 @@ const DEFAULT_TEMPLATE = 'basic';
 
 async function main(argv) {
   const args = parseArgs(argv);
+
   if (args.help) {
     printHelp();
     process.exit(0);
   }
 
   const appName = args._[0];
+
   if (!appName) {
     console.error('Error: missing <app-name>\n');
     printHelp();
@@ -28,6 +30,7 @@ async function main(argv) {
   }
 
   const template = (args.template || DEFAULT_TEMPLATE).toLowerCase();
+
   if (!TEMPLATES.has(template)) {
     console.error(
       `Error: invalid template "${template}". Valid: ${Array.from(TEMPLATES).join(', ')}`
@@ -58,6 +61,7 @@ async function main(argv) {
   if (doInstall) {
     console.log(`Installing dependencies with ${pkgMgr}...`);
     const code = await run(pmInstallCommand(pkgMgr), { cwd: dest });
+
     if (code !== 0) {
       console.warn(`⚠️  ${pkgMgr} install failed (exit ${code}). You can run it manually later.`);
     }
@@ -67,6 +71,7 @@ async function main(argv) {
 
   console.log('\nNext steps:');
   console.log(`  cd ${appName}`);
+
   if (!doInstall) console.log(`  ${pkgMgr} install`);
   console.log('  ' + scriptHint(pkgMgr, 'dev') + '     # watch & rebuild (use with preview)');
   console.log('  ' + scriptHint(pkgMgr, 'preview') + ' # open the preview UI at /_ui\n');
@@ -74,6 +79,7 @@ async function main(argv) {
 
 function parseArgs(argv) {
   const out = { _: [] };
+
   for (let i = 0; i < argv.length; i++) {
     const t = argv[i];
     if (t === '--help' || t === '-h') out.help = true;
@@ -85,6 +91,7 @@ function parseArgs(argv) {
     else if (t.startsWith('--package-manager=')) out['package-manager'] = t.split('=', 2)[1];
     else if (!t.startsWith('-')) out._.push(t);
   }
+
   return out;
 }
 
@@ -112,6 +119,7 @@ async function ensureEmptyDir(dest) {
   try {
     await fs.mkdir(dest, { recursive: true });
     const ent = await fs.readdir(dest);
+
     if (ent.length > 0) {
       console.error(`Error: destination directory is not empty: ${dest}`);
       process.exit(1);
@@ -125,6 +133,7 @@ async function ensureEmptyDir(dest) {
 async function copyTemplate(src, dst) {
   await fs.mkdir(dst, { recursive: true });
   const items = await fs.readdir(src, { withFileTypes: true });
+
   for (const it of items) {
     const s = path.join(src, it.name);
     const d = path.join(dst, it.name);
@@ -167,12 +176,14 @@ coverage
 function pmInstallCommand(pm) {
   if (pm === 'npm') return ['npm', ['install']];
   if (pm === 'yarn') return ['yarn', []];
+
   return ['pnpm', ['install']]; // default
 }
 
 function scriptHint(pm, script) {
   if (pm === 'npm') return `npm run ${script}`;
   if (pm === 'yarn') return `yarn ${script}`;
+
   return `pnpm ${script}`;
 }
 
@@ -187,5 +198,6 @@ function run([cmd, args], opts = {}) {
 
 main(process.argv.slice(2)).catch((e) => {
   console.error(e?.stack || e?.message || String(e));
+
   process.exit(1);
 });

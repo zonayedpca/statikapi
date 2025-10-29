@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import { DEFAULT_CONFIG } from './defaults.js';
 import { validateAndNormalize, ConfigError } from './validate.js';
 
@@ -42,5 +43,6 @@ function pickFlags(flags) {
   const o = {};
   if (flags.srcDir != null) o.srcDir = String(flags.srcDir);
   if (flags.outDir != null) o.outDir = String(flags.outDir);
+
   return o;
 }

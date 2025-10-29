@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
+
 import { makeTmp } from './_tmp.js';
 
 const BIN = path.resolve('packages/cli/bin/statikapi.js');
@@ -45,6 +46,7 @@ export async function data({ params }){ return { doc: params.slug.join('/') }; }
   const u2 = JSON.parse(await fs.readFile(tmp.join('api-out/users/2/index.json'), 'utf8'));
   const d1 = JSON.parse(await fs.readFile(tmp.join('api-out/docs/a/b/index.json'), 'utf8'));
   const d2 = JSON.parse(await fs.readFile(tmp.join('api-out/docs/guide/index.json'), 'utf8'));
+
   assert.equal(u1.user, '1');
   assert.equal(u2.user, '2');
   assert.equal(d1.doc, 'a/b');

@@ -8,6 +8,8 @@ import { execFile } from 'node:child_process';
 const TEMPLATES = new Set(['basic', 'dynamic', 'remote-data']);
 const DEFAULT_TEMPLATE = 'basic';
 const DEFAULT_PM = 'pnpm';
+const DEFAULT_SRC = 'src-api';
+const DEFAULT_OUT = 'api-out';
 
 async function main(argv) {
   const args = parseArgs(argv);
@@ -17,13 +19,19 @@ async function main(argv) {
     process.exit(0);
   }
 
-  // Collect inputs, prompting only if missing and we're in TTY & not --yes
+  // Are we allowed to prompt?
   const interactive = process.stdout.isTTY && !args.yes;
 
+  // seeds from flags/positionals
   let appName = args._[0] || null;
   let template = (args.template || '').toLowerCase();
   let pkgMgr = String(args['package-manager'] || '');
   const doInstall = !args['no-install'];
+
+  // new flags
+  let srcDir = args['src-dir'] || '';
+  let outDir = args['out-dir'] || '';
+  let wantGitignore = args['no-gitignore'] ? false : true; // default: true
 
   if (interactive) {
     const { default: prompts } = await import('prompts');
@@ -65,6 +73,26 @@ async function main(argv) {
               ],
               initial: 0,
             },
+        {
+          type: 'text',
+          name: 'srcDir',
+          message: 'Source directory for endpoints',
+          initial: srcDir || DEFAULT_SRC,
+        },
+        {
+          type: 'text',
+          name: 'outDir',
+          message: 'Output directory for built JSON',
+          initial: outDir || DEFAULT_OUT,
+        },
+        {
+          type: 'toggle',
+          name: 'gitignore',
+          message: 'Add .gitignore?',
+          active: 'yes',
+          inactive: 'no',
+          initial: wantGitignore ? 1 : 0,
+        },
       ].filter(Boolean),
       {
         onCancel: () => {
@@ -77,6 +105,9 @@ async function main(argv) {
     appName = appName || answers.name;
     template = TEMPLATES.has(template) ? template : answers.template || DEFAULT_TEMPLATE;
     pkgMgr = pkgMgr || answers.pm || DEFAULT_PM;
+    srcDir = answers.srcDir || DEFAULT_SRC;
+    outDir = answers.outDir || DEFAULT_OUT;
+    wantGitignore = !!answers.gitignore;
   }
 
   // Non-interactive fallbacks & validation
@@ -93,23 +124,38 @@ async function main(argv) {
     process.exit(1);
   }
   if (!pkgMgr) pkgMgr = DEFAULT_PM;
+  if (!srcDir) srcDir = DEFAULT_SRC;
+  if (!outDir) outDir = DEFAULT_OUT;
 
   const cwd = process.cwd();
   const dest = path.resolve(cwd, appName);
-
   await ensureEmptyDir(dest);
 
   const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
   const tplRoot = path.resolve(__dirname, '..', 'templates', template);
 
   await copyTemplate(tplRoot, dest);
+
+  // Patch package.json (name, scripts, devDeps)
   await patchPkgJson(dest, appName);
-  await writeGitignore(dest);
 
-  // Ensure src-api exists (safety for tests & empty templates)
-  await fs.mkdir(path.join(dest, 'src-api'), { recursive: true });
+  // Ensure src dir exists; if template has src-api and user changed the name, move it.
+  await ensureSrcDir(dest, srcDir);
 
-  console.log(`\nScaffolded ${appName} with "${template}" template.\n`);
+  // Write config if user deviated from defaults
+  if (srcDir !== DEFAULT_SRC || outDir !== DEFAULT_OUT) {
+    await writeConfigFile(dest, { srcDir, outDir });
+  }
+
+  // .gitignore (optional, default yes)
+  if (wantGitignore) {
+    await writeGitignore(dest, outDir);
+  }
+
+  console.log(`\nScaffolded ${appName} with "${template}" template.`);
+  console.log(`- srcDir: ${srcDir}`);
+  console.log(`- outDir: ${outDir}`);
+  console.log(`- .gitignore: ${wantGitignore ? 'yes' : 'no'}\n`);
 
   if (doInstall) {
     console.log(`Installing dependencies with ${pkgMgr}...`);
@@ -135,10 +181,15 @@ function parseArgs(argv) {
     if (t === '--help' || t === '-h') out.help = true;
     else if (t === '--yes' || t === '-y') out.yes = true;
     else if (t === '--no-install') out['no-install'] = true;
+    else if (t === '--no-gitignore') out['no-gitignore'] = true;
     else if (t === '--template') out.template = argv[++i];
     else if (t === '--package-manager') out['package-manager'] = argv[++i];
+    else if (t === '--src-dir') out['src-dir'] = argv[++i];
+    else if (t === '--out-dir') out['out-dir'] = argv[++i];
     else if (t.startsWith('--template=')) out.template = t.split('=', 2)[1];
     else if (t.startsWith('--package-manager=')) out['package-manager'] = t.split('=', 2)[1];
+    else if (t.startsWith('--src-dir=')) out['src-dir'] = t.split('=', 2)[1];
+    else if (t.startsWith('--out-dir=')) out['out-dir'] = t.split('=', 2)[1];
     else if (!t.startsWith('-')) out._.push(t);
   }
   return out;
@@ -148,20 +199,26 @@ function printHelp() {
   console.log(`create-statikapi — scaffold a StatikAPI project
 
 Usage:
-  create-statikapi <app-name> [--template basic|dynamic|remote-data] [--yes]
-                   [--no-install] [--package-manager pnpm|npm|yarn]
+  create-statikapi <app-name>
+    [--template basic|dynamic|remote-data]
+    [--yes] [--no-install] [--no-gitignore]
+    [--package-manager pnpm|npm|yarn]
+    [--src-dir <dir>] [--out-dir <dir>]
 
 Options:
   --template           Which template to use (default: ${DEFAULT_TEMPLATE})
   --yes, -y            Accept defaults (skip interactive prompts)
-  --no-install         Do not run the package manager install step
+  --no-install         Skip installing dependencies
+  --no-gitignore       Do not create a .gitignore (default is to create one)
   --package-manager    pnpm | npm | yarn (default: ${DEFAULT_PM})
+  --src-dir            Source directory for endpoints (default: ${DEFAULT_SRC})
+  --out-dir            Output directory for built JSON (default: ${DEFAULT_OUT})
   --help, -h           Show this help
 
 Examples:
   create-statikapi my-api
   create-statikapi my-api --template dynamic --no-install
-  create-statikapi my-api --package-manager npm
+  create-statikapi my-api --package-manager npm --src-dir api --out-dir out
 `);
 }
 
@@ -204,16 +261,48 @@ async function patchPkgJson(dest, appName) {
     build: 'statikapi build --pretty',
     preview: 'statikapi preview --open',
   };
-  // keep your current CLI version constraint
+  // keep your current CLI version constraint here
   json.devDependencies = { ...(json.devDependencies || {}), statikapi: '^0.1.2' };
   await fs.writeFile(p, JSON.stringify(json, null, 2) + '\n', 'utf8');
 }
 
-async function writeGitignore(dest) {
+async function ensureSrcDir(dest, srcDir) {
+  const defaultSrc = path.join(dest, DEFAULT_SRC);
+  const wantedSrc = path.join(dest, srcDir);
+  if (srcDir === DEFAULT_SRC) {
+    // ensure exists
+    await fs.mkdir(wantedSrc, { recursive: true });
+    return;
+  }
+  // If template created default dir, move it; otherwise just ensure the requested dir exists
+  try {
+    const st = await fs.stat(defaultSrc);
+    if (st.isDirectory()) {
+      // make parent dirs for wanted path, then move
+      await fs.mkdir(path.dirname(wantedSrc), { recursive: true });
+      await fs.rename(defaultSrc, wantedSrc);
+      return;
+    }
+  } catch {
+    /* ignore */
+  }
+  await fs.mkdir(wantedSrc, { recursive: true });
+}
+
+async function writeConfigFile(dest, { srcDir, outDir }) {
+  const cfgPath = path.join(dest, 'statikapi.config.mjs');
+  const body = `export default {
+  srcDir: ${JSON.stringify(srcDir)},
+  outDir: ${JSON.stringify(outDir)},
+};\n`;
+  await fs.writeFile(cfgPath, body, 'utf8');
+}
+
+async function writeGitignore(dest, outDir) {
   const p = path.join(dest, '.gitignore');
   if (fss.existsSync(p)) return;
   const txt = `node_modules
-api-out
+${outDir}
 dist
 .tmp
 coverage

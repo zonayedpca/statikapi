@@ -1,0 +1,13 @@
+{
+  "name": "APP_NAME",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "statikapi dev",
+    "build": "statikapi build --pretty",
+    "preview": "statikapi preview --open"
+  },
+  "devDependencies": {
+    "statikapi": "^0.1.1"
+  }
+}

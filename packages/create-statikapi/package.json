@@ -14,6 +14,9 @@
     "url": "https://github.com/zonayedpca/statikapi",
     "directory": "packages/create-statikapi"
   },
+  "dependencies": {
+    "prompts": "^2.4.2"
+  },
   "bugs": { "url": "https://github.com/zonayedpca/statikapi/issues" },
   "homepage": "https://github.com/zonayedpca/statikapi#readme",
   "publishConfig": { "access": "public", "provenance": true },

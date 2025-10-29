@@ -8,6 +8,6 @@
     "preview": "statikapi preview --open"
   },
   "devDependencies": {
-    "statikapi": "^0.1.3"
+    "statikapi": "^0.1.4"
   }
 }

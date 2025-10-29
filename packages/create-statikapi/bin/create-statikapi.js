@@ -303,7 +303,7 @@ async function patchPkgJson(dest, appName) {
     // tiny helpers for Netlify/GitHub if user wants:
     'build:api': 'statikapi build',
   };
-  json.devDependencies = { ...(json.devDependencies || {}), statikapi: '^0.1.3' };
+  json.devDependencies = { ...(json.devDependencies || {}), statikapi: '^0.1.4' };
   await fs.writeFile(p, JSON.stringify(json, null, 2) + '\n', 'utf8');
 }
 

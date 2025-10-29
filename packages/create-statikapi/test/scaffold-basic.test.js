@@ -53,7 +53,7 @@ test('scaffolds BASIC template without installing deps', async (t) => {
   assert.equal(pkg.name, appName);
   assert.equal(pkg.type, 'module');
   assert.ok(pkg.devDependencies?.statikapi, 'statikapi should be a devDependency');
-  assert.deepEqual(Object.keys(pkg.scripts || {}), ['dev', 'build', 'preview']);
+  assert.deepEqual(Object.keys(pkg.scripts || {}), ['dev', 'build', 'preview', 'build:api']);
 
   // src-api/index.js should export default plain object
   const src = await fs.readFile(path.join(appDir, 'src-api', 'index.js'), 'utf8');

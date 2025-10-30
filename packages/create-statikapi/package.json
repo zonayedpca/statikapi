@@ -15,7 +15,8 @@
     "directory": "packages/create-statikapi"
   },
   "dependencies": {
-    "prompts": "^2.4.2"
+    "prompts": "^2.4.2",
+    "kleur": "^4.1.5"
   },
   "bugs": { "url": "https://github.com/zonayedpca/statikapi/issues" },
   "homepage": "https://github.com/zonayedpca/statikapi#readme",

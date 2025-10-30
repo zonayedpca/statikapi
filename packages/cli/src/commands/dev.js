@@ -1,7 +1,10 @@
 import chokidar from 'chokidar';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import fss from 'node:fs'; // NEW: for createReadStream
 import crypto from 'node:crypto';
+import http from 'node:http'; // NEW: tiny HTTP server
+import { fileURLToPath } from 'node:url'; // NEW: resolve UI dist
 
 import { loadConfig } from '../config/loadConfig.js';
 import { loadModuleValue } from '../loader/loadModuleValue.js';
@@ -10,6 +13,12 @@ import { mapRoutes, fileToRoute } from '../router/mapRoutes.js';
 import { readFlags } from '../util/readFlags.js';
 import { writeFileEnsured } from '../util/fsx.js';
 import { routeToOutPath } from '../build/routeOutPath.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+function hasIndex(dir) {
+  return fss.existsSync(path.join(dir, 'index.html'));
+}
 
 function clearScreen() {
   process.stdout.write('\x1Bc'); // ANSI "clear screen"
@@ -57,19 +66,27 @@ export default async function devCmd(argv) {
   const { config } = await loadConfig({ flags });
 
   // Where to notify preview
-  const previewHost = String(flags.previewHost ?? '127.0.0.1');
-  const previewPort = Number.isFinite(flags.previewPort) ? Number(flags.previewPort) : 8788;
-  const notifyOrigin = `http://${previewHost}:${previewPort}`;
+  // NEW: dev server + UI defaults
+  const host = String(flags.host ?? '127.0.0.1');
+  const port = Number.isFinite(flags.port) ? Number(flags.port) : 8788;
+  const noUi = !!(flags['no-ui'] || flags.noUi);
+  const noOpen = !!(flags['no-open'] || flags.noOpen);
 
-  async function notifyChanged(route) {
-    try {
-      // Node 18+ has global fetch
-      const u = `${notifyOrigin}/_ui/changed?route=${encodeURIComponent(route)}`;
-
-      await fetch(u, { method: 'POST' }).catch(() => {});
-    } catch {
-      // Ignore if preview isn't running
+  // NEW: live SSE clients
+  const sseClients = new Set(); // each entry: { id, res }
+  function sseBroadcast(msg) {
+    const line = `data: ${msg}\n\n`;
+    for (const c of sseClients) {
+      try {
+        c.res.write(line);
+      } catch {
+        /* ignore */
+      }
     }
+  }
+  async function notifyChanged(route) {
+    // Push to connected UIs
+    sseBroadcast(`changed:${route}`);
   }
 
   // Cache of outputs per source file (for deletions on subsequent rebuilds)
@@ -252,6 +269,116 @@ export default async function devCmd(argv) {
   await writeManifest();
   console.log(`[statikapi] ready. Watching ${path.relative(process.cwd(), config.paths.srcAbs)}/`);
 
+  // NEW: start HTTP server (UI + JSON helpers + SSE)
+  const server = http.createServer(async (req, res) => {
+    try {
+      let url;
+      try {
+        url = new URL(req.url || '/', `http://${host}:${port}`);
+      } catch {
+        // Extremely defensive fallback
+        url = new URL('/', `http://${host}:${port}`);
+      }
+      const pathname = url.pathname;
+
+      // 1) SSE: /_ui/events
+      if (pathname === '/_ui/events') {
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+          'X-Accel-Buffering': 'no', // for proxies
+        });
+        res.write('\n');
+        const client = { id: Date.now() + Math.random(), res };
+        sseClients.add(client);
+        req.on('close', () => sseClients.delete(client));
+        return;
+      }
+
+      // 2) Manifest JSON for UI: /ui/index
+      if (pathname === '/ui/index' && req.method === 'GET') {
+        const list = Array.from(manifestByRoute.values()).sort((a, b) =>
+          a.route.localeCompare(b.route)
+        );
+        const body = JSON.stringify(list);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(body);
+        return;
+      }
+
+      // 3) Serve built file content: /_ui/file?route=/path
+      if (pathname === '/_ui/file' && req.method === 'GET') {
+        const route = url.searchParams.get('route') || '';
+        const outFile = routeToOutPath({ outAbs: config.paths.outAbs, route });
+        // best-effort headers
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        try {
+          const rs = fss.createReadStream(outFile);
+          rs.on('error', () => {
+            res.statusCode = 404;
+            res.end(`Not found: ${route}`);
+          });
+          rs.pipe(res);
+        } catch {
+          res.statusCode = 404;
+          res.end(`Not found: ${route}`);
+        }
+        return;
+      }
+
+      // 4) Static React UI at /_ui/* (unless --no-ui)
+      if (!noUi && pathname.startsWith('/_ui/')) {
+        const uiRoot = resolveUiDist();
+        const rel = pathname.replace(/^\/_ui\//, '') || 'index.html';
+        const file = path.join(uiRoot, rel);
+        if (!file.startsWith(uiRoot)) {
+          res.statusCode = 403;
+          res.end('Forbidden');
+          return;
+        }
+        try {
+          const stat = await fs.stat(file);
+          if (stat.isDirectory()) {
+            // try index.html inside subdir
+            const idx = path.join(file, 'index.html');
+            await fs.access(idx);
+            streamFile(idx, res);
+          } else {
+            streamFile(file, res);
+          }
+        } catch {
+          // Fallback to index.html for SPA routes
+          const fallback = path.join(uiRoot, 'index.html');
+          streamFile(fallback, res);
+        }
+        return;
+      }
+
+      // 5) Root → redirect to UI (unless --no-ui)
+      if (!noUi && pathname === '/') {
+        res.writeHead(302, { Location: '/_ui/' });
+        res.end();
+        return;
+      }
+
+      // Otherwise: 404
+      res.statusCode = 404;
+      res.end('Not Found');
+    } catch (e) {
+      console.log(e);
+      res.statusCode = 500;
+      res.end('Internal Server Error');
+    }
+  });
+
+  server.listen(port, host, () => {
+    console.log(`statikapi dev → serving on http://${host}:${port}${noUi ? '' : '/_ui/'}`);
+    if (!noUi && !noOpen) {
+      openInBrowser(`http://${host}:${port}/_ui/`).catch(() => {});
+    }
+  });
+
   const watcher = chokidar.watch(config.paths.srcAbs, {
     ignoreInitial: true,
     ignored: (p) => path.basename(p).startsWith('_'),
@@ -263,10 +390,62 @@ export default async function devCmd(argv) {
 
   // Keep process alive until SIGINT
   await new Promise((resolve) => {
-    const stop = () => watcher.close().then(resolve).catch(resolve);
+    const stop = () =>
+      Promise.allSettled([watcher.close(), new Promise((r) => server.close(() => r()))]).then(() =>
+        resolve()
+      );
     process.on('SIGINT', stop);
     process.on('SIGTERM', stop);
   });
 
   return 0;
+}
+
+// NEW: helpers (static file & UI dist resolver & opener)
+function streamFile(file, res) {
+  const ext = path.extname(file).toLowerCase();
+  const ctype =
+    ext === '.html'
+      ? 'text/html; charset=utf-8'
+      : ext === '.js'
+        ? 'text/javascript; charset=utf-8'
+        : ext === '.css'
+          ? 'text/css; charset=utf-8'
+          : ext === '.json'
+            ? 'application/json; charset=utf-8'
+            : ext === '.svg'
+              ? 'image/svg+xml'
+              : ext === '.map'
+                ? 'application/json; charset=utf-8'
+                : 'application/octet-stream';
+  res.setHeader('Content-Type', ctype);
+  fss.createReadStream(file).pipe(res);
+}
+
+function resolveUiDist() {
+  // 0) Optional override for power users
+  const fromEnv = process.env.STATIKAPI_UI_DIR;
+  if (fromEnv && hasIndex(fromEnv)) return fromEnv;
+
+  // 1) Bundled with the CLI: packages/cli/ui/  (your screenshot)
+  const bundled = path.resolve(__dirname, '..', '..', 'ui');
+  if (hasIndex(bundled)) return bundled;
+
+  // 2) Monorepo dev fallback: packages/ui/dist
+  const monorepoDist = path.resolve(__dirname, '..', '..', '..', 'ui', 'dist');
+  if (hasIndex(monorepoDist)) return monorepoDist;
+
+  // 3) Last resort: throw with a helpful hint
+  throw new Error(
+    'StatikAPI UI build not found. ' +
+      'Either keep a built UI at packages/cli/ui/ (index.html present), ' +
+      'or run: pnpm -w --filter @statikapi/ui build'
+  );
+}
+
+async function openInBrowser(url) {
+  const { exec } = await import('node:child_process');
+  const cmd =
+    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+  exec(`${cmd} "${url}"`);
 }

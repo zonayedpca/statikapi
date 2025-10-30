@@ -17,7 +17,9 @@
   "keywords": ["static", "json", "api", "cli", "ssg"],
   "publishConfig": { "access": "public", "provenance": true },
   "dependencies": {
-    "chokidar": "^3.6.0"
+    "chokidar": "^3.6.0",
+    "sirv": "^2.0.4",
+    "polka": "^0.5.2"
   },
   "scripts": {
     "build": "node ./scripts/build.js || true",

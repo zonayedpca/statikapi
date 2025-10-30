@@ -299,8 +299,8 @@ async function patchPkgJson(dest, appName) {
   json.scripts = {
     dev: 'statikapi dev',
     build: 'statikapi build --pretty',
-    preview: 'statikapi preview --open',
-    // tiny helpers for Netlify/GitHub if user wants:
+    // headless option for CI:
+    'dev:headless': 'statikapi dev --no-ui',
     'build:api': 'statikapi build',
   };
   json.devDependencies = { ...(json.devDependencies || {}), statikapi: '^0.1.4' };

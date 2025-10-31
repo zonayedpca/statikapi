@@ -22,8 +22,9 @@
     "polka": "^0.5.2"
   },
   "scripts": {
-    "build": "node ./scripts/build.js || true",
-    "sync-ui": "rm -rf ui && mkdir -p ui && cp -R ../ui/dist/* ui/",
-    "prepack": "pnpm -w --filter @statikapi/ui build && pnpm run sync-ui"
+    "dev": "node bin/statikapi.js dev --port 8788",
+    "preview": "node bin/statikapi.js preview --port 8788",
+    "build": "node bin/statikapi.js build",
+    "test": "node --test"
   }
 }

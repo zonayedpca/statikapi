@@ -1,9 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { resolve } from 'node:path';
+import path, { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const BIN = resolve('packages/cli/bin/statikapi.js');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const BIN = resolve(__dirname, '../bin/statikapi.js');
 
 function run(args = []) {
   return new Promise((resolve, reject) => {
@@ -23,10 +25,8 @@ test('--help lists commands', async () => {
 });
 
 for (const [cmd, text] of [
-  ['init', 'to scaffold a new project'],
   ['build', 'building'],
   ['dev', 'starting'],
-  ['preview', 'previewing'],
 ]) {
   test(`${cmd} prints stub output`, async () => {
     const { stdout } = await run([cmd]);

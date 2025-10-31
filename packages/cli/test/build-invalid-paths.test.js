@@ -2,10 +2,12 @@ import { test } from 'node:test';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 import { makeTmp } from './_tmp.js';
 
-const BIN = path.resolve('packages/cli/bin/statikapi.js');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const BIN = path.resolve(__dirname, '../bin/statikapi.js');
 
 test('errors on invalid paths() return', async (t) => {
   const tmp = await makeTmp();

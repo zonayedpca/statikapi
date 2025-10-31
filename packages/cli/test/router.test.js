@@ -2,8 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { mapRoutes } from '../src/router/mapRoutes.js';
+import { fileURLToPath } from 'node:url';
 
-const FIX = path.resolve('packages/cli/test/router.fixture/src-api');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const FIX = path.resolve(__dirname, '../test/router.fixture/src-api');
 
 test('maps files to routes with stable order', async () => {
   const routes = await mapRoutes({ srcAbs: FIX });

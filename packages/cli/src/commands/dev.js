@@ -55,14 +55,20 @@ function toParams(segTokens, concreteRoute) {
 }
 
 export default async function devCmd(argv) {
-  // In non-TTY (like node --test), behave like the old stub so tests don't hang.
-  if (!process.stdout.isTTY) {
+  const flags = readFlags(argv);
+
+  // Allow forcing long-running behavior even in non-TTY (e.g., under `concurrently`)
+  const forceKeepAlive =
+    !!(flags['keep-alive'] || flags.keepAlive || flags.serve) ||
+    process.env.STATIKAPI_FORCE_DEV === '1';
+
+  // In non-TTY (like node --test), behave like a stub unless explicitly forced.
+  if (!process.stdout.isTTY && !forceKeepAlive) {
     console.log('statikapi dev → starting dev server (stub)');
 
     return 0;
   }
 
-  const flags = readFlags(argv);
   const { config } = await loadConfig({ flags });
 
   // Where to notify preview

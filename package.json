@@ -12,14 +12,14 @@
     "format:fix": "prettier . --write",
     "test": "pnpm -r test",
     "test:watch": "pnpm -r test --watch",
+    "dev": "concurrently -n API,UI -c cyan,magenta \"pnpm -C example/basic dev --no-ui --keep-alive\" \"pnpm -C packages/ui dev\"",
+    "preview": "pnpm -C packages/ui preview",
     "build": "pnpm -C packages/ui build",
-    "create:build": "pnpm -F create-statikapi build",
-    "create:dev": "pnpm -F create-statikapi dev",
-    "create:pack": "pnpm -F create-statikapi pack",
     "prepublishOnly": "pnpm -r test"
   },
   "devDependencies": {
     "@eslint/js": "^9",
+    "concurrently": "^9.0.0",
     "eslint": "^9.36.0",
     "eslint-config-prettier": "^9.1.2",
     "eslint-plugin-import": "^2.32.0",

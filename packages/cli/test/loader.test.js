@@ -1,10 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { loadModuleValue } from '../src/loader/loadModuleValue.js';
 
-const FIX = path.resolve('packages/cli/test/loader.fixture');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const FIX = path.resolve(__dirname, '../test/loader.fixture');
 
 function f(name) {
   return path.join(FIX, name);

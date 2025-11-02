@@ -53,7 +53,6 @@ const Sidebar = forwardRef(function Sidebar(
                 <span className="flex gap-2">
                   <span title={`${e.bytes} bytes`}>{formatBytes(e.bytes)}</span>
                   <span title={`Modified: ${formatDate(e.mtime)}`}>{formatDate(e.mtime)}</span>
-                  <span>revalidate: {e.revalidate == null ? '—' : String(e.revalidate)}</span>
                 </span>
               }
             />

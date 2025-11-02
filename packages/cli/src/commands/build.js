@@ -99,7 +99,6 @@ export default async function buildCmd(argv) {
         bytes: Buffer.byteLength(json),
         mtime: st ? st.mtimeMs : Date.now(),
         hash: digest(json),
-        revalidate: null,
       };
       manifest.push(entry);
     }

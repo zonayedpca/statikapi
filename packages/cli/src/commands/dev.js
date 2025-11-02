@@ -134,7 +134,6 @@ export default async function devCmd(argv) {
       bytes: Buffer.byteLength(json),
       mtime: st ? st.mtimeMs : Date.now(),
       hash: digest(json),
-      revalidate: null,
     };
 
     manifestByRoute.set(route, entry);

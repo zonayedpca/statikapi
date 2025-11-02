@@ -1,24 +1,32 @@
 import React, { useState } from 'react';
+import { Clipboard, Check } from 'lucide-react';
 
-export default function CopyButton({ getText, label = 'Copy', title }) {
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
+export default function CopyButton({ getText, label = 'Copy JSON', title = 'Copy JSON' }) {
   const [ok, setOk] = useState(false);
+
   async function onCopy() {
     try {
       const txt = typeof getText === 'function' ? getText() : String(getText ?? '');
       await navigator.clipboard.writeText(txt);
       setOk(true);
-      setTimeout(() => setOk(false), 1200);
-    } catch {
-      /* ignore */
-    }
+      setTimeout(() => setOk(false), 1000);
+    } catch {}
   }
+
   return (
-    <button
-      className="text-xs px-2 py-1 border rounded hover:bg-black/10"
-      onClick={onCopy}
-      title={title || label}
-    >
-      {ok ? 'Copied!' : label}
-    </button>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="outline" size="sm" onClick={onCopy} className="gap-2">
+            {ok ? <Check className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
+            <span className="hidden sm:inline">{ok ? 'Copied' : label}</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{title}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

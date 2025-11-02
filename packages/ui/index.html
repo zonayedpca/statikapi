@@ -4,6 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>StatikAPI UI</title>
+    <script>
+      (function () {
+        try {
+          const KEY = 'statik-theme';
+          const saved = localStorage.getItem(KEY) || 'system';
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          const wantDark = saved === 'dark' || (saved === 'system' && prefersDark);
+          const html = document.documentElement;
+          html.classList.toggle('dark', wantDark);
+          html.setAttribute('data-theme', saved);
+        } catch (_) {}
+      })();
+  </script>
   </head>
   <body>
     <div id="root"></div>

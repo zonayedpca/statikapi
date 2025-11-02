@@ -1,8 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+
 import { getManifest, getRoute } from './api.js';
+
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+
 import JsonTree from './components/JsonTree.jsx';
 import Snippets from './components/Snippets.jsx';
 import CopyButton from './components/CopyButton.jsx';
+import Sidebar from './components/Sidebar.jsx';
+import AppShell from './components/AppShell.jsx';
 
 export default function App() {
   const [manifest, setManifest] = useState([]);
@@ -124,37 +134,6 @@ export default function App() {
     return () => removeEventListener('keydown', onKey);
   }, [filtered, hi]);
 
-  function formatBytes(n) {
-    if (!Number.isFinite(n)) return '—';
-    if (n < 1024) return `${n} B`;
-    const units = ['KB', 'MB', 'GB'];
-    let u = -1;
-    let v = n;
-    do {
-      v /= 1024;
-      u++;
-    } while (v >= 1024 && u < units.length - 1);
-    const f = v >= 10 ? 0 : 1;
-    return `${v.toFixed(f)} ${units[u]}`;
-  }
-
-  function formatDate(ms) {
-    const d = new Date(ms);
-    if (isNaN(d)) return '—';
-    return d.toLocaleString();
-  }
-
-  function Badge({ children, title }) {
-    return (
-      <span
-        className="inline-block text-[11px] px-2 py-0.5 rounded bg-black/10 dark:bg-white/10 mr-2"
-        title={title}
-      >
-        {children}
-      </span>
-    );
-  }
-
   const prettyText = useMemo(() => {
     if (jsonVal == null) return rawText ?? '';
     try {
@@ -164,125 +143,98 @@ export default function App() {
     }
   }, [jsonVal, rawText]);
 
-  return (
-    <div className="app grid grid-cols-[20rem_1fr] h-screen">
-      <aside className="border-r p-3 overflow-auto">
-        <header className="flex items-center justify-between mb-2">
-          <h1 className="font-semibold">StatikAPI</h1>
-          <div className="text-xs opacity-70">{manifest.length} routes</div>
-        </header>
-
-        <input
-          ref={inputRef}
-          className="w-full border rounded px-2 py-1 mb-2"
-          placeholder="Filter routes…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-
-        <nav
-          ref={listRef}
-          className="space-y-1"
-          role="listbox"
-          aria-label="Endpoints"
-          aria-activedescendant={
-            filtered[hi]?.route ? `route-${cssId(filtered[hi].route)}` : undefined
-          }
-        >
-          {filtered.map((e, idx) => {
-            const isActive = active === e.route;
-            const isHilited = idx === hi;
-            return (
-              <button
-                key={e.route}
-                id={`route-${cssId(e.route)}`}
-                role="option"
-                aria-selected={isHilited}
-                onClick={() => pick(e.route)}
-                className={[
-                  'w-full text-left px-3 py-2 rounded outline-none',
-                  'hover:bg-black/10 focus:ring-2 focus:ring-black/20 dark:focus:ring-white/20',
-                  isHilited ? 'bg-black/10 dark:bg-white/10' : '',
-                  isActive ? 'ring-1 ring-black/20 dark:ring-white/20' : '',
-                ].join(' ')}
-                title={`bytes: ${e.bytes} • hash: ${(e.hash || '').slice(0, 7)}`}
-              >
-                <div className="font-mono text-sm">{e.route}</div>
-                <div className="mt-1 text-[12px] text-black/70 dark:text-white/70">
-                  <Badge title={`${e.bytes} bytes`}>{formatBytes(e.bytes)}</Badge>
-                  <Badge title={`Modified: ${formatDate(e.mtime)}`}>{formatDate(e.mtime)}</Badge>
-                  <Badge title="Revalidate seconds">
-                    revalidate: {e.revalidate == null ? '—' : String(e.revalidate)}
-                  </Badge>
-                </div>
-              </button>
-            );
-          })}
-          {!filtered.length && <div className="text-xs opacity-70">No routes match “{query}”.</div>}
-        </nav>
-      </aside>
-
-      <section className="p-3 overflow-auto">
-        {!active ? (
-          <div className="text-sm opacity-70">Select a route from the left to view its JSON.</div>
-        ) : (
-          <>
-            <div className="mb-2 text-sm">
-              <span className="opacity-70">Viewing:</span>{' '}
-              <span className="font-mono">{active}</span>
-              {loading && <span className="opacity-70 ml-2">loading…</span>}
-            </div>
-            {/* Headers row */}
-            <div className="mb-2 text-[12px] flex items-center gap-2 flex-wrap">
-              <Badge title="Content-Type">{headers['content-type'] || '—'}</Badge>
-              <Badge title="ETag">{headers.etag || '—'}</Badge>
-              <Badge title="Cache-Control">{headers['cache-control'] || '—'}</Badge>
-              <div className="ml-auto">
-                <CopyButton getText={() => prettyText} label="Copy JSON" title="Copy JSON" />
-              </div>
-            </div>
-
-            {/* Tabs */}
-            <div className="mb-2 flex gap-2">
-              {['tree', 'pretty', 'raw'].map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTab(t)}
-                  className={[
-                    'text-sm px-3 py-1 rounded border',
-                    tab === t ? 'bg-black/10' : 'hover:bg-black/10',
-                  ].join(' ')}
-                >
-                  {t === 'tree' ? 'Tree' : t === 'pretty' ? 'Pretty' : 'Raw'}
-                </button>
-              ))}
-            </div>
-
-            {/* Viewer */}
-            <div className="bg-black/5 p-3 rounded overflow-auto">
-              {tab === 'tree' ? (
-                jsonVal != null ? (
-                  <JsonTree data={jsonVal} />
-                ) : (
-                  <div className="text-sm opacity-70">
-                    Not valid JSON — showing Raw/Pretty instead.
-                  </div>
-                )
-              ) : tab === 'pretty' ? (
-                <pre className="whitespace-pre text-sm">{prettyText}</pre>
-              ) : (
-                <pre className="whitespace-pre text-sm">{rawText}</pre>
-              )}
-            </div>
-            {/* Snippets */}
-            <Snippets route={active} />
-          </>
-        )}
-      </section>
-    </div>
+  const sidebar = (
+    <Sidebar
+      count={manifest.length}
+      query={query}
+      setQuery={setQuery}
+      routes={filtered}
+      onPick={pick}
+      activeRoute={active}
+      highlightedIndex={hi}
+      ref={listRef}
+      headerExtras={null} // placeholder if you add extra filters later
+    />
   );
-}
 
-function cssId(s) {
-  return s.replace(/[^a-zA-Z0-9-_:.]/g, '_');
+  return (
+    <AppShell sidebar={sidebar}>
+      <div className="app flex h-screen">
+        <section className="flex-1 p-3 overflow-auto">
+          {!active ? (
+            <div className="text-sm opacity-70">Select a route from the left to view its JSON.</div>
+          ) : (
+            <>
+              <div className="mb-2 flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground">Viewing:</span>
+                <code className="font-mono">{active}</code>
+                {loading && (
+                  <span className="ml-2 inline-flex items-center gap-1 text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    loading…
+                  </span>
+                )}
+              </div>
+              {/* Headers row */}
+              <div className="mb-2 flex flex-wrap items-center gap-2 text-[12px]">
+                <Badge variant="secondary" title="Content-Type">
+                  {headers['content-type'] || '—'}
+                </Badge>
+                <Badge variant="secondary" title="ETag">
+                  {headers.etag || '—'}
+                </Badge>
+                <Badge variant="secondary" title="Cache-Control">
+                  {headers['cache-control'] || '—'}
+                </Badge>
+
+                <Separator className="mx-2 hidden sm:inline-flex" orientation="vertical" />
+
+                <div className="ml-auto">
+                  <CopyButton getText={() => prettyText} label="Copy JSON" title="Copy JSON" />
+                </div>
+              </div>
+
+              <Tabs
+                value={tab}
+                onValueChange={setTab}
+                className="w-full bg-accent/50 p-4 rounded-md"
+              >
+                <TabsList className="">
+                  <TabsTrigger value="tree">Tree</TabsTrigger>
+                  <TabsTrigger value="pretty">Pretty</TabsTrigger>
+                  <TabsTrigger value="raw">Raw</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="tree">
+                  <Card className="p-3 overflow-auto">
+                    {jsonVal != null ? (
+                      <JsonTree data={jsonVal} />
+                    ) : (
+                      <div className="text-sm text-muted-foreground">
+                        Not valid JSON — showing Raw/Pretty instead.
+                      </div>
+                    )}
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="pretty">
+                  <Card className="p-3 overflow-auto">
+                    <pre className="whitespace-pre text-sm">{prettyText}</pre>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="raw">
+                  <Card className="p-3 overflow-auto">
+                    <pre className="whitespace-pre text-sm">{rawText}</pre>
+                  </Card>
+                </TabsContent>
+              </Tabs>
+              {/* Snippets */}
+              <Snippets route={active} />
+            </>
+          )}
+        </section>
+      </div>
+    </AppShell>
+  );
 }

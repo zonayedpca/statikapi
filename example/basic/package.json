@@ -4,7 +4,6 @@
   "type": "module",
   "scripts": {
     "dev": "node ../../packages/cli/bin/statikapi.js dev",
-    "build": "node ../../packages/cli/bin/statikapi.js build --pretty",
-    "preview": "node ../../packages/cli/bin/statikapi.js preview --open"
+    "build": "node ../../packages/cli/bin/statikapi.js build --pretty"
   }
 }

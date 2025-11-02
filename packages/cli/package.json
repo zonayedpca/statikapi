@@ -23,7 +23,6 @@
   },
   "scripts": {
     "dev": "node bin/statikapi.js dev --port 8788",
-    "preview": "node bin/statikapi.js preview --port 8788",
     "build": "node bin/statikapi.js build",
     "test": "node --test"
   }

@@ -14,8 +14,6 @@ Global options:
   -v, --version   Show version
 
 Examples:
-  statikapi init
   statikapi build
   statikapi dev
-  statikapi preview
 `;

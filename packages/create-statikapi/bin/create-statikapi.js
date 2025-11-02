@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import fs from 'node:fs/promises';
+import fs, { readdir } from 'node:fs/promises';
 import fss from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
@@ -187,6 +187,11 @@ async function main(argv) {
 
   // Ensure src dir exists; if template has src-api and user changed the name, move it.
   await ensureSrcDir(dest, srcDir);
+
+  // If the user chose TypeScript, convert example endpoints to .ts
+  if (language === 'ts') {
+    await convertExampleEndpointsToTS(dest, srcDir);
+  }
 
   // Write config if user deviated from defaults
   if (srcDir !== DEFAULT_SRC || outDir !== DEFAULT_OUT) {
@@ -408,8 +413,8 @@ export default [
         checkJs: false,
         noEmit: true,
       },
-      include: ['src-api', '**/*.js', '**/*.mjs', '**/*.cjs'],
-      exclude: [DEFAULT_OUT, 'dist', 'node_modules'],
+      include: ['src-api', '**/*.ts', '**/*.js', '**/*.mjs', '**/*.cjs'],
+      exclude: [DEFAULT_OUT, 'node_modules'],
     };
     await fs.writeFile(
       path.join(dest, 'tsconfig.json'),
@@ -461,6 +466,88 @@ async function ensureSrcDir(dest, srcDir) {
     /* ignore */
   }
   await fs.mkdir(wantedSrc, { recursive: true });
+}
+
+async function convertExampleEndpointsToTS(dest, srcDir) {
+  const root = path.join(dest, srcDir);
+
+  // Given a relative file path under srcDir, infer { params: ... } type
+  function inferParamsType(relPath) {
+    // Collect all dynamic segments like [id], [slug], [...slug]
+    const parts = relPath.split(path.sep);
+    const dyn = [];
+    for (const p of parts) {
+      const m = [...p.matchAll(/\[(\.\.\.)?([^\]]+)\]/g)];
+      for (const g of m) {
+        const isCatchAll = !!g[1];
+        const name = g[2];
+        dyn.push({ name, isCatchAll });
+      }
+    }
+    if (!dyn.length) return null;
+
+    const fields = dyn
+      .map(({ name, isCatchAll }) => `  ${name}: ${isCatchAll ? 'string[]' : 'string'};`)
+      .join('\n');
+
+    return `{\n${fields}\n}`;
+  }
+
+  // Annotate function data({ params }) with inferred type
+  async function annotateParamsType(fileAbs, relPath) {
+    const paramsType = inferParamsType(relPath);
+    if (!paramsType) return; // nothing to do
+
+    let code = await fs.readFile(fileAbs, 'utf8');
+
+    // Only annotate when there is a data({ params }) signature
+    // Matches: export [default] [async] function data({ params })
+    const sigs = [
+      /export\s+async\s+function\s+data\s*\(\s*\{\s*params\s*\}\s*\)/g,
+      /export\s+function\s+data\s*\(\s*\{\s*params\s*\}\s*\)/g,
+      /export\s+default\s+async\s+function\s+data\s*\(\s*\{\s*params\s*\}\s*\)/g,
+      /export\s+default\s+function\s+data\s*\(\s*\{\s*params\s*\}\s*\)/g,
+    ];
+
+    let replaced = false;
+    const withType = `({ params }: { params: ${paramsType} })`;
+
+    for (const re of sigs) {
+      if (re.test(code)) {
+        code = code.replace(re, (m) => m.replace(/\(\s*\{\s*params\s*\}\s*\)/, withType));
+        replaced = true;
+      }
+    }
+
+    if (replaced) {
+      await fs.writeFile(fileAbs, code, 'utf8');
+    }
+  }
+
+  async function walk(dir, relBase = '') {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const e of entries) {
+      const abs = path.join(dir, e.name);
+      const rel = path.join(relBase, e.name);
+      if (e.isDirectory()) {
+        await walk(abs, rel);
+      } else if (e.isFile()) {
+        // If JS file, annotate then rename to .ts
+        if (abs.endsWith('.js')) {
+          await annotateParamsType(abs, rel);
+          const to = abs.slice(0, -3) + '.ts';
+          await fs.rename(abs, to);
+        }
+      }
+    }
+  }
+
+  try {
+    await walk(root);
+  } catch (e) {
+    // Non-fatal: srcDir may be empty, or already converted
+    // console.warn('TS conversion skipped:', e.message);
+  }
 }
 
 async function writeStatikConfig(dest, { srcDir, outDir }) {

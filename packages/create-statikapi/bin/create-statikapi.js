@@ -34,6 +34,9 @@ async function main(argv) {
   let pkgMgr = String(args['package-manager'] || '');
   const doInstall = !args['no-install'];
 
+  let wantEslint = true;
+  let language = 'js'; // default JavaScript
+
   // new flags
   let srcDir = args['src-dir'] || '';
   let outDir = args['out-dir'] || '';
@@ -83,6 +86,22 @@ async function main(argv) {
               initial: 0,
             },
         {
+          type: 'confirm',
+          name: 'wantEslint',
+          message: 'Add ESLint?',
+          initial: true,
+        },
+        {
+          type: 'select',
+          name: 'language',
+          message: 'Language',
+          choices: [
+            { title: 'JavaScript', value: 'js' },
+            { title: 'TypeScript', value: 'ts' },
+          ],
+          initial: 0,
+        },
+        {
           type: 'text',
           name: 'srcDir',
           message: 'Source directory for endpoints',
@@ -123,6 +142,8 @@ async function main(argv) {
     appName = appName || answers.name;
     template = TEMPLATES.has(template) ? template : answers.template || DEFAULT_TEMPLATE;
     pkgMgr = pkgMgr || answers.pm || DEFAULT_PM;
+    wantEslint = answers.wantEslint ?? true;
+    language = answers.language || 'js';
     srcDir = answers.srcDir || DEFAULT_SRC;
     outDir = answers.outDir || DEFAULT_OUT;
     wantGitignore = !!answers.gitignore;
@@ -156,7 +177,13 @@ async function main(argv) {
   await copyTemplate(tplRoot, dest);
 
   // Patch package.json (name, scripts, devDeps)
-  await patchPkgJson(dest, appName);
+  await patchPkgJson(dest, appName, { pkgMgr });
+
+  await writeNodeVersions(dest);
+
+  if (wantEslint) {
+    await writeEslint(dest, { language });
+  }
 
   // Ensure src dir exists; if template has src-api and user changed the name, move it.
   await ensureSrcDir(dest, srcDir);
@@ -173,7 +200,7 @@ async function main(argv) {
 
   // Deployment configs
   if (deploy.length) {
-    await writeDeployConfigs(dest, { outDir, appName, deploy });
+    await writeDeployConfigs(dest, { outDir, appName, deploy, pkgMgr });
   }
 
   console.log(`\nScaffolded ${appName} with "${template}" template.`);
@@ -195,8 +222,8 @@ async function main(argv) {
   console.log('\nNext steps:');
   console.log(`  cd ${appName}`);
   if (!doInstall) console.log(`  ${pkgMgr} install`);
-  console.log('  ' + scriptHint(pkgMgr, 'dev') + '     # watch & rebuild (use with preview)');
-  console.log('  ' + scriptHint(pkgMgr, 'preview') + ' # open the preview UI at /_ui\n');
+  console.log('  ' + scriptHint(pkgMgr, 'dev') + '     # run dev server with UI');
+  console.log('  ' + scriptHint(pkgMgr, 'build') + '   # emit static JSON into ' + outDir + '/\n');
 }
 
 function parseArgs(argv) {
@@ -290,21 +317,130 @@ async function copyTemplate(src, dst) {
   }
 }
 
-async function patchPkgJson(dest, appName) {
+function pmVersionFromSelection(pm) {
+  // Safe pinned defaults (adjust anytime)
+  const defaults = {
+    pnpm: '9.12.3',
+    yarn: '1.22.22', // Yarn classic
+    npm: '10.9.0',
+  };
+  return defaults[pm] || null;
+}
+
+async function patchPkgJson(dest, appName, { pkgMgr }) {
   const p = path.join(dest, 'package.json');
   const raw = await fs.readFile(p, 'utf8');
   const json = JSON.parse(raw);
+
   json.name = appName;
   json.type = json.type || 'module';
+  json.engines = { ...(json.engines || {}), node: '>=22' };
+
+  const pmVer = pmVersionFromSelection(pkgMgr);
+  if (pmVer) json.packageManager = `${pkgMgr}@${pmVer}`;
+  // else: leave packageManager unset to avoid invalid strings
+
   json.scripts = {
     dev: 'statikapi dev',
     build: 'statikapi build --pretty',
-    // headless option for CI:
     'dev:headless': 'statikapi dev --no-ui',
     'build:api': 'statikapi build',
   };
   json.devDependencies = { ...(json.devDependencies || {}), statikapi: '^0.2.0' };
+
   await fs.writeFile(p, JSON.stringify(json, null, 2) + '\n', 'utf8');
+}
+
+async function writeNodeVersions(dest) {
+  await fs.writeFile(path.join(dest, '.nvmrc'), '22\n', 'utf8');
+  await fs.writeFile(path.join(dest, '.node-version'), '22\n', 'utf8'); // asdf/Volta compatibility
+}
+
+async function writeEslint(dest, { language }) {
+  const pkgPath = path.join(dest, 'package.json');
+  const pkg = JSON.parse(await fs.readFile(pkgPath, 'utf8'));
+
+  pkg.scripts = {
+    ...(pkg.scripts || {}),
+    lint: 'eslint .',
+    'lint:fix': 'eslint . --fix',
+  };
+
+  if (language === 'js') {
+    pkg.devDependencies = {
+      ...(pkg.devDependencies || {}),
+      eslint: '^9.0.0',
+      '@eslint/js': '^9.0.0',
+    };
+
+    const eslintFlat = `import js from '@eslint/js';
+
+export default [
+  js.configs.recommended,
+  {
+    languageOptions: { ecmaVersion: 'latest', sourceType: 'module' },
+    ignores: ['${DEFAULT_OUT}', 'dist', 'node_modules'],
+  },
+];
+`;
+    await fs.writeFile(path.join(dest, 'eslint.config.mjs'), eslintFlat, 'utf8');
+  } else {
+    // TypeScript flavor (flat config)
+    pkg.devDependencies = {
+      ...(pkg.devDependencies || {}),
+      eslint: '^9.0.0',
+      '@eslint/js': '^9.0.0',
+      typescript: '^5.6.0',
+      '@typescript-eslint/parser': '^8.0.0',
+      '@typescript-eslint/eslint-plugin': '^8.0.0',
+      'typescript-eslint': '^8.0.0',
+    };
+
+    const tsconfig = {
+      compilerOptions: {
+        target: 'ES2022',
+        module: 'ES2022',
+        moduleResolution: 'Bundler',
+        strict: true,
+        skipLibCheck: true,
+        isolatedModules: true,
+        allowJs: true,
+        checkJs: false,
+        noEmit: true,
+      },
+      include: ['src-api', '**/*.js', '**/*.mjs', '**/*.cjs'],
+      exclude: [DEFAULT_OUT, 'dist', 'node_modules'],
+    };
+    await fs.writeFile(
+      path.join(dest, 'tsconfig.json'),
+      JSON.stringify(tsconfig, null, 2) + '\n',
+      'utf8'
+    );
+
+    const eslintTs = `import js from '@eslint/js';
+import tseslint from 'typescript-eslint';
+
+export default [
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  {
+    languageOptions: {
+      parser: '@typescript-eslint/parser',
+      parserOptions: {
+        project: false,
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+      },
+    },
+    ignores: ['${DEFAULT_OUT}', 'dist', 'node_modules'],
+    rules: {},
+  },
+];
+`;
+    await fs.writeFile(path.join(dest, 'eslint.config.mjs'), eslintTs, 'utf8');
+  }
+
+  await fs.writeFile(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
 }
 
 async function ensureSrcDir(dest, srcDir) {
@@ -349,15 +485,15 @@ coverage
   await fs.writeFile(p, txt, 'utf8');
 }
 
-async function writeDeployConfigs(dest, { outDir, appName, deploy }) {
+async function writeDeployConfigs(dest, { outDir, appName, deploy, pkgMgr }) {
   if (deploy.includes('cloudflare')) {
     await writeWranglerToml(dest, { outDir, appName });
   }
   if (deploy.includes('netlify')) {
-    await writeNetlifyToml(dest, { outDir });
+    await writeNetlifyToml(dest, { outDir, pkgMgr });
   }
   if (deploy.includes('github')) {
-    await writeGithubPagesWorkflow(dest, { outDir });
+    await writeGithubPagesWorkflow(dest, { outDir, pkgMgr });
   }
 }
 
@@ -385,23 +521,38 @@ directory = "${outDir}"
   }
 }
 
-async function writeNetlifyToml(dest, { outDir }) {
+async function writeNetlifyToml(dest, { outDir, pkgMgr }) {
   const p = path.join(dest, 'netlify.toml');
   if (!fss.existsSync(p)) {
+    const yarnEnv = pkgMgr === 'yarn' ? 'YARN_VERSION = "1"\n' : '';
     const body = `[build]
 publish = "${outDir}"
-# If you want Netlify to run a build, set a command (we build separately):
 # command = "pnpm build:api"
-`;
+
+[build.environment]
+NODE_VERSION = "22"
+${yarnEnv}`;
     await fs.writeFile(p, body, 'utf8');
   }
 }
 
-async function writeGithubPagesWorkflow(dest, { outDir }) {
+async function writeGithubPagesWorkflow(dest, { outDir, pkgMgr }) {
   const dir = path.join(dest, '.github', 'workflows');
   await fs.mkdir(dir, { recursive: true });
   const p = path.join(dir, 'pages.yml');
   if (!fss.existsSync(p)) {
+    const pmSetup =
+      pkgMgr === 'pnpm'
+        ? `- run: npm i -g pnpm@9
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:api`
+        : pkgMgr === 'yarn'
+          ? `- run: npm i -g yarn@1
+      - run: yarn install --frozen-lockfile
+      - run: yarn build:api`
+          : `- run: npm ci
+      - run: npm run build:api`;
+
     const body = `name: Deploy (GitHub Pages)
 
 on:
@@ -426,9 +577,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm i -g pnpm@9
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build:api
+${pmSetup.replace(/^/gm, '      ')}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ${JSON.stringify(outDir)}

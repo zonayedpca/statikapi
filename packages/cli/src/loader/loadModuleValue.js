@@ -1,7 +1,7 @@
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 import { LoaderError } from './errors.js';
+import { importModule } from './importModule.js';
 import { assertSerializable } from './serializeGuard.js';
 
 /**
@@ -18,10 +18,10 @@ export async function loadModuleValue(fileAbs, args = {}) {
   let mod;
 
   try {
-    const u = new URL(pathToFileURL(fileAbs).href);
-    if (fresh) u.search = `v=${Date.now()}-${Math.random()}`;
-    mod = await import(u.href);
+    console.log({ fileAbs, fresh });
+    mod = await importModule(fileAbs, { fresh });
   } catch (e) {
+    console.log({ e });
     throw new LoaderError(fileInfo, `Failed to import: ${e.message}`);
   }
 

@@ -209,7 +209,7 @@ export default async function devCmd(argv) {
     if (rel.startsWith('_')) return false;
     const ext = path.extname(rel);
 
-    return ext === '.js' || ext === '.mjs' || ext === '.cjs';
+    return ['.js', '.mjs', '.cjs', '.ts', '.tsx'].includes(ext);
   }
 
   async function buildOne(fileAbs, kind) {

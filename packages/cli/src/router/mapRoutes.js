@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-const VALID_EXT = new Set(['.js', '.mjs', '.cjs']);
+const VALID_EXT = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx']);
 
 export async function mapRoutes({ srcAbs }) {
   const entries = await walk(srcAbs);

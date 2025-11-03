@@ -25,6 +25,7 @@
   "scripts": {
     "dev": "node bin/statikapi.js dev --port 8788",
     "build": "node bin/statikapi.js build",
+    "prepack": "node scripts/embed-ui.js",
     "test": "node --test"
   }
 }

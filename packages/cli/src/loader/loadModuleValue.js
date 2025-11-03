@@ -18,10 +18,8 @@ export async function loadModuleValue(fileAbs, args = {}) {
   let mod;
 
   try {
-    console.log({ fileAbs, fresh });
     mod = await importModule(fileAbs, { fresh });
   } catch (e) {
-    console.log({ e });
     throw new LoaderError(fileInfo, `Failed to import: ${e.message}`);
   }
 

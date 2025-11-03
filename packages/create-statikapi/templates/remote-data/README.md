@@ -13,6 +13,5 @@ It currently uses [jsonplaceholder.typicode.com](https://jsonplaceholder.typicod
 
 ## Commands
 
-- `pnpm dev` — watch & rebuild (use with `pnpm preview`)
+- `pnpm dev` — watch & rebuild
 - `pnpm build` — one-off build to `api-out/`
-- `pnpm preview` — serves `api-out` and a preview UI at `/_ui`

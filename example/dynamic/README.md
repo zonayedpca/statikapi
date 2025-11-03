@@ -10,9 +10,8 @@ Demonstrates:
 
 ```
 pnpm dev        # watches and rebuilds
-pnpm preview    # Preview UI at http://127.0.0.1:8788/_ui
+pnpm build      # to build
 
 Build once:
 pnpm build
-pnpm preview
 ```

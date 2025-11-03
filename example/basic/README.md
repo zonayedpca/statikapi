@@ -6,10 +6,10 @@ A single static endpoint at `/`.
 
 ```
 pnpm dev        # in one terminal (watches src-api and writes to api-out)
-pnpm preview    # in another terminal (opens http://127.0.0.1:8788/_ui)
+pnpm build      # to build
 
 Or build once:
 
+pnpm dev
 pnpm build
-pnpm preview
 ```

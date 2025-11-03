@@ -90,6 +90,5 @@ export async function main(argv = process.argv.slice(2)) {
   console.log(
     '  pnpm dev    # watch & rebuild API (uses your globally installed statikapi or npx)'
   );
-  console.log('  pnpm preview --open');
   console.log('\nHappy building!');
 }

@@ -14,7 +14,7 @@ import { execSync } from 'node:child_process';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const cliRoot = path.resolve(__dirname, '..'); // packages/cli
-const uiPkg = path.resolve(cliRoot, '../../ui'); // packages/ui
+const uiPkg = path.resolve(cliRoot, '../../packages/ui'); // packages/ui
 const uiDist = path.join(uiPkg, 'dist');
 const dest = path.join(cliRoot, 'ui');
 

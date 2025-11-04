@@ -55,7 +55,7 @@ type(scope): subject
 | **chore**    | Maintenance / tooling                       | `chore(repo): align .editorconfig + prettier config`                                                   |
 | **security** | Security patch                              | `security(cli): sanitize route param printing`                                                         |
 | **deps**     | Dependency bump                             | `deps(ui): upgrade react to 18.3.1`                                                                    |
-| **release**  | Version tags and changelog updates          | `release: v0.3.0`                                                                                      |
+| **release**  | Version tags and changelog updates          | `release: v0.4.0`                                                                                      |
 
 ---
 
@@ -122,7 +122,7 @@ Use `statikapi dev` for incremental rebuilds.
 | 🧪    | test    | `🧪 test(router): stable route order`  |
 | 🔧    | chore   | `🔧 chore(repo): update pnpm lockfile` |
 | 🛠️    | build   | `🛠️ build(ui): add vite alias`         |
-| 🚀    | release | `🚀 release: v0.3.0`                   |
+| 🚀    | release | `🚀 release: v0.4.0`                   |
 
 ---
 
@@ -137,7 +137,7 @@ Use `statikapi dev` for incremental rebuilds.
 - `ci: publish order core → cli → create-statikapi`
 - `test(router): stable ordering for static/dynamic/catchall`
 - `chore(repo): add pnpm-workspace.yaml`
-- `release: v0.3.0`
+- `release: v0.4.0`
 
 ---
 

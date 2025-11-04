@@ -1,11 +1,16 @@
 {
   "name": "create-statikapi",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "bin": {
     "create-statikapi": "bin/create-statikapi.js"
   },
-  "files": ["bin", "templates", "README.md", "LICENSE"],
+  "files": [
+    "bin",
+    "templates",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "node --test"
   },
@@ -18,8 +23,13 @@
     "prompts": "^2.4.2",
     "kleur": "^4.1.5"
   },
-  "bugs": { "url": "https://github.com/zonayedpca/statikapi/issues" },
+  "bugs": {
+    "url": "https://github.com/zonayedpca/statikapi/issues"
+  },
   "homepage": "https://github.com/zonayedpca/statikapi#readme",
-  "publishConfig": { "access": "public", "provenance": true },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "license": "MIT"
 }

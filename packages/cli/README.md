@@ -23,10 +23,8 @@ pnpm add -D statikapi
 statikapi <command> [options]
 
 Commands:
-  init        Scaffold a new StatikAPI project
   build       Build static JSON endpoints
   dev         Watch & rebuild on changes
-  preview     Serve the built JSON files + UI
 
 Global:
   -h, --help      Show help

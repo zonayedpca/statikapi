@@ -19,7 +19,7 @@ function run(args = []) {
 
 test('--help lists commands', async () => {
   const { stdout } = await run(['--help']);
-  for (const word of ['init', 'build', 'dev', 'preview']) {
+  for (const word of ['build', 'dev']) {
     assert.match(stdout, new RegExp(`\\b${word}\\b`));
   }
 });

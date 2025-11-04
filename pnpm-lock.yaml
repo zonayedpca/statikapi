@@ -40,6 +40,12 @@ importers:
 
   example/dynamic: {}
 
+  example/showcase:
+    devDependencies:
+      statikapi:
+        specifier: workspace:*
+        version: link:../../packages/cli
+
   packages/cli:
     dependencies:
       chokidar:

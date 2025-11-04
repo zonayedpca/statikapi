@@ -11,7 +11,8 @@ function getOrigin() {
 /** Build an absolute endpoint URL for a given route (e.g., "/users/1"). */
 export function endpointUrl(route, originOverride) {
   const origin = originOverride || getOrigin();
-  return origin + route;
+
+  return origin + (route === '/' ? '/' : `${route}/`) + 'index.json';
 }
 
 /** Return snippet strings for curl, browser fetch, and Node (built-in) fetch. */

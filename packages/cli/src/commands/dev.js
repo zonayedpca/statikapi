@@ -367,6 +367,39 @@ export default async function devCmd(argv) {
         return;
       }
 
+      // 6) Serve built JSON directly from api-out
+      {
+        const outRoot = config.paths.outAbs;
+        // strip leading slash and normalize
+        const rel = pathname.replace(/^\/+/, '');
+        const candidates = [];
+
+        // If the request ends with .json, try that file directly
+        if (rel.endsWith('.json')) {
+          candidates.push(path.join(outRoot, rel));
+        } else {
+          // Otherwise, try a folder with index.json (e.g. "/" or "/users/1/")
+          candidates.push(path.join(outRoot, rel, 'index.json'));
+        }
+
+        for (const cand of candidates) {
+          const file = path.resolve(cand);
+          // prevent path traversal
+          if (!file.startsWith(path.resolve(outRoot))) continue;
+
+          try {
+            const st = await fs.stat(file);
+            if (st.isFile()) {
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              fss.createReadStream(file).pipe(res);
+              return; // served
+            }
+          } catch {
+            // try next candidate
+          }
+        }
+      }
+
       // Otherwise: 404
       res.statusCode = 404;
       res.end('Not Found');

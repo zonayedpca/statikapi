@@ -1,0 +1,14 @@
+# `config` (optional)
+
+An optional export for per‑route build behavior. (Reserved for future hints such as cache headers, `revalidate`, or `skip`.)
+
+```js
+// any route file
+export const config = {
+  // revalidate: 3600,
+  // skip: false
+};
+
+```
+
+> This is forward‑compatible: adding the export today won’t break current builds.

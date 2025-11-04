@@ -1,0 +1,40 @@
+# Remote Routes (Build‑time Fetch)
+
+Fetch external data during build in `data()`.
+
+## Example: `/posts`
+
+```js
+// src-api/posts/index.js
+export default async function data() {
+  const res = await fetch("https://jsonplaceholder.typicode.com/posts?_limit=5", {
+    headers: { Accept: "application/json" },
+    cache: "no-store"
+  });
+  if (!res.ok) return { error: "Upstream HTTP " + res.status };
+  const posts = await res.json();
+  return { count: posts.length, posts, generatedAt: new Date().toISOString() };
+}
+
+```
+
+## Example: `/posts/:id` (dynamic + remote)
+
+```js
+// src-api/posts/[id].js
+export async function paths() {
+  return ["1", "2", "3"];
+}
+export async function data({ params }) {
+  const res = await fetch("https://jsonplaceholder.typicode.com/posts/" + params.id, {
+    headers: { Accept: "application/json" },
+    cache: "no-store"
+  });
+  if (!res.ok) return { error: "Upstream HTTP " + res.status, id: params.id };
+  const post = await res.json();
+  return { id: params.id, post, generatedAt: new Date().toISOString() };
+}
+
+```
+
+> Remote fetches run **at build time**, and their responses are baked into static JSON.

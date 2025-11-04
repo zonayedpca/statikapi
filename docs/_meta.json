@@ -1,7 +1,7 @@
 {
   "name": "StatikAPI",
-  "description": "Build static JSON endpoints from filesystem modules.",
+  "description": "Build static JSON endpoints from filesystem modules — like Next.js static export, but for APIs.",
   "version": "0.3.0",
-  "lastUpdated": "2025-10-26T00:00:00.000Z",
+  "lastUpdated": "2025-11-04T00:00:00.000Z",
   "repo": "https://github.com/zonayedpca/statikapi"
 }

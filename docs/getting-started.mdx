@@ -1,48 +1,125 @@
 # Getting Started
 
-Welcome to **StatikAPI** — generate static JSON endpoints from simple files.
+Welcome to **StatikAPI** — generate **static JSON endpoints** from small JS/TS modules.
 
-## Installation
+This guide shows two flows:
 
+- **From scratch** using `create-statikapi`
+- **Inside an existing repo** by adding the CLI and a `src-api/` folder
+
+---
+
+## 1) Scaffold a new project (recommended)
+
+#### With pnpm
+```bash
+npx create-statikapi my-api
+```
+
+#### With yarn
+```bash
+npx create-statikapi my-api
+```
+
+#### With npm
+```bash
+npx create-statikapi my-api
+```
+
+You will be prompted for:
+- **Template**: `basic`, `dynamic`, or `remote-data`
+- **Package manager** and whether to install now
+- Optional ESLint, TS, directories, and deploy presets
+
+Then:
+
+#### With pnpm
+```bash
+cd my-api && pnpm dev
+```
+
+#### With yarn
+```bash
+cd my-api && yarn dev
+```
+
+#### With npm
+```bash
+cd my-api && npm run dev
+```
+
+The dev server watches `src-api/` and serves a local **UI** at `/_ui` with a live manifest, JSON previews, and copy-ready code snippets.
+
+---
+
+## 2) Integrate into an existing project
+
+1. Add the dependency (dev):
+#### With pnpm
 ```bash
 pnpm add -D statikapi
 ```
 
-Or use via the monorepo `packages/cli`:
-
+#### With yarn
 ```bash
-node packages/cli/bin/statikapi.js build
+yarn add -D statikapi
 ```
 
-## Quick Start
-
-Create `src-api/index.js`:
-
-```js
-export default { hello: 'world' };
-```
-
-Build:
-
+#### With npm
 ```bash
-statikapi build --pretty
+npm i -D statikapi
 ```
 
-Outputs:
-
-```
-api-out/
-└─ index.json
-```
-
-Preview:
-
+2. Create your **source directory**:
 ```bash
-statikapi preview --open
+mkdir -p src-api && printf "export default { hello: 'world' }\n" > src-api/index.js
 ```
 
-## What’s Next
+3. Add scripts to `package.json`:
+```json
+{
+  "scripts": {
+    "dev": "statikapi dev",
+    "build": "statikapi build --pretty",
+    "dev:headless": "statikapi dev --no-ui",
+    "build:api": "statikapi build"
+  }
+}
 
-- Learn the **CLI** features: see `/docs/cli`
-- Configure paths & output: see `/docs/config`
-- Prebuild **dynamic** routes: see `/docs/advanced/dynamic-routes`
+```
+
+4. Run it:
+#### With pnpm
+```bash
+pnpm dev
+```
+
+#### With yarn
+```bash
+yarn dev
+```
+
+#### With npm
+```bash
+npm run dev
+```
+
+---
+
+## Directory layout
+
+```
+src-api/            # your route modules
+  index.js          # → /index.json
+  users/[id].js     # → /users/1/index.json, etc (via paths())
+  docs/[...slug].js # → /docs/a/b/index.json, etc (via paths())
+api-out/            # generated JSON (gitignored)
+```
+
+---
+
+## Next steps
+
+- Read the **CLI Commands** to learn each flag
+- Learn the **Routing** model (static, dynamic, catch-all, remote)
+- Use **data()** and **paths()** to shape your endpoints

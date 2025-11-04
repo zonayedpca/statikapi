@@ -1,0 +1,29 @@
+# Catch‑all Routes
+
+Use `[...name].js` to capture **multiple segments**. `paths()` must return an array of string arrays.
+
+```
+src-api/docs/[...slug].js  → /docs/a/b/index.json, /docs/guide/index.json
+```
+
+## Example
+
+```js
+// src-api/docs/[...slug].js
+export async function paths() {
+  return [
+    ["a", "b"],
+    ["guide"]
+  ];
+}
+
+export async function data({ params }) {
+  return {
+    slug: params.slug,       // array of segments
+    path: params.slug.join("/"),
+    kind: params.slug.length > 1 ? "section" : "page",
+    generatedAt: new Date().toISOString()
+  };
+}
+
+```

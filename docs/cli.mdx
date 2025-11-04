@@ -1,50 +1,129 @@
-# CLI
+# CLI Commands
 
-The `statikapi` command has four subcommands.
+StatikAPI ships two CLIs:
 
-## Usage
+- **`create-statikapi`** — scaffolds a new project
+- **`statikapi`** — dev and build for your API
 
+---
+
+## `create-statikapi`
+
+Scaffold a new project with templates and deployment presets.
+
+#### With pnpm
 ```bash
-statikapi <command> [options]
+npx create-statikapi my-api
 ```
 
-### `init`
-
-Scaffold a new project (stub for now):
-
+#### With yarn
 ```bash
-statikapi init
+npx create-statikapi my-api
 ```
 
-### `build`
-
-Build static JSON endpoints to `api-out/`.
-
+#### With npm
 ```bash
-statikapi build [--pretty] [--srcDir src-api] [--outDir api-out]
+npx create-statikapi my-api
 ```
 
-- `--pretty`: pretty-print JSON (or use `--minify=false`)
-- `--srcDir`: source folder (default `src-api`)
-- `--outDir`: output folder (default `api-out`)
+### Flags
 
-### `dev`
+- `--template basic|dynamic|remote-data`
+- `--yes, -y` — accept defaults (non-interactive)
+- `--no-install`
+- `--no-gitignore`
+- `--package-manager pnpm|npm|yarn`
+- `--src-dir <dir>` (default `src-api`)
+- `--out-dir <dir>` (default `api-out`)
+- `--deploy cloudflare,netlify,github`
+- `--help, -h`
 
-Watch `src-api` and rebuild on change. Also notifies the preview UI via SSE.
-
-```bash
-statikapi dev [--previewHost 127.0.0.1] [--previewPort 8788]
-```
-
-### `preview`
-
-Serve the built JSON plus the embedded React UI at `/_ui`.
+**Examples**
 
 ```bash
-statikapi preview [--host 127.0.0.1] [--port 8788] [--open]
+create-statikapi my-api --template dynamic --no-install
 ```
 
-## Global Flags
+```bash
+create-statikapi my-api --src-dir api --out-dir public/api --deploy cloudflare,github
+```
 
-- `-h, --help`
-- `-v, --version`
+---
+
+## `statikapi dev`
+
+Watches your source and serves an interactive UI.
+
+#### With pnpm
+```bash
+pnpm dev
+```
+
+#### With yarn
+```bash
+yarn dev
+```
+
+#### With npm
+```bash
+npm run dev
+```
+
+**Common flags**
+
+- `--no-ui` — run server without the preview UI
+- `--port <number>` — override default dev port (from your bin)
+- `--src <dir>` — override source dir (defaults to config or `src-api/`)
+- `--out <dir>` — override output dir (defaults to config or `api-out/`)
+
+---
+
+## `statikapi build`
+
+Builds static JSON into `api-out/` (or your configured dir).
+
+#### With pnpm
+```bash
+pnpm build
+```
+
+#### With yarn
+```bash
+yarn build
+```
+
+#### With npm
+```bash
+npm run build
+```
+
+**Useful flags**
+
+- `--pretty` — human-readable `index.json`
+- `--src <dir>` — override source dir
+- `--out <dir>` — override output dir
+- `--clean` — remove old output before writing
+
+**Script-only variant**
+
+#### With pnpm
+```bash
+pnpm run build:api
+```
+
+#### With yarn
+```bash
+yarn build:api
+```
+
+#### With npm
+```bash
+npm run build:api
+```
+
+---
+
+## Exit codes
+
+- `0` success
+- non-zero indicates an error (parsing, user module errors, etc.)

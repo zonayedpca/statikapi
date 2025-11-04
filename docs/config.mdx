@@ -1,38 +1,16 @@
-# Config
+# Configuration
 
-StatikAPI reads `statikapi.config.js` (optional). You can also pass flags to override.
-
-## Example
+Most projects work with **zero config**. When you need to customize directories, add `statikapi.config.js` at the project root:
 
 ```js
 // statikapi.config.js
 export default {
-  srcDir: 'src-api',
-  outDir: 'api-out',
+  srcDir: "src-api",
+  outDir: "api-out"
 };
-```
-
-**Rules:**
-
-- `srcDir` and `outDir` must be **relative** and **different**.
-- Paths are normalized (no `..` traversal).
-
-## Flags Override
-
-```bash
-statikapi build --srcDir src-api --outDir api-out
-```
-
-## Manifest
-
-Builds write a manifest to:
 
 ```
-api-out/.statikapi/manifest.json
-```
 
-Each entry contains:
+You can override these from the CLI with `--src` and `--out`.
 
-- `route` – `/users/1`
-- `filePath` – output JSON path
-- `bytes`, `mtime`, `hash`
+> **Tip:** The scaffolders also generate `.nvmrc` and `.node-version` for Node 22, and can drop deploy files like `wrangler.toml`, `netlify.toml`, or a GitHub Pages workflow when selected.

@@ -1,0 +1,29 @@
+# `paths()`
+
+Enumerate all concrete pages for dynamic or catch‑all routes.
+
+## Dynamic example
+
+```js
+// users/[id].js
+export async function paths() {
+  return ["1", "2", "3"]; // strings for [id]
+}
+
+```
+
+## Catch‑all example
+
+```js
+// docs/[...slug].js
+export async function paths() {
+  return [
+    ["a", "b"],
+    ["guide"]
+  ]; // arrays of segments for [...slug]
+}
+
+```
+
+- Return values must be **pure data** (strings or arrays of strings).
+- Throwing rejects the build for that route and surfaces an error.

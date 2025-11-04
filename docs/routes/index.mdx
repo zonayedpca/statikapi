@@ -1,0 +1,14 @@
+# Routes Overview
+
+Routes are defined by **files in `src-api/`** and map directly to URLs.
+
+- **Static** — plain files like `index.js`, `about.js`
+- **Dynamic** — `users/[id].js` parameterized by segments
+- **Catch-all** — `docs/[...slug].js` captures multiple segments
+- **Remote** — any route that fetches external data within `data()` at build time
+
+Every route module must provide data via:
+- `export default <object>` **or** `export async function data(ctx)`
+
+Dynamic/catch-all routes also provide:
+- `export async function paths()` to enumerate all concrete pages

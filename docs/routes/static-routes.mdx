@@ -1,0 +1,27 @@
+# Static Routes
+
+A file path becomes a URL path. Examples:
+
+```
+src-api/
+  index.js          → /index.json
+  about.js          → /about/index.json
+  team/info.js      → /team/info/index.json
+```
+
+## Example
+
+```js
+// src-api/index.js
+export default {
+  hello: "world",
+  generatedAt: new Date().toISOString()
+};
+
+```
+
+Output written to:
+
+```
+api-out/index.json
+```

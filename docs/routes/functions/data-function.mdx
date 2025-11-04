@@ -1,0 +1,27 @@
+# `data(context)`
+
+Return the JSON payload for the current route.
+
+## Signature
+
+```js
+// Both forms are supported
+export default <plain-object>;
+export async function data(context) { /* return plain-object */ }
+
+```
+
+- `context.params` — dynamic params, e.g. `{ id: "1" }` or `{ slug: ["a","b"] }`
+- `context.route` — normalized route path (e.g., `/users/:id`)
+- `context.segments` — array of path tokens
+- `context.file` — absolute source file path (for logging)
+- (More fields may be added in minor versions)
+
+## Rules
+
+- Must return **JSON-serializable** data:
+  - Plain objects / arrays only
+  - No functions, Dates, or circular refs
+  - Numbers must be finite
+
+Violations fail the build with a helpful error.

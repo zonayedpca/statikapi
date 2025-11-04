@@ -1,11 +1,56 @@
 [
-  { "title": "Getting Started", "slug": "getting-started" },
-  { "title": "CLI", "slug": "cli" },
-  { "title": "Config", "slug": "config" },
   {
-    "title": "Advanced",
+    "title": "Getting Started",
+    "slug": "getting-started"
+  },
+  {
+    "title": "CLI Commands",
+    "slug": "cli"
+  },
+  {
+    "title": "Configuration",
+    "slug": "config"
+  },
+  {
+    "title": "Routes",
     "children": [
-      { "title": "Dynamic Routes", "slug": "advanced/dynamic-routes" }
+      {
+        "title": "Overview",
+        "slug": "routes/index"
+      },
+      {
+        "title": "Static Routes",
+        "slug": "routes/static-routes"
+      },
+      {
+        "title": "Dynamic Routes",
+        "slug": "routes/dynamic-routes"
+      },
+      {
+        "title": "Catch-all Routes",
+        "slug": "routes/catch-all-routes"
+      },
+      {
+        "title": "Remote Routes",
+        "slug": "routes/remote-routes"
+      },
+      {
+        "title": "Functions",
+        "children": [
+          {
+            "title": "data()",
+            "slug": "routes/functions/data-function"
+          },
+          {
+            "title": "paths()",
+            "slug": "routes/functions/paths-function"
+          },
+          {
+            "title": "config()",
+            "slug": "routes/functions/config-function"
+          }
+        ]
+      }
     ]
   }
 ]

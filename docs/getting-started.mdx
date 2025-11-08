@@ -5,77 +5,85 @@ Welcome to **StatikAPI** — generate **static JSON endpoints** from small JS/TS
 This guide shows two flows:
 
 - **From scratch** using `create-statikapi`
-- **Inside an existing repo** by adding the CLI and a `src-api/` folder
+- **Inside an existing repo** by adding the CLI and a `src-api/` folder _(this directory is configurable via your [configuration](./config))_
 
 ---
 
 ## 1) Scaffold a new project (recommended)
 
-#### With pnpm
+<Tabs group="create">
+  <Tab label="pnpm">
+
 ```bash
 npx create-statikapi my-api
+cd my-api && pnpm dev
 ```
 
-#### With yarn
+  </Tab>
+  <Tab label="yarn">
+
 ```bash
 npx create-statikapi my-api
+cd my-api && yarn dev
 ```
 
-#### With npm
+  </Tab>
+  <Tab label="npm">
+
 ```bash
 npx create-statikapi my-api
+cd my-api && npm run dev
 ```
+
+  </Tab>
+</Tabs>
 
 You will be prompted for:
+
 - **Template**: `basic`, `dynamic`, or `remote-data`
 - **Package manager** and whether to install now
 - Optional ESLint, TS, directories, and deploy presets
 
-Then:
-
-#### With pnpm
-```bash
-cd my-api && pnpm dev
-```
-
-#### With yarn
-```bash
-cd my-api && yarn dev
-```
-
-#### With npm
-```bash
-cd my-api && npm run dev
-```
-
-The dev server watches `src-api/` and serves a local **UI** at `/_ui` with a live manifest, JSON previews, and copy-ready code snippets.
+The dev server watches your **source directory** (default `src-api/`, configurable via [Configuration](./config)) and serves a local **UI** at `/_ui` with a live manifest, JSON previews, and copy-ready code snippets.
 
 ---
 
 ## 2) Integrate into an existing project
 
 1. Add the dependency (dev):
-#### With pnpm
+
+<Tabs group="install">
+  <Tab label="pnpm">
+
 ```bash
 pnpm add -D statikapi
 ```
 
-#### With yarn
+  </Tab>
+  <Tab label="yarn">
+
 ```bash
 yarn add -D statikapi
 ```
 
-#### With npm
+  </Tab>
+  <Tab label="npm">
+
 ```bash
 npm i -D statikapi
 ```
 
-2. Create your **source directory**:
+  </Tab>
+</Tabs>
+
+2. Create your **source directory** (default `src-api/`, configurable via [Configuration](./config)):
+
 ```bash
 mkdir -p src-api && printf "export default { hello: 'world' }\n" > src-api/index.js
 ```
 
 3. Add scripts to `package.json`:
+
 ```json
 {
   "scripts": {
@@ -85,35 +93,44 @@ mkdir -p src-api && printf "export default { hello: 'world' }\n" > src-api/index
     "build:api": "statikapi build"
   }
 }
-
 ```
 
 4. Run it:
-#### With pnpm
+
+<Tabs group="dev">
+  <Tab label="pnpm">
+
 ```bash
 pnpm dev
 ```
 
-#### With yarn
+  </Tab>
+  <Tab label="yarn">
+
 ```bash
 yarn dev
 ```
 
-#### With npm
+  </Tab>
+  <Tab label="npm">
+
 ```bash
 npm run dev
 ```
+
+  </Tab>
+</Tabs>
 
 ---
 
 ## Directory layout
 
 ```
-src-api/            # your route modules
+src-api/            # your route modules (configurable via [Configuration](./config))
   index.js          # → /index.json
   users/[id].js     # → /users/1/index.json, etc (via paths())
   docs/[...slug].js # → /docs/a/b/index.json, etc (via paths())
-api-out/            # generated JSON (gitignored)
+api-out/            # generated JSON (also configurable via [Configuration](./config))
 ```
 
 ---

@@ -1,0 +1,150 @@
+# Community & Contributing
+
+Welcome to the StatikAPI community. This page explains how the project is maintained, how you can contribute, and how the documentation site is kept in sync with the repository. It also summarizes the monorepo layout so you can find your way around quickly.
+
+---
+
+## How the project is maintained
+
+StatikAPI is developed in a JavaScript monorepo and released under the MIT license. We prioritize small, iterative changes with clear commit messages and automated CI checks.
+
+- Issues and feature requests are tracked on GitHub using issue templates.
+- Pull requests must pass linting, tests, and basic manual checks before merge.
+- Releases are cut from git tags and published via GitHub Actions to npm. The CLI bundles a prebuilt copy of the preview UI during publish.
+
+See: [`./.github/workflows/release.yml`](../.github/workflows/release.yml)
+
+---
+
+## Monorepo at a glance
+
+```
+.
+├─ packages/
+│  ├─ cli/              → The `statikapi` CLI (build, dev, preview)
+│  ├─ core/             → Shared utilities and internal helpers
+│  ├─ ui/               → React preview UI served at /_ui
+│  └─ create-statikapi/ → Project scaffolder
+├─ example/             → Minimal example projects
+├─ docs/                → OSS documentation content (MDX)
+├─ .github/             → Issue templates and release workflows
+└─ scripts, configs, etc.
+```
+
+- Node version is pinned via [`.nvmrc`](../.nvmrc) (Node 22).
+- Editor and formatting defaults live in [`.editorconfig`](../.editorconfig).
+
+---
+
+## How to contribute
+
+We welcome bug reports, fixes, features, docs improvements, and examples.
+
+1. **Discuss**: If an issue does not exist, open one first (bug or feature template).
+   - Bug: [`.github/ISSUE_TEMPLATE/bug_report.md`](../.github/ISSUE_TEMPLATE/bug_report.md)  
+   - Feature: [`.github/ISSUE_TEMPLATE/feature_request.md`](../.github/ISSUE_TEMPLATE/feature_request.md)
+2. **Fork and branch** off `main`. Use a descriptive branch name like `feat/route-aliases`.
+3. **Develop locally** (see quickstart below). Keep commits small and focused.
+4. **Tests and lint** must pass before opening a PR:
+   ```bash
+   pnpm -w lint
+   pnpm -w test
+   ```
+5. **Open a PR** using the pull request template. Explain the change and link issues.
+
+Read the full guide: [`CONTRIBUTING.md`](../CONTRIBUTING.md) and the PR template: [`.github/PULL_REQUEST_TEMPLATE.md`](../.github/PULL_REQUEST_TEMPLATE.md).
+
+---
+
+## Commit style
+
+Use a short, imperative subject and include an optional body explaining the “what” and “why”.
+
+```
+type(scope): subject
+```
+
+Common types include: `feat`, `fix`, `perf`, `refactor`, `build`, `ci`, `docs`, `style`, `test`, `chore`, `security`, `deps`, `release`.
+
+See details and examples in [`CONTRIBUTING.md`](../CONTRIBUTING.md#commit-style).
+
+---
+
+## Docs: how it works
+
+The documentation you are reading is maintained **in the same repository** under `docs/` as MDX files. The website consumes these MDX files directly. When a docs PR is merged to the default branch:
+
+- The MDX files are built and deployed by the website pipeline.
+- Any change under `docs/` automatically updates the live Docs site on the next deployment.
+- The left‑hand navigation is driven by JSON/MDX metadata (for example, `_nav.json`).
+
+Guidelines for docs changes:
+
+- Keep titles, slugs, and folder structure stable to avoid broken links.
+- Prefer small, atomic docs PRs scoped to one page or feature.
+- Include runnable or copy‑pasteable examples; verify commands.
+
+---
+
+## Local development quickstart
+
+Requirements: Node 22, pnpm 9.
+
+```bash
+git clone https://github.com/zonayedpca/statikapi.git
+cd statikapi
+pnpm install
+
+# Start development loop (CLI + UI preview)
+pnpm dev
+
+# Or run a specific example
+pnpm -C example/basic dev
+```
+
+Useful scripts:
+- `pnpm -w lint` and `pnpm -w format` to keep code style consistent.
+- `pnpm -r test` to run tests across packages.
+- `pnpm -C packages/ui build` to build the preview UI (the CLI bundles it on publish).
+
+---
+
+## Issue workflow
+
+- Use the provided templates for clear reports and proposals.
+- Include reproduction steps and expected behavior for bugs.
+- For features, describe the problem, proposed solution (flags, config, UI), and alternatives.
+- Security issues should be reported privately (see Security below).
+
+Templates:
+- Bug: [`.github/ISSUE_TEMPLATE/bug_report.md`](../.github/ISSUE_TEMPLATE/bug_report.md)
+- Feature: [`.github/ISSUE_TEMPLATE/feature_request.md`](../.github/ISSUE_TEMPLATE/feature_request.md)
+
+---
+
+## Code of Conduct and Security
+
+- Be respectful and constructive. See [`CODE_OF_CONDUCT.md`](../CODE_OF_CONDUCT.md).
+- Report vulnerabilities privately as described in [`SECURITY.md`](../SECURITY.md).
+  - Email: contact@statikapi.com
+  - Please include environment, version/commit, impact, and steps to reproduce.
+
+---
+
+## Docs and site deployment
+
+- Docs live under `docs/` and are version‑agnostic at the moment.
+- The site build watches `docs/` and republishes changes automatically after merge.
+- Release automation for packages is separate and handled by GitHub Actions (`release.yml`).
+
+If a docs change must land at the same time as a code change, note that in your PR body so maintainers can coordinate the merge order.
+
+---
+
+## Questions and discussion
+
+- File an issue for bugs or feature requests.
+- For general questions, you can also open a “question” issue if needed.
+- We’ll add Discussions as the community grows.
+
+Thank you for helping improve StatikAPI.

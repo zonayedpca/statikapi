@@ -1,0 +1,22 @@
+# Amazon S3
+
+Amazon S3 is ideal for large or enterprise-grade static JSON APIs.
+
+**Steps:**
+
+1. Build:
+   ```bash
+   statikapi build
+   ```
+
+2. Sync to S3:
+   ```bash
+   aws s3 sync api-out s3://my-bucket-name/ --content-type "application/json"
+   ```
+
+3. Enable static website hosting or serve via CloudFront for CDN distribution.
+
+**Example URL**
+```
+https://my-bucket-name.s3.amazonaws.com/users/1/index.json
+```

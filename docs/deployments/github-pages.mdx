@@ -1,0 +1,20 @@
+# GitHub Pages
+
+GitHub Pages can serve JSON just like HTML.
+
+1. Commit your `api-out/` directory.
+2. Push it to a `gh-pages` branch (or `/docs` folder).
+3. Enable Pages in repo settings.
+
+```bash
+git add api-out
+git commit -m "Add API output"
+git subtree push --prefix api-out origin gh-pages
+```
+
+Your endpoints will be accessible at:
+```
+https://username.github.io/repo-name/users/1/index.json
+```
+
+> For automation, use GitHub Actions to build and push after every commit.

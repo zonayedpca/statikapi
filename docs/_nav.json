@@ -12,6 +12,17 @@
     "slug": "config"
   },
   {
+    "title": "Deployments",
+    "children": [
+      { "title": "Overview", "slug": "deployments/index" },
+      { "title": "Cloudflare Pages & R2", "slug": "deployments/cloudflare" },
+      { "title": "Netlify", "slug": "deployments/netlify" },
+      { "title": "GitHub Pages", "slug": "deployments/github-pages" },
+      { "title": "Amazon S3", "slug": "deployments/amazon-s3" },
+      { "title": "Other Providers", "slug": "deployments/other" }
+    ]
+  },
+  {
     "title": "Routes",
     "children": [
       {

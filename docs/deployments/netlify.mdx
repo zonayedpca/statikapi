@@ -1,0 +1,17 @@
+# Netlify
+
+Deploy your `api-out/` directory like any static site.
+
+```bash
+netlify deploy --dir=api-out --prod
+```
+
+Netlify automatically serves `.json` files with proper headers and global CDN caching.
+
+**Example URL**
+```
+https://your-site.netlify.app/users/1/index.json
+```
+
+> Works best for small and medium APIs.  
+> For large data sets, consider using object storage (S3, R2, etc.).

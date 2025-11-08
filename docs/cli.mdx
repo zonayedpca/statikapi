@@ -1,129 +1,151 @@
-# CLI Commands
+# Configuration
 
-StatikAPI ships two CLIs:
+StatikAPI works with **zero config**. When you need to customize paths, create a **`statikapi.config.js`** in your project root.
 
-- **`create-statikapi`** — scaffolds a new project
-- **`statikapi`** — dev and build for your API
+```js
+// statikapi.config.js
+export default {
+  srcDir: 'src-api',
+  outDir: 'api-out',
+};
+```
+
+> Both directories are **relative to the project root**, must be **non-empty strings**, and **cannot be the same path**. Absolute paths and parent traversal (e.g. `../outside`) are not allowed.
 
 ---
 
-## `create-statikapi`
+## Fields
 
-Scaffold a new project with templates and deployment presets.
+### `srcDir` (string, default: `"src-api"`)
 
-#### With pnpm
-```bash
-npx create-statikapi my-api
-```
+- Folder that contains your **route modules**.
+- Supported extensions: **.js, .mjs, .cjs, .ts, .tsx**.
+- Files/folders that **start with `_`** are ignored (e.g. `_private/`).
+- `index.js` collapses to the folder route (e.g. `blog/index.js` → `/blog`).
 
-#### With yarn
-```bash
-npx create-statikapi my-api
-```
+### `outDir` (string, default: `"api-out"`)
 
-#### With npm
-```bash
-npx create-statikapi my-api
-```
-
-### Flags
-
-- `--template basic|dynamic|remote-data`
-- `--yes, -y` — accept defaults (non-interactive)
-- `--no-install`
-- `--no-gitignore`
-- `--package-manager pnpm|npm|yarn`
-- `--src-dir <dir>` (default `src-api`)
-- `--out-dir <dir>` (default `api-out`)
-- `--deploy cloudflare,netlify,github`
-- `--help, -h`
-
-**Examples**
-
-```bash
-create-statikapi my-api --template dynamic --no-install
-```
-
-```bash
-create-statikapi my-api --src-dir api --out-dir public/api --deploy cloudflare,github
-```
+- Folder where **generated JSON** is written.
+- Each URL path becomes a folder with **`index.json`** inside.
+- A build **manifest** is also written to `api-out/.statikapi/manifest.json` containing route → file mappings and sizes (handy for tooling/preview UIs).
 
 ---
 
-## `statikapi dev`
+## Path resolution & validation
 
-Watches your source and serves an interactive UI.
+The CLI normalizes and validates configuration:
 
-#### With pnpm
-```bash
-pnpm dev
-```
+- Paths are **normalized** with POSIX separators.
+- Must be **relative** (no absolute paths).
+- Must **not traverse** outside the project (no leading `../`).
+- `srcDir` and `outDir` must be **different**.
 
-#### With yarn
-```bash
-yarn dev
-```
-
-#### With npm
-```bash
-npm run dev
-```
-
-**Common flags**
-
-- `--no-ui` — run server without the preview UI
-- `--port <number>` — override default dev port (from your bin)
-- `--src <dir>` — override source dir (defaults to config or `src-api/`)
-- `--out <dir>` — override output dir (defaults to config or `api-out/`)
+If validation fails, the CLI throws a helpful **ConfigError** before building.
 
 ---
 
-## `statikapi build`
+## Override via CLI flags
 
-Builds static JSON into `api-out/` (or your configured dir).
+You can override config values per-invocation. The current CLI reads **`--srcDir`** and **`--outDir`**:
 
-#### With pnpm
+<Tabs group="flags">
+  <Tab label="pnpm">
+
 ```bash
-pnpm build
+pnpm statikapi build --srcDir api --outDir public/api
 ```
 
-#### With yarn
+  </Tab>
+  <Tab label="yarn">
+
 ```bash
-yarn build
+yarn statikapi build --srcDir api --outDir public/api
 ```
 
-#### With npm
+  </Tab>
+  <Tab label="npm">
+
 ```bash
-npm run build
+npx statikapi build --srcDir api --outDir public/api
 ```
 
-**Useful flags**
+  </Tab>
+</Tabs>
 
-- `--pretty` — human-readable `index.json`
-- `--src <dir>` — override source dir
-- `--out <dir>` — override output dir
-- `--clean` — remove old output before writing
-
-**Script-only variant**
-
-#### With pnpm
-```bash
-pnpm run build:api
-```
-
-#### With yarn
-```bash
-yarn build:api
-```
-
-#### With npm
-```bash
-npm run build:api
-```
+> Heads‑up: older notes might mention `--src` / `--out`. In the current CLI, use **`--srcDir`** and **`--outDir`** to affect configuration.
 
 ---
 
-## Exit codes
+## Dev server notes
 
-- `0` success
-- non-zero indicates an error (parsing, user module errors, etc.)
+When running **`statikapi dev`**:
+
+- Serves your built files and an interactive UI at `/_ui`.
+- Writes/updates `api-out/.statikapi/manifest.json` on changes.
+- Environment overrides (advanced):
+  - **`STATIKAPI_UI_DIR`** — serve a custom, prebuilt UI directory (must contain `index.html`).
+  - **`STATIKAPI_FORCE_DEV=1`** — keep dev running in non‑TTY environments (e.g., CI runners, `concurrently`).
+
+<Tabs group="dev-flags">
+  <Tab label="pnpm">
+
+```bash
+pnpm statikapi dev --port 8788 --srcDir src-api --outDir api-out
+```
+
+  </Tab>
+  <Tab label="yarn">
+
+```bash
+yarn statikapi dev --port 8788 --srcDir src-api --outDir api-out
+```
+
+  </Tab>
+  <Tab label="npm">
+
+```bash
+npx statikapi dev --port 8788 --srcDir src-api --outDir api-out
+```
+
+  </Tab>
+</Tabs>
+
+---
+
+## Recipes
+
+### 1) Customizing directories
+
+```js
+// statikapi.config.js
+export default {
+  srcDir: 'api', // move sources into /api
+  outDir: 'public/api', // emit static JSON inside your public/ folder
+};
+```
+
+### 2) Monorepo (package-local config)
+
+Place `statikapi.config.js` in the **package root** that owns the `srcDir`. The CLI resolves paths **relative to the CWD** (where you run it).
+
+### 3) TypeScript routes
+
+You can freely use **.ts / .tsx** route files. The CLI transpiles on the fly and imports them, then enforces **JSON‑serializable** outputs.
+
+---
+
+## Troubleshooting
+
+- **Config error “must be a relative path”** — remove any leading `/` or drive letter; use relative paths like `src-api`, `api-out`.
+- **“cannot traverse outside the project”** — avoid `../` path segments.
+- **`srcDir` and `outDir` must differ** — point them at different folders.
+- **Dynamic routes not emitting** — ensure the module exports `paths()` that returns **strings** (or arrays of strings for catch‑all). See **Routes** docs.
+- **Non‑serializable value** — only plain objects/arrays, finite numbers, strings, booleans, or `null`. No functions, symbols, BigInt, Dates, classes, or cycles.
+
+---
+
+## See also
+
+- **[CLI → StatikAPI (Core)](./cli/statikapi)** for flags and dev/build usage
+- **[Routes](./routes/index)** for file → URL mapping rules
+- **[Deployments](./deployments/index)** for hosting static JSON

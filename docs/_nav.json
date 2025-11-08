@@ -4,8 +4,12 @@
     "slug": "getting-started"
   },
   {
-    "title": "CLI Commands",
-    "slug": "cli"
+    "title": "CLI",
+    "children": [
+      { "title": "Overview", "slug": "cli/index" },
+      { "title": "StatikAPI (Core)", "slug": "cli/statikapi" },
+      { "title": "Project Scaffolding", "slug": "cli/create-statikapi" }
+    ]
   },
   {
     "title": "Configuration",

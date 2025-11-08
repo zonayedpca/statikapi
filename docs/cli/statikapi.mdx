@@ -1,0 +1,112 @@
+# Core CLI — `statikapi`
+
+The core CLI provides two commands: **`dev`** and **`build`**.
+
+---
+
+## `statikapi dev`
+
+Watches your source and serves an interactive UI at `/_ui`.
+
+> **Note:** The default **source dir** is `src-api/` and **output dir** is `api-out/`, both are configurable via your [Configuration](../config). You can also override them via CLI flags `--src` and `--out`.
+
+<Tabs group="dev">
+  <Tab label="pnpm">
+
+  ```bash
+  pnpm dev
+  ```
+
+  </Tab>
+  <Tab label="yarn">
+
+  ```bash
+  yarn dev
+  ```
+
+  </Tab>
+  <Tab label="npm">
+
+  ```bash
+  npm run dev
+  ```
+
+  </Tab>
+</Tabs>
+
+**Common flags**
+
+- `--no-ui` — run server without the preview UI  
+- `--port <number>` — override dev port  
+- `--src <dir>` — override source dir (defaults to config or `src-api/`, configurable via [Configuration](../config))  
+- `--out <dir>` — override output dir (defaults to config or `api-out/`, configurable via [Configuration](../config))
+
+---
+
+## `statikapi build`
+
+Builds static JSON into your output directory (default `api-out/`, configurable via [Configuration](../config)).
+
+<Tabs group="build">
+  <Tab label="pnpm">
+
+  ```bash
+  pnpm build
+  ```
+
+  </Tab>
+  <Tab label="yarn">
+
+  ```bash
+  yarn build
+  ```
+
+  </Tab>
+  <Tab label="npm">
+
+  ```bash
+  npm run build
+  ```
+
+  </Tab>
+</Tabs>
+
+**Useful flags**
+
+- `--pretty` — human‑readable `index.json`  
+- `--src <dir>` — override source dir (configurable; default `src-api/`)  
+- `--out <dir>` — override output dir (configurable; default `api-out/`)  
+- `--clean` — remove old output before writing
+
+**Script‑only variant** (skip prettifying, ideal for CI):
+
+<Tabs group="build-only">
+  <Tab label="pnpm">
+
+  ```bash
+  pnpm run build:api
+  ```
+
+  </Tab>
+  <Tab label="yarn">
+
+  ```bash
+  yarn build:api
+  ```
+
+  </Tab>
+  <Tab label="npm">
+
+  ```bash
+  npm run build:api
+  ```
+
+  </Tab>
+</Tabs>
+
+---
+
+## Exit codes
+
+- `0` success  
+- non‑zero indicates an error (parsing, user module errors, etc.)

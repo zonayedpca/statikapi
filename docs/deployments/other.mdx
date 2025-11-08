@@ -1,17 +1,73 @@
 # Other Providers
 
-Any provider that supports static hosting can serve your generated JSON files.
-
-**Examples**
-- **Vercel** (via static export or public directory)
-- **Firebase Hosting**
-- **DigitalOcean Spaces**
-- **Render**
-- **Surge.sh**
-
-Simply upload your `api-out/` directory and point your routes accordingly.
+Any provider that supports **static hosting** can serve your generated JSON files.  
+The process is typically the same — upload your `api-out/` directory and map your routes.
 
 ---
 
-> 💡 Tip:  
-> Use a CDN (Cloudflare, Fastly, BunnyCDN, etc.) in front of your JSON hosting for faster global delivery.
+## Common Providers
+
+### Vercel
+
+You can deploy your JSON files through **Vercel** either by:
+
+- placing them under the `public/` directory in an existing project, or
+- using **Vercel CLI** to deploy `api-out/` directly:
+  ```bash
+  vercel --prod api-out
+  ```
+
+### Firebase Hosting
+
+Firebase supports static file hosting.  
+Simply add your build directory in `firebase.json`:
+
+```json
+{
+  "hosting": {
+    "public": "api-out"
+  }
+}
+```
+
+Then deploy:
+
+```bash
+firebase deploy
+```
+
+### DigitalOcean Spaces
+
+Use `s3cmd` or the AWS CLI to sync files:
+
+```bash
+aws s3 sync api-out s3://my-space-name --endpoint-url https://nyc3.digitaloceanspaces.com
+```
+
+### Render
+
+Render can serve static content from any folder.  
+Create a new **Static Site** and point it to your `api-out/` folder.
+
+### Surge.sh
+
+You can deploy instantly using the Surge CLI:
+
+```bash
+npx surge api-out myapi.surge.sh
+```
+
+---
+
+## Performance Tip
+
+Use a **CDN layer** (Cloudflare, Fastly, BunnyCDN, or similar) in front of your JSON hosting for faster global delivery and caching.
+
+---
+
+## Considerations
+
+- These services are best suited for **small to medium** JSON projects or API prototypes.
+- For larger datasets or high-traffic APIs, prefer **object storage** solutions like **Cloudflare R2** or **Amazon S3**.
+- You can also host your APIs directly with **StatikAPI Cloud** _(coming soon)_ — a managed platform for static JSON APIs with automatic builds, versioned deployments, and integrated CDN caching.  
+  [Join the waitlist](#subscription) to get early access.

@@ -1,11 +1,11 @@
 # Cloudflare Pages & R2
 
-Cloudflare is an excellent choice for hosting small or medium static JSON APIs —  
-especially if you’re already hosting your frontend or documentation there.
+Cloudflare is an excellent choice for hosting small or medium static JSON APIs — 
+especially if you are already hosting your frontend or documentation there.
 
 ---
 
-## ✅ Using Cloudflare Pages
+## Using Cloudflare Pages
 
 You can deploy your `api-out/` folder directly to **Cloudflare Pages**:
 
@@ -13,58 +13,82 @@ You can deploy your `api-out/` folder directly to **Cloudflare Pages**:
 npx wrangler pages publish api-out --project-name my-statikapi
 ```
 
-This works great for:
+Cloudflare Pages supports two deployment approaches:
+
+1. **Git Integration** — connect your repository (GitHub, GitLab, or Bitbucket) directly to Cloudflare Pages.  
+   Every time you push changes to your configured branch, Cloudflare will automatically trigger a new build and redeploy your project.
+
+2. **Manual Deployment** — use the `wrangler pages publish` command to upload a local build (as shown above).  
+   This is ideal for projects built by CI/CD pipelines or for static API exports like StatikAPI.
+
+Cloudflare also supports **build hooks and webhooks**, which can trigger rebuilds automatically when your external systems (for example, StatikAPI SaaS or your backend) finish a build.
+
+> Example: You can configure a webhook in Cloudflare Pages and have your StatikAPI build process call it whenever `api-out/` is regenerated.
+
+This approach works great for:
 - Small APIs
 - Public demo endpoints
-- Combined projects (e.g., your docs + JSON API in one Pages site)
+- Combined projects (for example, your documentation and JSON API in one Pages site)
 
-Your JSON files will be served from the same CDN edge network that powers Pages.
+Your JSON files will be served from the same global CDN edge network that powers Cloudflare Pages.
 
-> **Example URL**
-> ```
-> https://my-statikapi.pages.dev/api/users/1/index.json
-> ```
+**Example URL**
+```
+https://my-statikapi.pages.dev/api/users/1/index.json
+```
 
 ---
 
-## ⚠️ Fair Usage Policy
+## Fair Usage Policy
 
 Cloudflare Pages is primarily designed for **websites**, not large API systems.  
 If you plan to serve thousands of JSON files or expect high traffic, review their **fair use policy** and bandwidth limits.
 
-**In short:**
-- Occasional JSON requests are fine ✅  
-- API-like workloads with heavy access may be rate-limited or blocked ❌  
-- Pages cache and limits vary per plan — always check the [Cloudflare Pages Terms of Service](https://developers.cloudflare.com/pages/platform/limits/) and related usage rules.
+**Summary:**
+- Occasional JSON requests are fine.
+- Heavy API-like workloads may be rate-limited or blocked.
+- Limits and caching behavior vary per plan — always review the [Cloudflare Pages Limits](https://developers.cloudflare.com/pages/platform/limits/) and Terms of Service.
 
 ---
 
-## 💡 For Larger Projects — Use R2
+## For Larger Projects — Use R2
 
-If your StatikAPI project produces **many JSON files** or large objects, host them in **Cloudflare R2**:
+If your StatikAPI project produces many JSON files or large objects, consider hosting them in **Cloudflare R2**.
 
-1. Upload the entire `api-out/` folder to R2:
-   ```bash
-   npx wrangler r2 object put my-bucket --file api-out
-   ```
+R2 is Cloudflare’s object storage service, similar to AWS S3, designed for large data sets and high availability.
 
-2. Configure public access or route it via a Worker:
-   ```js
-   export default {
-     async fetch(request) {
-       // Proxy JSON files from R2
-     }
-   };
-   ```
+### Upload to R2
 
-R2 gives you:
-- Better scalability and cost control
-- API-friendly object storage
-- Freedom from Pages file limits
+You can upload your entire `api-out/` directory:
+
+```bash
+npx wrangler r2 object put my-bucket --file api-out
+```
+
+### Serve from R2 or via Workers
+
+You can make your R2 bucket public or serve it behind a Worker:
+
+```js
+export default {
+  async fetch(request) {
+    // Example: Proxy JSON files from R2
+  }
+};
+```
+
+**Advantages of R2**
+- Handles large-scale APIs efficiently
+- No egress bandwidth fees within Cloudflare
+- Can integrate seamlessly with Workers and KV
+- Supports advanced routing and caching
 
 ---
 
-> **Best practice:**  
-> - For small JSON sets or static sites → Pages ✅  
-> - For large datasets or API-style serving → R2 💪  
-> - Always follow Cloudflare’s latest policies and ToS.
+## Considerations
+
+- For **small projects** or when combining with an existing site → use **Cloudflare Pages**
+- For **large datasets** or when serving JSON like an API → use **Cloudflare R2**
+- Always follow Cloudflare’s current **usage policies and terms** to stay within fair-use limits
+- You can also host your APIs directly with **StatikAPI Cloud** *(coming soon)* — a managed hosting solution built for static JSON APIs, automatic builds, and versioned deployments.  
+  [Join the waitlist](#subscription) to get early access.

@@ -1,22 +1,134 @@
 # Amazon S3
 
-Amazon S3 is ideal for large or enterprise-grade static JSON APIs.
+Amazon S3 is a solid option for large or enterprise‑grade static JSON APIs, especially when paired with **CloudFront** for global CDN delivery.
 
-**Steps:**
+---
 
-1. Build:
-   ```bash
-   statikapi build
-   ```
+## Using the AWS CLI
 
-2. Sync to S3:
-   ```bash
-   aws s3 sync api-out s3://my-bucket-name/ --content-type "application/json"
-   ```
+### 1) Build locally
 
-3. Enable static website hosting or serve via CloudFront for CDN distribution.
+```bash
+npx statikapi build
+```
 
-**Example URL**
+### 2) Sync the output to S3
+
+Use `sync` to mirror your local `api-out/` to a bucket. The AWS CLI will generally infer `Content-Type: application/json` for `.json` files. You can also set headers explicitly if needed.
+
+**Basic (let CLI infer content type):**
+
+```bash
+aws s3 sync api-out s3://my-bucket-name/ --delete
+```
+
+**Force JSON content type for everything (only if all files are JSON):**
+
+```bash
+aws s3 sync api-out s3://my-bucket-name/ --delete --content-type "application/json"
+```
+
+**Optional caching headers (tune to your needs):**
+
+```bash
+# Example: short cache to allow quick updates
+aws s3 sync api-out s3://my-bucket-name/   --delete   --cache-control "public,max-age=60"
+```
+
+> If you also upload non‑JSON assets (rare for a pure API), prefer the basic command so the CLI infers the correct `Content-Type` per file.
+
+### 3) Make objects publicly readable
+
+If you need public access, configure a **Bucket Policy** that allows `s3:GetObject` on the objects. Avoid ACLs if Object Ownership is set to “Bucket owner enforced”.
+
+Minimal example policy (adjust `Resource` ARN to your bucket name/region):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicReadGetObject",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::my-bucket-name/*"
+    }
+  ]
+}
+```
+
+---
+
+## Serving options
+
+### Option A — S3 Static Website Hosting
+
+- Enable **Static website hosting** on the bucket.
+- Access via the website endpoint (varies by region), for example:
+
+```
+http://my-bucket-name.s3-website-us-east-1.amazonaws.com/users/1/index.json
+```
+
+### Option B — CloudFront over S3 (recommended for production)
+
+- Create a **CloudFront distribution** with the S3 bucket as the origin.
+- Set appropriate caching behavior and headers.
+- Access via your CloudFront domain or a custom domain:
+
+```
+https://api.example.com/users/1/index.json
+```
+
+**Direct S3 object URL (when public):**
+
 ```
 https://my-bucket-name.s3.amazonaws.com/users/1/index.json
 ```
+
+---
+
+## Automation (CI/CD)
+
+Typical GitHub Actions flow using OIDC and the AWS CLI:
+
+```yaml
+name: Deploy StatikAPI to S3
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/gha-oidc-deploy
+          aws-region: us-east-1
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build API
+        run: npx statikapi build
+
+      - name: Sync to S3
+        run: aws s3 sync api-out s3://my-bucket-name/ --delete
+```
+
+---
+
+## Considerations
+
+- S3 can scale to very large datasets; pair with **CloudFront** for low‑latency global access and fine‑grained caching.
+- Prefer **short cache** for frequently updated JSON; increase `max-age` for versioned paths.
+- Keep object keys stable if you intend to leverage CDN caching effectively.
+- You can also host your APIs directly with **StatikAPI Cloud** _(coming soon)_ — a managed platform for static JSON hosting with automatic builds and versioned deployments.  
+  [Join the waitlist](#subscription) for early access.

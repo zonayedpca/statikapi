@@ -1,17 +1,62 @@
 # Netlify
 
-Deploy your `api-out/` directory like any static site.
+Netlify makes it easy to deploy your `api-out/` directory just like any static website.
+
+---
+
+## Using the CLI
+
+You can deploy directly from your local build output:
 
 ```bash
 netlify deploy --dir=api-out --prod
 ```
 
-Netlify automatically serves `.json` files with proper headers and global CDN caching.
+Netlify will automatically detect and serve `.json` files with the correct headers and global CDN caching.
 
 **Example URL**
 ```
 https://your-site.netlify.app/users/1/index.json
 ```
 
-> Works best for small and medium APIs.  
-> For large data sets, consider using object storage (S3, R2, etc.).
+---
+
+## Git Integration
+
+You can connect your Git repository (GitHub, GitLab, or Bitbucket) directly to Netlify.  
+Every time you push new commits to the configured branch (usually `main`), Netlify automatically triggers a new build and redeploys your project.
+
+For StatikAPI projects, this means any update to your `api-out/` directory or the source code that generates it can automatically rebuild and publish your static JSON API.
+
+---
+
+## Build Hooks & CI/CD Integration
+
+Netlify supports **build hooks** that can be used to trigger new builds from external systems or workflows.  
+This works well with StatikAPI automation or continuous deployment setups.
+
+Example flow:
+1. StatikAPI runs `statikapi build` locally or in CI.
+2. Once finished, your CI or Worker calls the Netlify build hook URL.
+3. Netlify pulls the latest changes from your repo (if connected) and redeploys automatically.
+
+This approach allows seamless automated publishing when your data or endpoints are rebuilt.
+
+---
+
+## Considerations
+
+Netlify’s CDN and caching system efficiently serve JSON files globally.  
+However:
+- It’s best suited for **small to medium** API workloads.
+- For **larger datasets** or high-traffic APIs, consider using an object storage solution such as **Amazon S3** or **Cloudflare R2**.
+- You can also host your APIs directly with **StatikAPI Cloud** *(coming soon)* — a managed hosting platform for static JSON APIs with automatic builds and versioned deployments.  
+  [Join the waitlist](#subscription) for early access.
+
+---
+
+## Recommendation
+
+- For small, simple JSON endpoints or demo APIs → use **Netlify**
+- For larger or frequently updated datasets → use **S3**, **R2**, or another object storage service
+- Always ensure your build directory (`api-out/`) is correctly configured in your [Configuration](../config)

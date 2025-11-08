@@ -1,10 +1,12 @@
 # GitHub Pages
 
-GitHub Pages can serve JSON just like HTML.
+GitHub Pages can serve JSON files just like regular static assets.
 
-1. Commit your `api-out/` directory.
-2. Push it to a `gh-pages` branch (or `/docs` folder).
-3. Enable Pages in repo settings.
+---
+
+## Manual Deployment
+
+You can manually commit and push your `api-out/` directory to a branch or folder used by GitHub Pages.
 
 ```bash
 git add api-out
@@ -12,9 +14,56 @@ git commit -m "Add API output"
 git subtree push --prefix api-out origin gh-pages
 ```
 
-Your endpoints will be accessible at:
+Your endpoints will be publicly accessible at:
+
 ```
 https://username.github.io/repo-name/users/1/index.json
 ```
 
-> For automation, use GitHub Actions to build and push after every commit.
+---
+
+## Git Integration
+
+GitHub Pages automatically builds and serves content from specific branches (`gh-pages`, `main`, or `docs/` folders depending on settings).  
+Once your repository is configured for Pages, any push to the target branch will trigger an automatic redeploy of your static JSON API.
+
+---
+
+## Automation with GitHub Actions
+
+You can automate your StatikAPI build and deployment using **GitHub Actions**.
+
+Example workflow snippet:
+
+```yaml
+name: Deploy StatikAPI
+on:
+  push:
+    branches: [main]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: npm ci
+      - name: Build API
+        run: npx statikapi build
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./api-out
+```
+
+This workflow ensures that every commit to `main` automatically rebuilds and deploys your JSON endpoints to GitHub Pages.
+
+---
+
+## Considerations
+
+- Best for **small APIs**, demos, and documentation datasets.
+- GitHub Pages has limited bandwidth and file size per repository.
+- For **larger or dynamic datasets**, consider using **Cloudflare R2**, **Amazon S3**, or another CDN-backed object storage.
+- You can also host your APIs directly with **StatikAPI Cloud** _(coming soon)_ — a managed hosting platform with automatic builds, caching, and versioned JSON hosting.  
+  [Join the waitlist](#subscription) for early access.

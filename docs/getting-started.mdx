@@ -15,16 +15,18 @@ This guide shows two flows:
   <Tab label="pnpm">
 
 ```bash
-npx create-statikapi my-api
-cd my-api && pnpm dev
+pnpm dlx create-statikapi my-api
+cd my-api
+pnpm dev
 ```
 
   </Tab>
   <Tab label="yarn">
 
 ```bash
-npx create-statikapi my-api
-cd my-api && yarn dev
+yarn create statikapi my-api
+cd my-api
+yarn dev
 ```
 
   </Tab>
@@ -32,7 +34,8 @@ cd my-api && yarn dev
 
 ```bash
 npx create-statikapi my-api
-cd my-api && npm run dev
+cd my-api
+npm run dev
 ```
 
   </Tab>
@@ -88,9 +91,7 @@ mkdir -p src-api && printf "export default { hello: 'world' }\n" > src-api/index
 {
   "scripts": {
     "dev": "statikapi dev",
-    "build": "statikapi build --pretty",
-    "dev:headless": "statikapi dev --no-ui",
-    "build:api": "statikapi build"
+    "build": "statikapi build"
   }
 }
 ```
@@ -126,11 +127,11 @@ npm run dev
 ## Directory layout
 
 ```
-src-api/            # your route modules (configurable via [Configuration](./config))
+src-api/            # your route modules (configurable via Configuration)
   index.js          # → /index.json
   users/[id].js     # → /users/1/index.json, etc (via paths())
   docs/[...slug].js # → /docs/a/b/index.json, etc (via paths())
-api-out/            # generated JSON (also configurable via [Configuration](./config))
+api-out/            # generated JSON (also configurable via Configuration)
 ```
 
 ---

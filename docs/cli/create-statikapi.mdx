@@ -5,31 +5,31 @@ Quickly scaffold a new StatikAPI project with templates and deployment presets.
 <Tabs group="scaffold">
   <Tab label="pnpm">
 
-  ```bash
-  npx create-statikapi my-api
-  ```
+```bash
+pnpm dlx create-statikapi
+```
 
   </Tab>
   <Tab label="yarn">
 
-  ```bash
-  npx create-statikapi my-api
-  ```
+```bash
+yarn create statikapi
+```
 
   </Tab>
   <Tab label="npm">
 
-  ```bash
-  npx create-statikapi my-api
-  ```
+```bash
+npx create-statikapi
+```
 
   </Tab>
 </Tabs>
 
 You will be prompted for:
 
-- **Template**: `basic`, `dynamic`, or `remote-data`  
-- **Package manager** and whether to install now  
+- **Template**: `basic`, `dynamic`, or `remote-data`
+- **Package manager** and whether to install now
 - Optional ESLint, TS, directories, and deploy presets
 
 > **Note:** The **source** (`src-api/`) and **output** (`api-out/`) directories are defaults. You can **customize** these during scaffolding or later in your [Configuration](../config).
@@ -38,14 +38,14 @@ You will be prompted for:
 
 ## Flags
 
-- `--template basic|dynamic|remote-data`  
-- `--yes, -y` — accept defaults (non‑interactive)  
-- `--no-install`  
-- `--no-gitignore`  
-- `--package-manager pnpm|npm|yarn`  
-- `--src-dir <dir>` (default `src-api`, configurable)  
-- `--out-dir <dir>` (default `api-out`, configurable)  
-- `--deploy cloudflare,netlify,github`  
+- `--template basic|dynamic|remote-data`
+- `--yes, -y` — accept defaults (non‑interactive)
+- `--no-install`
+- `--no-gitignore`
+- `--package-manager pnpm|npm|yarn`
+- `--src-dir <dir>` (default `src-api`, configurable)
+- `--out-dir <dir>` (default `api-out`, configurable)
+- `--deploy cloudflare,netlify,github`
 - `--help, -h`
 
 **Examples**
@@ -62,5 +62,5 @@ create-statikapi my-api --src-dir api --out-dir public/api --deploy cloudflare,g
 
 ## Exit codes
 
-- `0` success  
+- `0` success
 - non‑zero indicates an error (parsing, user module errors, etc.)

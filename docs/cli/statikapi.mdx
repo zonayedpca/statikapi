@@ -8,38 +8,38 @@ The core CLI provides two commands: **`dev`** and **`build`**.
 
 Watches your source and serves an interactive UI at `/_ui`.
 
-> **Note:** The default **source dir** is `src-api/` and **output dir** is `api-out/`, both are configurable via your [Configuration](../config). You can also override them via CLI flags `--src` and `--out`.
+> **Note:** The default **source dir** is `src-api/` and **output dir** is `api-out/`, both configurable via your [Configuration](../config). You can also override them via CLI flags `--src` and `--out`.
 
 <Tabs group="dev">
   <Tab label="pnpm">
 
-  ```bash
-  pnpm dev
-  ```
+```bash
+pnpm dev
+```
 
   </Tab>
   <Tab label="yarn">
 
-  ```bash
-  yarn dev
-  ```
+```bash
+yarn dev
+```
 
   </Tab>
   <Tab label="npm">
 
-  ```bash
-  npm run dev
-  ```
+```bash
+npm run dev
+```
 
   </Tab>
 </Tabs>
 
 **Common flags**
 
-- `--no-ui` — run server without the preview UI  
-- `--port <number>` — override dev port  
-- `--src <dir>` — override source dir (defaults to config or `src-api/`, configurable via [Configuration](../config))  
-- `--out <dir>` — override output dir (defaults to config or `api-out/`, configurable via [Configuration](../config))
+- `--no-ui` — run server without the preview UI
+- `--port <number>` — override dev port
+- `--src <dir>` — override source dir (defaults to config or `src-api/`)
+- `--out <dir>` — override output dir (defaults to config or `api-out/`)
 
 ---
 
@@ -47,66 +47,46 @@ Watches your source and serves an interactive UI at `/_ui`.
 
 Builds static JSON into your output directory (default `api-out/`, configurable via [Configuration](../config)).
 
+By default, all JSON files are **minified** — optimized for hosting and CI/CD pipelines.  
+If you prefer readable output, pass the `--pretty` flag.
+
 <Tabs group="build">
   <Tab label="pnpm">
 
-  ```bash
-  pnpm build
-  ```
+```bash
+pnpm build
+```
 
   </Tab>
   <Tab label="yarn">
 
-  ```bash
-  yarn build
-  ```
+```bash
+yarn build
+```
 
   </Tab>
   <Tab label="npm">
 
-  ```bash
-  npm run build
-  ```
+```bash
+npm run build
+```
 
   </Tab>
 </Tabs>
 
 **Useful flags**
 
-- `--pretty` — human‑readable `index.json`  
-- `--src <dir>` — override source dir (configurable; default `src-api/`)  
-- `--out <dir>` — override output dir (configurable; default `api-out/`)  
+- `--pretty` — output human-readable JSON
+- `--src <dir>` — override source dir (default `src-api/`)
+- `--out <dir>` — override output dir (default `api-out/`)
 - `--clean` — remove old output before writing
 
-**Script‑only variant** (skip prettifying, ideal for CI):
-
-<Tabs group="build-only">
-  <Tab label="pnpm">
-
-  ```bash
-  pnpm run build:api
-  ```
-
-  </Tab>
-  <Tab label="yarn">
-
-  ```bash
-  yarn build:api
-  ```
-
-  </Tab>
-  <Tab label="npm">
-
-  ```bash
-  npm run build:api
-  ```
-
-  </Tab>
-</Tabs>
+> 💡 **Ideal for CI/CD:**  
+> Use `statikapi build` (without `--pretty`) for faster builds and smaller artifacts.
 
 ---
 
 ## Exit codes
 
-- `0` success  
-- non‑zero indicates an error (parsing, user module errors, etc.)
+- `0` — success
+- non-zero — indicates an error (parsing, user module errors, etc.))

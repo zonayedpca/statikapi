@@ -8,6 +8,6 @@
     "dev:headless": "statikapi dev --no-ui"
   },
   "devDependencies": {
-    "statikapi": "^0.5.0"
+    "statikapi": "^0.6.0"
   }
 }

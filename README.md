@@ -154,7 +154,7 @@ Tests cover:
 
 Publishing is automated via **GitHub Actions** (`.github/workflows/release.yml`):
 
-1. Triggered on pushing a version tag (e.g. `v0.5.0`).
+1. Triggered on pushing a version tag (e.g. `v0.6.0`).
 2. Verifies tag version matches `package.json` across packages.
 3. Builds & embeds the UI.
 4. Packs and publishes in order:

@@ -351,7 +351,7 @@ async function patchPkgJson(dest, appName, { pkgMgr }) {
     'dev:headless': 'statikapi dev --no-ui',
     'build:api': 'statikapi build',
   };
-  json.devDependencies = { ...(json.devDependencies || {}), statikapi: '^0.5.0' };
+  json.devDependencies = { ...(json.devDependencies || {}), statikapi: '^0.6.0' };
 
   await fs.writeFile(p, JSON.stringify(json, null, 2) + '\n', 'utf8');
 }

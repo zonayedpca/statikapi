@@ -1,0 +1,44 @@
+name: CI (tests)
+
+on:
+  push:
+    branches: ['**'] # run on push to any branch
+
+permissions:
+  contents: read
+
+# Cancel in-progress runs for the same branch to save minutes
+concurrency:
+  group: ci-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm' # built-in cache for pnpm store
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+        env:
+          CI: true
+
+      - name: Run tests
+        run: pnpm -r test -- --ci
+        env:
+          CI: true

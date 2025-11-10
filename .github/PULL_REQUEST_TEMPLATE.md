@@ -13,7 +13,7 @@ Describe the change and why it’s needed.
 - Manual:
   - [ ] `statikapi build` basic
   - [ ] `statikapi build` dynamic routes
-  - [ ] `statikapi preview` UI opens and lists routes
+  - [ ] `statikapi dev` UI opens and lists routes
 
 ## Notes
 

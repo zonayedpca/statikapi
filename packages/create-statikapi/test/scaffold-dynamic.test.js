@@ -33,7 +33,7 @@ test('scaffolds DYNAMIC template with users/:id and docs/*slug examples', async 
   const tmp = await makeTmp();
   const appName = 'my-dynamic-api';
 
-  // FIX: remove BIN from the arg list
+  // remove BIN from the arg list
   await runScaffold(tmp.cwd, [appName, '--yes', '--template', 'dynamic', '--no-install']);
 
   const base = tmp.join(appName, 'src-api');

@@ -16,7 +16,7 @@ export default [
       '.tmp',
       // Frontend build outputs (both the UI package and the copy bundled into the CLI)
       'packages/ui/dist/**',
-      'packages/cli/ui/**', // if you copied UI here
+      'packages/cli/ui/**', // if UI is copied here
       'packages/cli/ui-dist/**', // or here, depending on your choice
       // API build output
       '**/api-out/**',

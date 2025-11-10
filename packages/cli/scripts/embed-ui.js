@@ -1,11 +1,4 @@
 #!/usr/bin/env node
-/**
- * Embed the built UI into packages/cli/ui before publishing.
- * Strategy:
- * 1) Ensure packages/ui/dist exists; if not, try to build it with pnpm.
- * 2) Copy packages/ui/dist -> packages/cli/ui
- * 3) Write a tiny README so the folder isn’t mistaken for a build artifact.
- */
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';

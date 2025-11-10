@@ -122,10 +122,6 @@ You can override via flags: `--srcDir <dir>`, `--outDir <dir>`.
 - Rebuilds on changes, updates the preview UI via SSE.
 - `--previewHost`, `--previewPort` — where to notify the preview server.
 - `--srcDir`, `--outDir` — override config paths.
-
-`preview`
-
-- Serves `api-out/` and the UI at `/\_ui`.
 - `--host` (default 127.0.0.1)
 - `--port` (default 8788)
 - `--open` — try to open the browser
@@ -142,15 +138,17 @@ There are two example projects in this repo under `example/`:
 # from repo root
 
 pnpm -C example/basic dev
-pnpm -C example/basic preview
+pnpm -C example/basic build
 
 pnpm -C example/dynamic dev
-pnpm -C example/dynamic preview
+pnpm -C example/dynamic build
+
+pnpm -C example/showcase dev
+pnpm -C example/showcase build
 ```
 
 ## Troubleshooting
 
-- UI doesn’t load: ensure `preview` is running; if you’re developing the UI separately, start Vite on port 5173 or pass `--uiDir` to serve a built UI.
 - Dynamic routes not emitted: make sure the file exports a valid `paths()` function returning strings (or arrays of strings for catch-all).
 
 License

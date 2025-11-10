@@ -1,10 +1,10 @@
 import chokidar from 'chokidar';
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import fss from 'node:fs'; // NEW: for createReadStream
+import fss from 'node:fs';
 import crypto from 'node:crypto';
-import http from 'node:http'; // NEW: tiny HTTP server
-import { fileURLToPath } from 'node:url'; // NEW: resolve UI dist
+import http from 'node:http';
+import { fileURLToPath } from 'node:url';
 
 import { loadConfig } from '../config/loadConfig.js';
 import { loadModuleValue } from '../loader/loadModuleValue.js';
@@ -72,13 +72,11 @@ export default async function devCmd(argv) {
   const { config } = await loadConfig({ flags });
 
   // Where to notify preview
-  // NEW: dev server + UI defaults
   const host = String(flags.host ?? '127.0.0.1');
   const port = Number.isFinite(flags.port) ? Number(flags.port) : 8788;
   const noUi = !!(flags['no-ui'] || flags.noUi);
   const noOpen = !!(flags['no-open'] || flags.noOpen);
 
-  // NEW: live SSE clients
   const sseClients = new Set(); // each entry: { id, res }
   function sseBroadcast(msg) {
     const line = `data: ${msg}\n\n`;
@@ -274,7 +272,6 @@ export default async function devCmd(argv) {
   await writeManifest();
   console.log(`[statikapi] ready. Watching ${path.relative(process.cwd(), config.paths.srcAbs)}/`);
 
-  // NEW: start HTTP server (UI + JSON helpers + SSE)
   const server = http.createServer(async (req, res) => {
     try {
       let url;
@@ -286,7 +283,6 @@ export default async function devCmd(argv) {
       }
       const pathname = url.pathname;
 
-      // 1) SSE: /_ui/events
       if (pathname === '/_ui/events') {
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',
@@ -301,7 +297,6 @@ export default async function devCmd(argv) {
         return;
       }
 
-      // 2) Manifest JSON for UI: /ui/index
       if (pathname === '/ui/index' && req.method === 'GET') {
         const list = Array.from(manifestByRoute.values()).sort((a, b) =>
           a.route.localeCompare(b.route)
@@ -312,7 +307,6 @@ export default async function devCmd(argv) {
         return;
       }
 
-      // 3) Serve built file content: /_ui/file?route=/path
       if (pathname === '/_ui/file' && req.method === 'GET') {
         const route = url.searchParams.get('route') || '';
         const outFile = routeToOutPath({ outAbs: config.paths.outAbs, route });
@@ -332,7 +326,6 @@ export default async function devCmd(argv) {
         return;
       }
 
-      // 4) Static React UI at /_ui/* (unless --no-ui)
       if (!noUi && pathname.startsWith('/_ui/')) {
         const uiRoot = resolveUiDist();
         const rel = pathname.replace(/^\/_ui\//, '') || 'index.html';
@@ -360,14 +353,13 @@ export default async function devCmd(argv) {
         return;
       }
 
-      // 5) Root → redirect to UI (unless --no-ui)
       if (!noUi && pathname === '/') {
         res.writeHead(302, { Location: '/_ui/' });
         res.end();
         return;
       }
 
-      // 6) Serve built JSON directly from api-out
+      // Serve built JSON directly from api-out
       {
         const outRoot = config.paths.outAbs;
         // strip leading slash and normalize
@@ -439,7 +431,6 @@ export default async function devCmd(argv) {
   return 0;
 }
 
-// NEW: helpers (static file & UI dist resolver & opener)
 function streamFile(file, res) {
   const ext = path.extname(file).toLowerCase();
   const ctype =
@@ -461,19 +452,19 @@ function streamFile(file, res) {
 }
 
 function resolveUiDist() {
-  // 0) Optional override for power users
+  // Optional override for power users
   const fromEnv = process.env.STATIKAPI_UI_DIR;
   if (fromEnv && hasIndex(fromEnv)) return fromEnv;
 
-  // 1) Bundled with the CLI: packages/cli/ui/  (your screenshot)
+  // Bundled with the CLI: packages/cli/ui/
   const bundled = path.resolve(__dirname, '..', '..', 'ui');
   if (hasIndex(bundled)) return bundled;
 
-  // 2) Monorepo dev fallback: packages/ui/dist
+  // Monorepo dev fallback: packages/ui/dist
   const monorepoDist = path.resolve(__dirname, '..', '..', '..', 'ui', 'dist');
   if (hasIndex(monorepoDist)) return monorepoDist;
 
-  // 3) Last resort: throw with a helpful hint
+  // Last resort: throw with a helpful hint
   throw new Error(
     'StatikAPI UI build not found. ' +
       'Either keep a built UI at packages/cli/ui/ (index.html present), ' +

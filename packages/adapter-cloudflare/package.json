@@ -1,0 +1,36 @@
+{
+  "name": "@statikapi/adapter-cf",
+  "version": "0.6.0",
+  "type": "module",
+  "bin": {
+    "statikapi-cf": "bin/statikapi-cf.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./src/index.js"
+    }
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "devDependencies": {},
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zonayedpca/statikapi",
+    "directory": "packages/adapter-cloudflare"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

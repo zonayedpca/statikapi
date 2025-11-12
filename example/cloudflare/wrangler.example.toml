@@ -1,0 +1,14 @@
+name = "statikapi-cf-demo"
+main = "dist/worker.mjs"
+compatibility_date = "2025-01-01"
+
+[[r2_buckets]]
+binding = "STATIK_BUCKET"
+bucket_name = "REPLACE_ME_BUCKET"
+
+[[kv_namespaces]]
+binding = "STATIK_MANIFEST"
+id = "REPLACE_ME_KV_NAMESPACE_ID"
+
+[vars]
+STATIK_BUILD_TOKEN = "REPLACE_ME_STATIK_BUILD_TOKEN"

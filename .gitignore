@@ -21,3 +21,11 @@ project_dump.txt
 
 packages/cli/ui
 packages/ui/dist
+
+# Cloudflare Workers / local dev
+example/**/wrangler.toml
+.wrangler/
+.mf/              # Miniflare cache
+.dev.vars         # local secrets (DO NOT COMMIT)
+worker-*.mjs
+**/worker-*.mjs

@@ -26,6 +26,9 @@ packages/ui/dist
 example/**/wrangler.toml
 .wrangler/
 .mf/              # Miniflare cache
+.miniflare/
 .dev.vars         # local secrets (DO NOT COMMIT)
+.statkapi-cf-tmp/
 worker-*.mjs
 **/worker-*.mjs
+wrangler.toml.local

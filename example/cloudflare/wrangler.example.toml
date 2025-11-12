@@ -12,3 +12,4 @@ id = "REPLACE_ME_KV_NAMESPACE_ID"
 
 [vars]
 STATIK_BUILD_TOKEN = "REPLACE_ME_STATIK_BUILD_TOKEN"
+STATIK_SRC = "src-api"   # optional: lets the CLI auto-detect

@@ -179,6 +179,9 @@ export const DEFAULT_PRETTY = ${prettyDefault ? 'true' : 'false'};
 const WORKER_RUNTIME_JS = `
   import { REGISTRY, DEFAULT_PRETTY } from './entry.mjs';
 
+  // -------------------------
+  // Helpers
+  // -------------------------
   function isPlainObject(x){ return Object.prototype.toString.call(x) === '[object Object]'; }
   function assertSerializable(v, seen = new Set()) {
     const t = typeof v;
@@ -200,6 +203,13 @@ const WORKER_RUNTIME_JS = `
   function splitRoute(route) {
     if (route === '/') return [];
     return route.replace(/^\\//,'').split('/');
+  }
+
+  // -------------------------
+  // Config helpers
+  // -------------------------
+  function isPrettyRoutes(env) {
+    return (env.STATIK_PRETTY_ROUTES || 'true').toLowerCase() === 'true';
   }
 
   function parseAllowedOrigins(env) {
@@ -241,6 +251,9 @@ const WORKER_RUNTIME_JS = `
     return headers;
   }
 
+  // -------------------------
+  // Routing helpers
+  // -------------------------
   function matchPattern(patternRoute, concreteRoute) {
     const pSegs = splitRoute(patternRoute);
     const cSegs = splitRoute(concreteRoute);
@@ -328,9 +341,6 @@ const WORKER_RUNTIME_JS = `
           const { route, params } = concreteFromPattern(patternSegs, entry);
           out.push({ ...r, concreteRoute: route, params });
         }
-      } else {
-        // no paths(): skip dynamic/catchall
-        // (We still include a "skip" marker if needed by summary)
       }
     }
     return out;
@@ -343,44 +353,82 @@ const WORKER_RUNTIME_JS = `
     return '"' + hex + '"';
   }
 
-  function r2Key(projectId, concreteRoute) {
-    // concreteRoute: '/demo' => key 'projectId/demo/index.json'
-    // concreteRoute: '/'     => key 'projectId/index.json'
-    const suffix = concreteRoute === '/' ? '/index.json' : concreteRoute + '/index.json';
-    return \`\${projectId}\${suffix}\`;
+  // -------------------------
+  // R2 key mapping
+  // -------------------------
+
+  // From concrete route ('/', '/posts', '/users/1') to canonical R2 key.
+  function r2KeyForRoute(concreteRoute) {
+    if (concreteRoute === '/') return 'index.json';
+    const clean = concreteRoute.replace(/^\\/+/, '');
+    return clean + '/index.json';
+  }
+
+  // From request path ('/', '/posts', '/posts/index.json') to R2 key,
+  // obeying STATIK_PRETTY_ROUTES.
+  function r2KeyFromRequestPath(pathname, env) {
+    const pretty = isPrettyRoutes(env);
+
+    if (!pathname || pathname === '/') {
+      return 'index.json';
+    }
+
+    let p = pathname;
+    if (p.startsWith('/')) p = p.slice(1);
+
+    // If user explicitly asks for .json, always respect it
+    if (p.endsWith('.json')) {
+      return p;
+    }
+
+    // Pretty mode: '/posts' -> 'posts/index.json'
+    if (pretty) {
+      return p + '/index.json';
+    }
+
+    // Strict index mode: only '/foo/index.json' works
+    // '/foo' without .json is not valid
+    return null;
+  }
+
+  // All public paths that should map to a given route
+  // (for cache purge, etc.)
+  function publicPathsForRoute(route, env) {
+    const pretty = isPrettyRoutes(env);
+    if (route === '/') {
+      return pretty ? ['/', '/index.json'] : ['/index.json'];
+    }
+    const base = route; // e.g. '/posts', '/users/1'
+    const jsonPath = base + '/index.json';
+    return pretty ? [base, jsonPath] : [jsonPath];
   }
 
   async function writeJsonToR2(env, key, text, extraMeta = {}) {
     const httpMetadata = {
       contentType: 'application/json; charset=utf-8',
-      cacheControl: 'public, max-age=0, s-maxage=31536000'
+      cacheControl: 'public, max-age=0, s-maxage=31536000',
     };
     await env.STATIK_BUCKET.put(key, text, { httpMetadata, customMetadata: extraMeta });
   }
 
-  async function readManifest(env, projectId) {
-    const k = \`\${projectId}::manifest\`;
-    const m = await env.STATIK_MANIFEST.get(k);
+  const MANIFEST_KEY = 'manifest';
+
+  async function readManifest(env) {
+    const m = await env.STATIK_MANIFEST.get(MANIFEST_KEY);
     if (!m) return [];
     try { return JSON.parse(m); } catch { return []; }
   }
 
-  async function writeManifest(env, projectId, list) {
-    const k = \`\${projectId}::manifest\`;
-    await env.STATIK_MANIFEST.put(k, JSON.stringify(list));
+  async function writeManifest(env, list) {
+    await env.STATIK_MANIFEST.put(MANIFEST_KEY, JSON.stringify(list));
   }
 
-  function r2KeyFromPath(projectId, pathname) {
-    // pathname like '/demo/index.json' -> 'projectId/demo/index.json'
-    // or '/' -> 'projectId/index.json' if you ever map root
-    const clean = pathname === '/' ? '/index.json' : pathname;
-    return \`\${projectId}\${clean}\`;
-  }
-
+  // -------------------------
+  // Read: GET JSON from R2
+  // -------------------------
   async function handleRead(req, env) {
     const url = new URL(req.url);
     const origin = req.headers.get('origin') || '';
-    const projectId = url.searchParams.get('projectId') || 'default';
 
     if (!isOriginAllowed(origin, env)) {
       return new Response('forbidden', { status: 403 });
@@ -393,7 +441,14 @@ const WORKER_RUNTIME_JS = `
       );
     }
 
-    const key = r2KeyFromPath(projectId, url.pathname);
+    const key = r2KeyFromRequestPath(url.pathname, env);
+    if (!key) {
+      return new Response(
+        JSON.stringify({ ok: false, error: 'not_found' }),
+        { status: 404, headers: corsHeaders(origin) },
+      );
+    }
+
     const obj = await env.STATIK_BUCKET.get(key);
 
     if (!obj) {
@@ -407,24 +462,27 @@ const WORKER_RUNTIME_JS = `
 
     return new Response(body, {
       headers: corsHeaders(origin, {
-        // cache at edge, but easy to invalidate
         'cache-control': 'public, max-age=0, s-maxage=600',
       }),
     });
   }
 
-  async function purgeCacheForPath(env, origin, path) {
-    // Minimal: purge Worker cache for this path on this colo.
-    // (Global purge via CF API can be added later using env.STATIK_CF_API_TOKEN / STATIK_CF_ZONE_ID.)
+  // -------------------------
+  // Cache purge helpers
+  // -------------------------
+  async function purgeCacheForPath(origin, path) {
     try {
       const url = origin + path;
       await caches.default.delete(new Request(url, { method: 'GET' }));
     } catch (err) {
-      // swallow errors; cache purge is best-effort
+      // best-effort
       console.warn('purgeCacheForPath error', err);
     }
   }
 
+  // -------------------------
+  // CORS preflight
+  // -------------------------
   async function handleOptions(req, env) {
     const origin = req.headers.get('origin') || '';
     if (!isOriginAllowed(origin, env)) {
@@ -442,6 +500,9 @@ const WORKER_RUNTIME_JS = `
     });
   }
 
+  // -------------------------
+  // Build single route
+  // -------------------------
   async function handleBuildRoute(req, env) {
     const auth = req.headers.get('authorization') || '';
     const want = 'Bearer ' + (env.STATIK_BUILD_TOKEN || '');
@@ -450,7 +511,6 @@ const WORKER_RUNTIME_JS = `
     }
 
     const body = await req.json().catch(() => ({}));
-    const projectId = body.projectId || 'default';
     const pretty = body.pretty ?? DEFAULT_PRETTY;
     const route = body.route;
 
@@ -476,13 +536,13 @@ const WORKER_RUNTIME_JS = `
     assertSerializable(value);
 
     const text = pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value);
-    const key = r2Key(projectId, route);
+    const key = r2KeyForRoute(route);
     const etag = await digestETag(text);
 
     await writeJsonToR2(env, key, text, { route, etag });
 
     // update manifest: remove old entry for this route, then add fresh one
-    const existing = await readManifest(env, projectId);
+    const existing = await readManifest(env);
     const next = (existing || []).filter((e) => e.route !== route);
     const bytes = (new TextEncoder().encode(text)).length;
 
@@ -494,13 +554,14 @@ const WORKER_RUNTIME_JS = `
       hash: etag.replace(/"/g, ''),
     });
 
-    await writeManifest(env, projectId, next);
+    await writeManifest(env, next);
 
-    // per-route cache purge (worker cache) for the JSON path
+    // per-route cache purge (worker cache) for all public paths of this route
     const url = new URL(req.url);
     const origin = url.origin;
-    const jsonPath = route === '/' ? '/index.json' : route + '/index.json';
-    await purgeCacheForPath(env, origin, jsonPath);
+    for (const p of publicPathsForRoute(route, env)) {
+      await purgeCacheForPath(origin, p);
+    }
 
     const resBody = {
       ok: true,
@@ -514,6 +575,9 @@ const WORKER_RUNTIME_JS = `
     });
   }
 
+  // -------------------------
+  // Build all routes
+  // -------------------------
   async function handleBuild(req, env) {
     const auth = req.headers.get('authorization') || '';
     const want = 'Bearer ' + (env.STATIK_BUILD_TOKEN || '');
@@ -521,7 +585,6 @@ const WORKER_RUNTIME_JS = `
       return new Response('unauthorized', { status: 401 });
     }
     const body = await req.json().catch(() => ({}));
-    const projectId = body.projectId || 'default';
     const pretty = body.pretty ?? DEFAULT_PRETTY;
 
     const t0 = Date.now();
@@ -530,21 +593,23 @@ const WORKER_RUNTIME_JS = `
     const expanded = await expandAllRoutes(REGISTRY);
     const man = [];
 
+    const url = new URL(req.url);
+    const origin = url.origin;
+
     for (const r of expanded) {
       if (!r.concreteRoute) { skipped++; continue; }
       const ctx = { params: r.params || {}, env };
       const value = await r.mod.data(ctx);
       assertSerializable(value);
       const text = pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value);
-      const key = r2Key(projectId, r.concreteRoute);
+      const key = r2KeyForRoute(r.concreteRoute);
       const etag = await digestETag(text);
       await writeJsonToR2(env, key, text, { route: r.concreteRoute, etag });
 
-      // per-route purge for the concrete JSON path
-      const url = new URL(req.url);
-      const origin = url.origin;
-      const jsonPath = r.concreteRoute === '/' ? '/index.json' : r.concreteRoute + '/index.json';
-      await purgeCacheForPath(env, origin, jsonPath);
+      // per-route purge for all public paths of this route
+      for (const p of publicPathsForRoute(r.concreteRoute, env)) {
+        await purgeCacheForPath(origin, p);
+      }
 
       files++;
       written += (new TextEncoder().encode(text)).length;
@@ -557,7 +622,7 @@ const WORKER_RUNTIME_JS = `
       });
     }
 
-    await writeManifest(env, projectId, man);
+    await writeManifest(env, man);
 
     const ms = Date.now() - t0;
     return new Response(JSON.stringify({ ok: true, files, bytes: written, skipped, ms }), {
@@ -565,6 +630,9 @@ const WORKER_RUNTIME_JS = `
     });
   }
 
+  // -------------------------
+  // Entry
+  // -------------------------
   export default {
     async fetch(req, env) {
       const url = new URL(req.url);
@@ -581,15 +649,14 @@ const WORKER_RUNTIME_JS = `
       if (req.method === 'POST' && url.pathname === '/__statikapi/build') {
         return handleBuild(req, env);
       }
+
       if (req.method === 'GET' && url.pathname === '/__statikapi/manifest') {
-        const projectId = url.searchParams.get('projectId') || 'default';
-        const list = await readManifest(env, projectId);
+        const list = await readManifest(env);
         return new Response(JSON.stringify(list), { headers: { 'content-type': 'application/json' } });
       }
 
       // Public API: serve JSON directly from R2
       if (req.method === 'GET') {
-        // e.g. /demo/index.json -> projectId/demo/index.json
         return handleRead(req, env);
       }
 

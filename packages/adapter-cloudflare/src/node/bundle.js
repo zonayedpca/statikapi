@@ -202,6 +202,45 @@ const WORKER_RUNTIME_JS = `
     return route.replace(/^\\//,'').split('/');
   }
 
+  function parseAllowedOrigins(env) {
+    const raw = env.STATIK_ALLOWED_ORIGINS || '';
+    return raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  function isOriginAllowed(origin, env) {
+    if (!origin) return true; // server-to-server, curl, etc.
+    const allowed = parseAllowedOrigins(env);
+    if (!allowed.length) return true; // no restriction configured
+    return allowed.includes(origin);
+  }
+
+  function isReadAuthorized(req, env) {
+    const requireAuth = (env.STATIK_API_REQUIRE_AUTH || 'false').toLowerCase() === 'true';
+    if (!requireAuth) return true;
+
+    const auth = req.headers.get('authorization') || '';
+    const token = env.STATIK_API_AUTH_TOKEN || '';
+    if (!token) return false;
+
+    const want = 'Bearer ' + token;
+    return auth === want;
+  }
+
+  function corsHeaders(origin, extra = {}) {
+    const headers = {
+      'content-type': 'application/json; charset=utf-8',
+      ...extra,
+    };
+    if (origin) {
+      headers['access-control-allow-origin'] = origin;
+      headers['vary'] = 'origin';
+    }
+    return headers;
+  }
+
   function matchPattern(patternRoute, concreteRoute) {
     const pSegs = splitRoute(patternRoute);
     const cSegs = splitRoute(concreteRoute);
@@ -305,8 +344,10 @@ const WORKER_RUNTIME_JS = `
   }
 
   function r2Key(projectId, concreteRoute) {
-    const suffix = concreteRoute === '/' ? '' : concreteRoute.replace(/^\\//, '') + '/';
-    return \`\${projectId}/\${suffix}index.json\`;
+    // concreteRoute: '/demo' => key 'projectId/demo/index.json'
+    // concreteRoute: '/'     => key 'projectId/index.json'
+    const suffix = concreteRoute === '/' ? '/index.json' : concreteRoute + '/index.json';
+    return \`\${projectId}\${suffix}\`;
   }
 
   async function writeJsonToR2(env, key, text, extraMeta = {}) {
@@ -323,9 +364,82 @@ const WORKER_RUNTIME_JS = `
     if (!m) return [];
     try { return JSON.parse(m); } catch { return []; }
   }
+
   async function writeManifest(env, projectId, list) {
     const k = \`\${projectId}::manifest\`;
     await env.STATIK_MANIFEST.put(k, JSON.stringify(list));
+  }
+
+  function r2KeyFromPath(projectId, pathname) {
+    // pathname like '/demo/index.json' -> 'projectId/demo/index.json'
+    // or '/' -> 'projectId/index.json' if you ever map root
+    const clean = pathname === '/' ? '/index.json' : pathname;
+    return \`\${projectId}\${clean}\`;
+  }
+
+  async function handleRead(req, env) {
+    const url = new URL(req.url);
+    const origin = req.headers.get('origin') || '';
+    const projectId = url.searchParams.get('projectId') || 'default';
+
+    if (!isOriginAllowed(origin, env)) {
+      return new Response('forbidden', { status: 403 });
+    }
+
+    if (!isReadAuthorized(req, env)) {
+      return new Response(
+        JSON.stringify({ ok: false, error: 'unauthorized' }),
+        { status: 401, headers: corsHeaders(origin) },
+      );
+    }
+
+    const key = r2KeyFromPath(projectId, url.pathname);
+    const obj = await env.STATIK_BUCKET.get(key);
+
+    if (!obj) {
+      return new Response(
+        JSON.stringify({ ok: false, error: 'not_found' }),
+        { status: 404, headers: corsHeaders(origin) },
+      );
+    }
+
+    const body = await obj.text();
+
+    return new Response(body, {
+      headers: corsHeaders(origin, {
+        // cache at edge, but easy to invalidate
+        'cache-control': 'public, max-age=0, s-maxage=600',
+      }),
+    });
+  }
+
+  async function purgeCacheForPath(env, origin, path) {
+    // Minimal: purge Worker cache for this path on this colo.
+    // (Global purge via CF API can be added later using env.STATIK_CF_API_TOKEN / STATIK_CF_ZONE_ID.)
+    try {
+      const url = origin + path;
+      await caches.default.delete(new Request(url, { method: 'GET' }));
+    } catch (err) {
+      // swallow errors; cache purge is best-effort
+      console.warn('purgeCacheForPath error', err);
+    }
+  }
+
+  async function handleOptions(req, env) {
+    const origin = req.headers.get('origin') || '';
+    if (!isOriginAllowed(origin, env)) {
+      return new Response('forbidden', { status: 403 });
+    }
+
+    return new Response(null, {
+      headers: {
+        ...(origin ? { 'access-control-allow-origin': origin } : {}),
+        'access-control-allow-methods': 'GET, OPTIONS, POST',
+        'access-control-allow-headers': 'Content-Type, Authorization',
+        'access-control-max-age': '86400',
+        'vary': 'origin',
+      },
+    });
   }
 
   async function handleBuildRoute(req, env) {
@@ -382,6 +496,12 @@ const WORKER_RUNTIME_JS = `
 
     await writeManifest(env, projectId, next);
 
+    // per-route cache purge (worker cache) for the JSON path
+    const url = new URL(req.url);
+    const origin = url.origin;
+    const jsonPath = route === '/' ? '/index.json' : route + '/index.json';
+    await purgeCacheForPath(env, origin, jsonPath);
+
     const resBody = {
       ok: true,
       route,
@@ -420,6 +540,12 @@ const WORKER_RUNTIME_JS = `
       const etag = await digestETag(text);
       await writeJsonToR2(env, key, text, { route: r.concreteRoute, etag });
 
+      // per-route purge for the concrete JSON path
+      const url = new URL(req.url);
+      const origin = url.origin;
+      const jsonPath = r.concreteRoute === '/' ? '/index.json' : r.concreteRoute + '/index.json';
+      await purgeCacheForPath(env, origin, jsonPath);
+
       files++;
       written += (new TextEncoder().encode(text)).length;
       man.push({
@@ -443,6 +569,11 @@ const WORKER_RUNTIME_JS = `
     async fetch(req, env) {
       const url = new URL(req.url);
 
+      // CORS preflight
+      if (req.method === 'OPTIONS') {
+        return handleOptions(req, env);
+      }
+
       if (req.method === 'POST' && url.pathname === '/__statikapi/build/route') {
         return handleBuildRoute(req, env);
       }
@@ -456,8 +587,11 @@ const WORKER_RUNTIME_JS = `
         return new Response(JSON.stringify(list), { headers: { 'content-type': 'application/json' } });
       }
 
-      // optional: you could later add a read endpoint that serves from R2
-      // if (req.method === 'GET') { ... fetch from env.STATIK_BUCKET.get(...) }
+      // Public API: serve JSON directly from R2
+      if (req.method === 'GET') {
+        // e.g. /demo/index.json -> projectId/demo/index.json
+        return handleRead(req, env);
+      }
 
       return new Response('Not found', { status: 404 });
     }

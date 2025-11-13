@@ -13,3 +13,8 @@ id = "REPLACE_ME_KV_NAMESPACE_ID"
 [vars]
 STATIK_BUILD_TOKEN = "REPLACE_ME_STATIK_BUILD_TOKEN"
 STATIK_SRC = "src-api"   # optional: lets the CLI auto-detect
+
+# API access
+STATIK_ALLOWED_ORIGINS = "https://statikapi.dev,https://example.com"
+STATIK_API_REQUIRE_AUTH = "false"   # or "true"
+STATIK_API_AUTH_TOKEN = "super-secret-api-token"

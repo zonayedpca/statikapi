@@ -527,7 +527,7 @@ async function patchPkgJson(dest, appName, { pkgMgr, template, srcDir }) {
     'dev:headless': 'statikapi dev --no-ui',
     'build:api': 'statikapi build',
   };
-  json.devDependencies = { ...(json.devDependencies || {}), statikapi: '^0.6.3' };
+  json.devDependencies = { ...(json.devDependencies || {}), statikapi: '^0.6.4' };
 
   await fs.writeFile(p, JSON.stringify(json, null, 2) + '\n', 'utf8');
 }
@@ -741,12 +741,40 @@ async function writeGitignore(dest, { outDir, template }) {
   let txt;
   if (template === 'cloudflare-adapter') {
     // Cloudflare Worker-oriented ignore
-    txt = `node_modules
-dist
-.wrangler
-wrangler.log
-.DS_Store
-`;
+    txt = `
+    # Node
+    node_modules
+    npm-debug.log*
+    yarn-debug.log*
+    yarn-error.log*
+    pnpm-debug.log*
+    package-lock.json
+    yarn.lock
+    pnpm-lock.yaml
+
+    # Build artifacts
+    dist
+    .build
+    .tmp
+    coverage
+
+    # Wrangler + Cloudflare
+    .wrangler
+    wrangler.log
+
+    # Local env / secrets
+    .env
+    .env.*
+    .dev.vars
+
+    # OS / editor junk
+    .DS_Store
+    Thumbs.db
+    .idea
+    .vscode/*
+    !.vscode/extensions.json
+    !.vscode/settings.json
+    `;
   } else {
     txt = `node_modules
 ${outDir}
@@ -871,32 +899,36 @@ ${pmSetup.replace(/^/gm, '      ')}
   }
 }
 
-// Cloudflare-adapter: patch wrangler.toml from wrangler.example.toml
+// Cloudflare-adapter: patch wrangler.toml (template ships as wrangler.toml now)
 async function patchCloudflareWrangler(
   dest,
   { srcDir, r2Binding, r2BucketName, kvBinding, kvId, buildToken, statikSrc, statikUseIndexJson }
 ) {
-  const examplePath = path.join(dest, 'wrangler.example.toml');
   const finalPath = path.join(dest, 'wrangler.toml');
 
-  let body;
-  if (fss.existsSync(examplePath)) {
-    body = await fs.readFile(examplePath, 'utf8');
-  } else if (fss.existsSync(finalPath)) {
-    body = await fs.readFile(finalPath, 'utf8');
-  } else {
+  if (!fss.existsSync(finalPath)) {
     // nothing to patch, bail
     return;
   }
 
+  let body = await fs.readFile(finalPath, 'utf8');
+
   body = body
+    // R2 bucket
     .replace(/binding\s*=\s*"STATIK_BUCKET"/, `binding = "${r2Binding}"`)
     .replace(/bucket_name\s*=\s*"REPLACE_ME_BUCKET"/, `bucket_name = "${r2BucketName}"`)
+
+    // KV namespace
     .replace(/binding\s*=\s*"STATIK_MANIFEST"/, `binding = "${kvBinding}"`)
     .replace(/id\s*=\s*"REPLACE_ME_KV_NAMESPACE_ID"/, `id = "${kvId}"`)
+
+    // STATIK_* vars
     .replace(/STATIK_BUILD_TOKEN\s*=\s*".*"/, `STATIK_BUILD_TOKEN = "${buildToken}"`)
     .replace(/STATIK_SRC\s*=\s*".*"/, `STATIK_SRC = "${statikSrc}"`)
-    .replace(/STATIK_USE_INDEX_JSON\s*=\s*".*"/, `STATIK_USE_INDEX_JSON = "${statikUseIndexJson}"`);
+    .replace(/STATIK_USE_INDEX_JSON\s*=\s*".*"/, `STATIK_USE_INDEX_JSON = "${statikUseIndexJson}"`)
+
+    // NEW: make STATIK_MANIFEST_BINDING follow whatever kvBinding the user chose
+    .replace(/STATIK_MANIFEST_BINDING\s*=\s*".*"/, `STATIK_MANIFEST_BINDING = "${kvBinding}"`);
 
   await fs.writeFile(finalPath, body, 'utf8');
 }

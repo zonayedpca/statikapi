@@ -376,14 +376,25 @@ const WORKER_RUNTIME_JS = `
 
   const MANIFEST_KEY = 'manifest';
 
+  function getManifestNS(env) {
+    const bindingName = env.STATIK_MANIFEST_BINDING || 'STATIK_MANIFEST';
+    const ns = env[bindingName];
+    if (!ns) {
+      throw new Error(\`KV namespace binding "\${bindingName}" not found on env\`);
+    }
+    return ns;
+  }
+
   async function readManifest(env) {
-    const m = await env.STATIK_MANIFEST.get(MANIFEST_KEY);
+    const ns = getManifestNS(env);
+    const m = await ns.get(MANIFEST_KEY);
     if (!m) return [];
     try { return JSON.parse(m); } catch { return []; }
   }
 
   async function writeManifest(env, list) {
-    await env.STATIK_MANIFEST.put(MANIFEST_KEY, JSON.stringify(list));
+    const ns = getManifestNS(env);
+    await ns.put(MANIFEST_KEY, JSON.stringify(list));
   }
 
   // -------------------------

@@ -15,10 +15,10 @@
     "dev": "concurrently -n API,UI -c cyan,magenta \"pnpm -C example/basic dev --no-ui --keep-alive\" \"pnpm -C packages/ui dev\"",
     "ui:preview": "pnpm -C packages/ui preview",
     "ui:build": "pnpm -C packages/ui build && node packages/cli/scripts/embed-ui.js",
-    "cf:bundle": "pnpm -C example/cloudflare cf:bundle",
-    "cf:watch": "pnpm -C example/cloudflare cf:watch",
-    "cf:dev:wrangler": "pnpm -C example/cloudflare cf:dev:wrangler",
-    "cf:dev": "pnpm -C example/cloudflare cf:dev",
+    "cf:build": "pnpm -C example/cloudflare build",
+    "cf:watch": "pnpm -C example/cloudflare watch",
+    "cf:dev:wrangler": "pnpm -C example/cloudflare dev:wrangler",
+    "cf:dev": "pnpm -C example/cloudflare dev",
     "prepublishOnly": "pnpm -r test"
   },
   "devDependencies": {

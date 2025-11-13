@@ -76,7 +76,11 @@ jobs:
         working-directory: packages/create-statikapi
         run: npm pack --dry-run
 
-      # Publish order: core → cli → create-statikapi
+      - name: Pack dry-run (adapter-cloudflare)
+        working-directory: packages/adapter-cloudflare
+        run: npm pack --dry-run
+
+      # Publish order: core → cli → adapter-cf → create-statikapi
       - name: Publish @statikapi/core
         working-directory: packages/core
         env:
@@ -85,6 +89,12 @@ jobs:
 
       - name: Publish statikapi (CLI)
         working-directory: packages/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance
+
+      - name: Publish @statikapi/adapter-cf
+        working-directory: packages/adapter-cloudflare
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public --provenance

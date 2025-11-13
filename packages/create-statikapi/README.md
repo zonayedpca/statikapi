@@ -17,7 +17,7 @@ npx create-statikapi my-api --package-manager npm
 
 ## Flags
 
-- `--template basic|dynamic` (default: `basic`)
+- `--template basic|dynamic|remote-data|cloudflare-adapter` (default: `basic`)
 
 - `--no-install` — skip installing dependencies
 

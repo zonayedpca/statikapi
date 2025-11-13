@@ -5,13 +5,13 @@ import path from 'node:path';
 import url from 'node:url';
 import { execFile } from 'node:child_process';
 
-const TEMPLATES = new Set(['basic', 'dynamic', 'remote-data']);
+const TEMPLATES = new Set(['basic', 'dynamic', 'remote-data', 'cloudflare-adapter']);
 const DEFAULT_TEMPLATE = 'basic';
 const DEFAULT_PM = 'pnpm';
 const DEFAULT_SRC = 'src-api';
 const DEFAULT_OUT = 'api-out';
 
-// deploy targets
+// deploy targets (for non-cloudflare templates)
 const DEPLOY_TARGETS = [
   { title: 'Cloudflare Workers (wrangler.toml)', value: 'cloudflare' },
   { title: 'Netlify (netlify.toml)', value: 'netlify' },
@@ -37,13 +37,22 @@ async function main(argv) {
   let wantEslint = true;
   let language = 'js'; // default JavaScript
 
-  // new flags
+  // generic flags
   let srcDir = args['src-dir'] || '';
   let outDir = args['out-dir'] || '';
   let wantGitignore = args['no-gitignore'] ? false : true; // default: true
 
-  // deploy flags (comma-separated OK): e.g. --deploy cloudflare,github
+  // deploy flags (non-cloudflare templates)
   let deploy = normalizeDeployArg(args.deploy);
+
+  // Cloudflare adapter specific config (with placeholder defaults)
+  let r2Binding = 'STATIK_BUCKET';
+  let r2BucketName = 'REPLACE_ME_BUCKET';
+  let kvBinding = 'STATIK_MANIFEST';
+  let kvId = 'REPLACE_ME_KV_NAMESPACE_ID';
+  let buildToken = 'REPLACE_ME_STATIK_BUILD_TOKEN';
+  let statikSrcVar = ''; // defaults to srcDir later
+  let statikUseIndexJson = 'false'; // default false as requested
 
   if (interactive) {
     const { default: prompts } = await import('prompts');
@@ -69,6 +78,7 @@ async function main(argv) {
                 { title: 'basic (single endpoint)', value: 'basic' },
                 { title: 'dynamic (params + catch-all)', value: 'dynamic' },
                 { title: 'remote-data (build-time API fetch)', value: 'remote-data' },
+                { title: 'cloudflare-adapter (Worker + R2 + KV)', value: 'cloudflare-adapter' },
               ],
               initial: 0,
             },
@@ -91,8 +101,12 @@ async function main(argv) {
           message: 'Add ESLint?',
           initial: true,
         },
+        // language: hidden for cloudflare-adapter (JS only)
         {
-          type: 'select',
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? null : 'select';
+          },
           name: 'language',
           message: 'Language',
           choices: [
@@ -102,28 +116,109 @@ async function main(argv) {
           initial: 0,
         },
         {
-          type: 'text',
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? null : 'text';
+          },
           name: 'srcDir',
           message: 'Source directory for endpoints',
           initial: srcDir || DEFAULT_SRC,
         },
+        // outDir: not asked for cloudflare-adapter
         {
-          type: 'text',
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? null : 'text';
+          },
           name: 'outDir',
           message: 'Output directory for built JSON',
           initial: outDir || DEFAULT_OUT,
         },
+
+        // Cloudflare adapter–specific prompts
         {
-          type: 'toggle',
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'text' : null;
+          },
+          name: 'r2Binding',
+          message: 'R2 bucket binding name ([[r2_buckets]].binding)',
+          initial: r2Binding,
+        },
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'text' : null;
+          },
+          name: 'r2BucketName',
+          message: 'R2 bucket_name',
+          initial: r2BucketName,
+        },
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'text' : null;
+          },
+          name: 'kvBinding',
+          message: 'KV namespace binding ([[kv_namespaces]].binding)',
+          initial: kvBinding,
+        },
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'text' : null;
+          },
+          name: 'kvId',
+          message: 'KV namespace id',
+          initial: kvId,
+        },
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'text' : null;
+          },
+          name: 'buildToken',
+          message: 'STATIK_BUILD_TOKEN (used to auth /build)',
+          initial: buildToken,
+        },
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'text' : null;
+          },
+          name: 'statikSrc',
+          message: 'STATIK_SRC (source dir for worker; usually matches srcDir)',
+          initial: (answers) => answers.srcDir || srcDir || DEFAULT_SRC,
+        },
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'toggle' : null;
+          },
+          name: 'statikUseIndexJson',
+          message: 'STATIK_USE_INDEX_JSON?',
+          active: 'true',
+          inactive: 'false',
+          initial: 0, // default false
+        },
+
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? null : 'toggle';
+          },
           name: 'gitignore',
           message: 'Add .gitignore?',
           active: 'yes',
           inactive: 'no',
           initial: wantGitignore ? 1 : 0,
         },
-        // new: deployment multiselect
+        // "Where do you plan to deploy?" — disabled for cloudflare-adapter
         {
-          type: 'multiselect',
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? null : 'multiselect';
+          },
           name: 'deploy',
           message: 'Where do you plan to deploy? (creates config files)',
           instructions: false,
@@ -143,11 +238,28 @@ async function main(argv) {
     template = TEMPLATES.has(template) ? template : answers.template || DEFAULT_TEMPLATE;
     pkgMgr = pkgMgr || answers.pm || DEFAULT_PM;
     wantEslint = answers.wantEslint ?? true;
-    language = answers.language || 'js';
+    // language: if cloudflare-adapter, force JS
+    language = template === 'cloudflare-adapter' ? 'js' : answers.language || language || 'js';
+
     srcDir = answers.srcDir || DEFAULT_SRC;
-    outDir = answers.outDir || DEFAULT_OUT;
+    outDir = template === 'cloudflare-adapter' ? DEFAULT_OUT : answers.outDir || DEFAULT_OUT;
     wantGitignore = !!answers.gitignore;
-    deploy = deploy.length ? deploy : answers.deploy || [];
+
+    if (template === 'cloudflare-adapter') {
+      r2Binding = answers.r2Binding || r2Binding;
+      r2BucketName = answers.r2BucketName || r2BucketName;
+      kvBinding = answers.kvBinding || kvBinding;
+      kvId = answers.kvId || kvId;
+      buildToken = answers.buildToken || buildToken;
+      statikSrcVar = answers.statikSrc || srcDir || DEFAULT_SRC;
+      statikUseIndexJson =
+        typeof answers.statikUseIndexJson === 'string'
+          ? answers.statikUseIndexJson
+          : String(answers.statikUseIndexJson ?? false);
+      deploy = []; // never used for this template
+    } else {
+      deploy = deploy.length ? deploy : answers.deploy || [];
+    }
   }
 
   // Non-interactive fallbacks & validation
@@ -177,7 +289,7 @@ async function main(argv) {
   await copyTemplate(tplRoot, dest);
 
   // Patch package.json (name, scripts, devDeps)
-  await patchPkgJson(dest, appName, { pkgMgr });
+  await patchPkgJson(dest, appName, { pkgMgr, template, srcDir });
 
   await writeNodeVersions(dest);
 
@@ -188,31 +300,55 @@ async function main(argv) {
   // Ensure src dir exists; if template has src-api and user changed the name, move it.
   await ensureSrcDir(dest, srcDir);
 
-  // If the user chose TypeScript, convert example endpoints to .ts
-  if (language === 'ts') {
+  // If the user chose TypeScript (non-cloudflare), convert example endpoints to .ts
+  if (language === 'ts' && template !== 'cloudflare-adapter') {
     await convertExampleEndpointsToTS(dest, srcDir);
   }
 
-  // Write config if user deviated from defaults
-  if (srcDir !== DEFAULT_SRC || outDir !== DEFAULT_OUT) {
+  // Write config if user deviated from defaults (non-cloudflare only)
+  if (template !== 'cloudflare-adapter' && (srcDir !== DEFAULT_SRC || outDir !== DEFAULT_OUT)) {
     await writeStatikConfig(dest, { srcDir, outDir });
+  }
+
+  // Cloudflare wrangler.toml patching for adapter template
+  if (template === 'cloudflare-adapter') {
+    await patchCloudflareWrangler(dest, {
+      srcDir,
+      r2Binding,
+      r2BucketName,
+      kvBinding,
+      kvId,
+      buildToken,
+      statikSrc: statikSrcVar || srcDir || DEFAULT_SRC,
+      statikUseIndexJson,
+    });
   }
 
   // .gitignore (optional, default yes)
   if (wantGitignore) {
-    await writeGitignore(dest, outDir);
+    await writeGitignore(dest, { outDir, template });
   }
 
-  // Deployment configs
-  if (deploy.length) {
+  // Deployment configs (non-cloudflare templates only)
+  if (template !== 'cloudflare-adapter' && deploy.length) {
     await writeDeployConfigs(dest, { outDir, appName, deploy, pkgMgr });
   }
 
   console.log(`\nScaffolded ${appName} with "${template}" template.`);
   console.log(`- srcDir: ${srcDir}`);
-  console.log(`- outDir: ${outDir}`);
   console.log(`- .gitignore: ${wantGitignore ? 'yes' : 'no'}`);
-  console.log(`- deploy: ${deploy.length ? deploy.join(', ') : 'none'}\n`);
+
+  if (template === 'cloudflare-adapter') {
+    console.log(`- Cloudflare R2 binding: ${r2Binding}`);
+    console.log(`- R2 bucket_name: ${r2BucketName}`);
+    console.log(`- KV binding: ${kvBinding}`);
+    console.log(`- KV id: ${kvId}`);
+    console.log(`- STATIK_SRC: ${statikSrcVar || srcDir}`);
+    console.log(`- STATIK_USE_INDEX_JSON: ${statikUseIndexJson}\n`);
+  } else {
+    console.log(`- outDir: ${outDir}`);
+    console.log(`- deploy: ${deploy.length ? deploy.join(', ') : 'none'}\n`);
+  }
 
   if (doInstall) {
     console.log(`Installing dependencies with ${pkgMgr}...`);
@@ -227,8 +363,21 @@ async function main(argv) {
   console.log('\nNext steps:');
   console.log(`  cd ${appName}`);
   if (!doInstall) console.log(`  ${pkgMgr} install`);
-  console.log('  ' + scriptHint(pkgMgr, 'dev') + '     # run dev server with UI');
-  console.log('  ' + scriptHint(pkgMgr, 'build') + '   # emit static JSON into ' + outDir + '/\n');
+
+  if (template === 'cloudflare-adapter') {
+    console.log(
+      '  ' + scriptHint(pkgMgr, 'dev') + '     # start Cloudflare dev (statikapi-cf + wrangler)'
+    );
+    console.log('  ' + scriptHint(pkgMgr, 'build') + '   # bundle worker to dist/worker.mjs\n');
+    console.log('Then:');
+    console.log('  - Inspect wrangler.toml (bindings, bucket, KV, STATIK_*)');
+    console.log('  - Configure R2 bucket & KV namespace in Cloudflare dashboard\n');
+  } else {
+    console.log('  ' + scriptHint(pkgMgr, 'dev') + '     # run dev server with UI');
+    console.log(
+      '  ' + scriptHint(pkgMgr, 'build') + '   # emit static JSON into ' + outDir + '/\n'
+    );
+  }
 }
 
 function parseArgs(argv) {
@@ -270,7 +419,7 @@ function printHelp() {
 
 Usage:
   create-statikapi <app-name>
-    [--template basic|dynamic|remote-data]
+    [--template basic|dynamic|remote-data|cloudflare-adapter]
     [--yes] [--no-install] [--no-gitignore]
     [--package-manager pnpm|npm|yarn]
     [--src-dir <dir>] [--out-dir <dir>]
@@ -291,7 +440,7 @@ Examples:
   create-statikapi my-api
   create-statikapi my-api --template dynamic --no-install
   create-statikapi my-api --package-manager npm --src-dir api --out-dir out
-  create-statikapi my-api --deploy cloudflare,github
+  create-statikapi my-worker --template cloudflare-adapter
 `);
 }
 
@@ -332,7 +481,7 @@ function pmVersionFromSelection(pm) {
   return defaults[pm] || null;
 }
 
-async function patchPkgJson(dest, appName, { pkgMgr }) {
+async function patchPkgJson(dest, appName, { pkgMgr, template, srcDir }) {
   const p = path.join(dest, 'package.json');
   const raw = await fs.readFile(p, 'utf8');
   const json = JSON.parse(raw);
@@ -343,8 +492,26 @@ async function patchPkgJson(dest, appName, { pkgMgr }) {
 
   const pmVer = pmVersionFromSelection(pkgMgr);
   if (pmVer) json.packageManager = `${pkgMgr}@${pmVer}`;
-  // else: leave packageManager unset to avoid invalid strings
 
+  // For cloudflare-adapter, keep template's scripts/devDeps and just tweak --src
+  if (template === 'cloudflare-adapter') {
+    const scripts = json.scripts || {};
+    const buildScript = scripts.build || '';
+
+    if (buildScript.includes('statikapi-cf')) {
+      if (/--src\s+\S+/.test(buildScript)) {
+        scripts.build = buildScript.replace(/--src\s+\S+/, `--src ${srcDir}`);
+      } else {
+        scripts.build = `${buildScript} --src ${srcDir}`;
+      }
+    }
+
+    json.scripts = scripts;
+    await fs.writeFile(p, JSON.stringify(json, null, 2) + '\n', 'utf8');
+    return;
+  }
+
+  // Default behavior for "normal" StatikAPI projects
   json.scripts = {
     dev: 'statikapi dev',
     build: 'statikapi build --pretty',
@@ -546,7 +713,6 @@ async function convertExampleEndpointsToTS(dest, srcDir) {
     await walk(root);
   } catch {
     // Non-fatal: srcDir may be empty, or already converted
-    // console.warn('TS conversion skipped:', e.message);
   }
 }
 
@@ -559,19 +725,32 @@ async function writeStatikConfig(dest, { srcDir, outDir }) {
   await fs.writeFile(cfgPath, body, 'utf8');
 }
 
-async function writeGitignore(dest, outDir) {
+async function writeGitignore(dest, { outDir, template }) {
   const p = path.join(dest, '.gitignore');
   if (fss.existsSync(p)) return;
-  const txt = `node_modules
+
+  let txt;
+  if (template === 'cloudflare-adapter') {
+    // Cloudflare Worker-oriented ignore
+    txt = `node_modules
+dist
+.wrangler
+wrangler.log
+.DS_Store
+`;
+  } else {
+    txt = `node_modules
 ${outDir}
 dist
 .tmp
 coverage
 .DS_Store
 `;
+  }
   await fs.writeFile(p, txt, 'utf8');
 }
 
+// Only used by non-cloudflare templates
 async function writeDeployConfigs(dest, { outDir, appName, deploy, pkgMgr }) {
   if (deploy.includes('cloudflare')) {
     await writeWranglerToml(dest, { outDir, appName });
@@ -584,6 +763,7 @@ async function writeDeployConfigs(dest, { outDir, appName, deploy, pkgMgr }) {
   }
 }
 
+// Static-asset-style wrangler helper (unchanged)
 async function writeWranglerToml(dest, { outDir, appName }) {
   const p = path.join(dest, 'wrangler.toml');
   if (!fss.existsSync(p)) {
@@ -680,6 +860,36 @@ ${pmSetup.replace(/^/gm, '      ')}
 `;
     await fs.writeFile(p, body, 'utf8');
   }
+}
+
+// Cloudflare-adapter: patch wrangler.toml from wrangler.example.toml
+async function patchCloudflareWrangler(
+  dest,
+  { srcDir, r2Binding, r2BucketName, kvBinding, kvId, buildToken, statikSrc, statikUseIndexJson }
+) {
+  const examplePath = path.join(dest, 'wrangler.example.toml');
+  const finalPath = path.join(dest, 'wrangler.toml');
+
+  let body;
+  if (fss.existsSync(examplePath)) {
+    body = await fs.readFile(examplePath, 'utf8');
+  } else if (fss.existsSync(finalPath)) {
+    body = await fs.readFile(finalPath, 'utf8');
+  } else {
+    // nothing to patch, bail
+    return;
+  }
+
+  body = body
+    .replace(/binding\s*=\s*"STATIK_BUCKET"/, `binding = "${r2Binding}"`)
+    .replace(/bucket_name\s*=\s*"REPLACE_ME_BUCKET"/, `bucket_name = "${r2BucketName}"`)
+    .replace(/binding\s*=\s*"STATIK_MANIFEST"/, `binding = "${kvBinding}"`)
+    .replace(/id\s*=\s*"REPLACE_ME_KV_NAMESPACE_ID"/, `id = "${kvId}"`)
+    .replace(/STATIK_BUILD_TOKEN\s*=\s*".*"/, `STATIK_BUILD_TOKEN = "${buildToken}"`)
+    .replace(/STATIK_SRC\s*=\s*".*"/, `STATIK_SRC = "${statikSrc}"`)
+    .replace(/STATIK_USE_INDEX_JSON\s*=\s*".*"/, `STATIK_USE_INDEX_JSON = "${statikUseIndexJson}"`);
+
+  await fs.writeFile(finalPath, body, 'utf8');
 }
 
 function sanitizeName(s) {

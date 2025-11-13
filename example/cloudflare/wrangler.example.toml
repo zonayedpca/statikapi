@@ -15,4 +15,4 @@ STATIK_BUILD_TOKEN = "REPLACE_ME_STATIK_BUILD_TOKEN"
 STATIK_SRC = "src-api"   # optional: lets the CLI auto-detect
 
 # API access
-STATIK_USE_INDEX_JSON = "true"
+STATIK_USE_INDEX_JSON = "false"

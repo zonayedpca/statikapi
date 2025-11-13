@@ -251,6 +251,10 @@ const WORKER_RUNTIME_JS = `
     return headers;
   }
 
+  function useIndexJson(env) {
+    return (env.STATIK_USE_INDEX_JSON || 'true').toLowerCase() === 'true';
+  }
+
   // -------------------------
   // Routing helpers
   // -------------------------
@@ -358,49 +362,86 @@ const WORKER_RUNTIME_JS = `
   // -------------------------
 
   // From concrete route ('/', '/posts', '/users/1') to canonical R2 key.
-  function r2KeyForRoute(concreteRoute) {
-    if (concreteRoute === '/') return 'index.json';
+  function r2KeyForRoute(concreteRoute, env) {
+    const useIndex = useIndexJson(env);
+
+    if (concreteRoute === '/') {
+      // root
+      return useIndex ? 'index.json' : 'index';
+    }
+
     const clean = concreteRoute.replace(/^\\/+/, '');
-    return clean + '/index.json';
+
+    if (useIndex) {
+      // old behavior: posts -> posts/index.json
+      return clean + '/index.json';
+    }
+
+    // flat mode: posts -> posts
+    return clean;
   }
 
   // From request path ('/', '/posts', '/posts/index.json') to R2 key,
-  // obeying STATIK_PRETTY_ROUTES.
+  // obeying STATIK_PRETTY_ROUTES and STATIK_USE_INDEX_JSON.
   function r2KeyFromRequestPath(pathname, env) {
     const pretty = isPrettyRoutes(env);
+    const useIndex = useIndexJson(env);
 
+    // Root handling
     if (!pathname || pathname === '/') {
-      return 'index.json';
+      return useIndex ? 'index.json' : 'index';
     }
 
     let p = pathname;
     if (p.startsWith('/')) p = p.slice(1);
 
-    // If user explicitly asks for .json, always respect it
+    // If user explicitly asks for .json, always respect it,
+    // but in flat mode we map \`/foo.json\` -> \`foo\`.
     if (p.endsWith('.json')) {
-      return p;
+      if (useIndex) {
+        // index.json mode: the key really is '...json'
+        return p;
+      }
+      // flat mode: drop '.json' and read from bare key
+      return p.slice(0, -5);
     }
 
-    // Pretty mode: '/posts' -> 'posts/index.json'
+    // Pretty routes: '/posts' is valid
     if (pretty) {
-      return p + '/index.json';
+      return useIndex ? p + '/index.json' : p;
     }
 
-    // Strict index mode: only '/foo/index.json' works
-    // '/foo' without .json is not valid
-    return null;
+    // Non-pretty mode:
+    // - index.json mode: require explicit '/foo/index.json' (handled above)
+    // - flat mode: treat '/foo' as key 'foo'
+    return useIndex ? null : p;
   }
 
   // All public paths that should map to a given route
   // (for cache purge, etc.)
   function publicPathsForRoute(route, env) {
     const pretty = isPrettyRoutes(env);
+    const useIndex = useIndexJson(env);
+
     if (route === '/') {
-      return pretty ? ['/', '/index.json'] : ['/index.json'];
+      if (useIndex) {
+        // root index.json plus pretty '/'
+        return pretty ? ['/', '/index.json'] : ['/index.json'];
+      }
+      // flat root: underlying key 'index', but we still may serve '/', '/index', '/index.json'
+      return ['/', '/index', '/index.json'];
     }
+
     const base = route; // e.g. '/posts', '/users/1'
-    const jsonPath = base + '/index.json';
-    return pretty ? [base, jsonPath] : [jsonPath];
+
+    if (useIndex) {
+      const jsonPath = base + '/index.json';
+      return pretty ? [base, jsonPath] : [jsonPath];
+    }
+
+    // flat keys: underlying key is 'posts' or 'users/1'
+    // we purge both pretty path and .json alias
+    return [base, base + '.json'];
   }
 
   async function writeJsonToR2(env, key, text, extraMeta = {}) {
@@ -536,7 +577,7 @@ const WORKER_RUNTIME_JS = `
     assertSerializable(value);
 
     const text = pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value);
-    const key = r2KeyForRoute(route);
+    const key = r2KeyForRoute(route, env);
     const etag = await digestETag(text);
 
     await writeJsonToR2(env, key, text, { route, etag });
@@ -602,7 +643,7 @@ const WORKER_RUNTIME_JS = `
       const value = await r.mod.data(ctx);
       assertSerializable(value);
       const text = pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value);
-      const key = r2KeyForRoute(r.concreteRoute);
+      const key = r2KeyForRoute(r.concreteRoute, env);
       const etag = await digestETag(text);
       await writeJsonToR2(env, key, text, { route: r.concreteRoute, etag });
 

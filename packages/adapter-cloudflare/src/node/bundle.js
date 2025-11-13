@@ -208,49 +208,6 @@ const WORKER_RUNTIME_JS = `
   // -------------------------
   // Config helpers
   // -------------------------
-  function isPrettyRoutes(env) {
-    return (env.STATIK_PRETTY_ROUTES || 'true').toLowerCase() === 'true';
-  }
-
-  function parseAllowedOrigins(env) {
-    const raw = env.STATIK_ALLOWED_ORIGINS || '';
-    return raw
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }
-
-  function isOriginAllowed(origin, env) {
-    if (!origin) return true; // server-to-server, curl, etc.
-    const allowed = parseAllowedOrigins(env);
-    if (!allowed.length) return true; // no restriction configured
-    return allowed.includes(origin);
-  }
-
-  function isReadAuthorized(req, env) {
-    const requireAuth = (env.STATIK_API_REQUIRE_AUTH || 'false').toLowerCase() === 'true';
-    if (!requireAuth) return true;
-
-    const auth = req.headers.get('authorization') || '';
-    const token = env.STATIK_API_AUTH_TOKEN || '';
-    if (!token) return false;
-
-    const want = 'Bearer ' + token;
-    return auth === want;
-  }
-
-  function corsHeaders(origin, extra = {}) {
-    const headers = {
-      'content-type': 'application/json; charset=utf-8',
-      ...extra,
-    };
-    if (origin) {
-      headers['access-control-allow-origin'] = origin;
-      headers['vary'] = 'origin';
-    }
-    return headers;
-  }
-
   function useIndexJson(env) {
     return (env.STATIK_USE_INDEX_JSON || 'true').toLowerCase() === 'true';
   }
@@ -373,7 +330,7 @@ const WORKER_RUNTIME_JS = `
     const clean = concreteRoute.replace(/^\\/+/, '');
 
     if (useIndex) {
-      // old behavior: posts -> posts/index.json
+      // index.json mode: posts -> posts/index.json
       return clean + '/index.json';
     }
 
@@ -381,52 +338,15 @@ const WORKER_RUNTIME_JS = `
     return clean;
   }
 
-  // From request path ('/', '/posts', '/posts/index.json') to R2 key,
-  // obeying STATIK_PRETTY_ROUTES and STATIK_USE_INDEX_JSON.
-  function r2KeyFromRequestPath(pathname, env) {
-    const pretty = isPrettyRoutes(env);
-    const useIndex = useIndexJson(env);
-
-    // Root handling
-    if (!pathname || pathname === '/') {
-      return useIndex ? 'index.json' : 'index';
-    }
-
-    let p = pathname;
-    if (p.startsWith('/')) p = p.slice(1);
-
-    // If user explicitly asks for .json, always respect it,
-    // but in flat mode we map \`/foo.json\` -> \`foo\`.
-    if (p.endsWith('.json')) {
-      if (useIndex) {
-        // index.json mode: the key really is '...json'
-        return p;
-      }
-      // flat mode: drop '.json' and read from bare key
-      return p.slice(0, -5);
-    }
-
-    // Pretty routes: '/posts' is valid
-    if (pretty) {
-      return useIndex ? p + '/index.json' : p;
-    }
-
-    // Non-pretty mode:
-    // - index.json mode: require explicit '/foo/index.json' (handled above)
-    // - flat mode: treat '/foo' as key 'foo'
-    return useIndex ? null : p;
-  }
-
-  // All public paths that should map to a given route
-  // (for cache purge, etc.)
+  // All public paths that *should* map to a given route
+  // (used only for worker cache purge; actual public access is via R2 now).
   function publicPathsForRoute(route, env) {
-    const pretty = isPrettyRoutes(env);
     const useIndex = useIndexJson(env);
 
     if (route === '/') {
       if (useIndex) {
-        // root index.json plus pretty '/'
-        return pretty ? ['/', '/index.json'] : ['/index.json'];
+        // root index.json plus '/'
+        return ['/', '/index.json'];
       }
       // flat root: underlying key 'index', but we still may serve '/', '/index', '/index.json'
       return ['/', '/index', '/index.json'];
@@ -435,12 +355,12 @@ const WORKER_RUNTIME_JS = `
     const base = route; // e.g. '/posts', '/users/1'
 
     if (useIndex) {
-      const jsonPath = base + '/index.json';
-      return pretty ? [base, jsonPath] : [jsonPath];
+      // index.json mode: primary JSON path is '/posts/index.json'
+      return [base + '/index.json'];
     }
 
     // flat keys: underlying key is 'posts' or 'users/1'
-    // we purge both pretty path and .json alias
+    // purge both extensionless and .json alias
     return [base, base + '.json'];
   }
 
@@ -465,50 +385,6 @@ const WORKER_RUNTIME_JS = `
   }
 
   // -------------------------
-  // Read: GET JSON from R2
-  // -------------------------
-  async function handleRead(req, env) {
-    const url = new URL(req.url);
-    const origin = req.headers.get('origin') || '';
-
-    if (!isOriginAllowed(origin, env)) {
-      return new Response('forbidden', { status: 403 });
-    }
-
-    if (!isReadAuthorized(req, env)) {
-      return new Response(
-        JSON.stringify({ ok: false, error: 'unauthorized' }),
-        { status: 401, headers: corsHeaders(origin) },
-      );
-    }
-
-    const key = r2KeyFromRequestPath(url.pathname, env);
-    if (!key) {
-      return new Response(
-        JSON.stringify({ ok: false, error: 'not_found' }),
-        { status: 404, headers: corsHeaders(origin) },
-      );
-    }
-
-    const obj = await env.STATIK_BUCKET.get(key);
-
-    if (!obj) {
-      return new Response(
-        JSON.stringify({ ok: false, error: 'not_found' }),
-        { status: 404, headers: corsHeaders(origin) },
-      );
-    }
-
-    const body = await obj.text();
-
-    return new Response(body, {
-      headers: corsHeaders(origin, {
-        'cache-control': 'public, max-age=0, s-maxage=600',
-      }),
-    });
-  }
-
-  // -------------------------
   // Cache purge helpers
   // -------------------------
   async function purgeCacheForPath(origin, path) {
@@ -519,26 +395,6 @@ const WORKER_RUNTIME_JS = `
       // best-effort
       console.warn('purgeCacheForPath error', err);
     }
-  }
-
-  // -------------------------
-  // CORS preflight
-  // -------------------------
-  async function handleOptions(req, env) {
-    const origin = req.headers.get('origin') || '';
-    if (!isOriginAllowed(origin, env)) {
-      return new Response('forbidden', { status: 403 });
-    }
-
-    return new Response(null, {
-      headers: {
-        ...(origin ? { 'access-control-allow-origin': origin } : {}),
-        'access-control-allow-methods': 'GET, OPTIONS, POST',
-        'access-control-allow-headers': 'Content-Type, Authorization',
-        'access-control-max-age': '86400',
-        'vary': 'origin',
-      },
-    });
   }
 
   // -------------------------
@@ -678,9 +534,9 @@ const WORKER_RUNTIME_JS = `
     async fetch(req, env) {
       const url = new URL(req.url);
 
-      // CORS preflight
+      // Minimal OPTIONS handler
       if (req.method === 'OPTIONS') {
-        return handleOptions(req, env);
+        return new Response(null, { status: 204 });
       }
 
       if (req.method === 'POST' && url.pathname === '/__statikapi/build/route') {
@@ -694,11 +550,6 @@ const WORKER_RUNTIME_JS = `
       if (req.method === 'GET' && url.pathname === '/__statikapi/manifest') {
         const list = await readManifest(env);
         return new Response(JSON.stringify(list), { headers: { 'content-type': 'application/json' } });
-      }
-
-      // Public API: serve JSON directly from R2
-      if (req.method === 'GET') {
-        return handleRead(req, env);
       }
 
       return new Response('Not found', { status: 404 });

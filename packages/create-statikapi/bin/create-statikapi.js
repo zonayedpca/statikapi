@@ -96,7 +96,10 @@ async function main(argv) {
               initial: 0,
             },
         {
-          type: 'confirm',
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? null : 'confirm';
+          },
           name: 'wantEslint',
           message: 'Add ESLint?',
           initial: true,
@@ -237,7 +240,13 @@ async function main(argv) {
     appName = appName || answers.name;
     template = TEMPLATES.has(template) ? template : answers.template || DEFAULT_TEMPLATE;
     pkgMgr = pkgMgr || answers.pm || DEFAULT_PM;
-    wantEslint = answers.wantEslint ?? true;
+
+    // For cloudflare-adapter, always disable ESLint
+    if (template === 'cloudflare-adapter') {
+      wantEslint = false;
+    } else {
+      wantEslint = answers.wantEslint ?? true;
+    }
     // language: if cloudflare-adapter, force JS
     language = template === 'cloudflare-adapter' ? 'js' : answers.language || language || 'js';
 
@@ -293,7 +302,7 @@ async function main(argv) {
 
   await writeNodeVersions(dest);
 
-  if (wantEslint) {
+  if (wantEslint && template !== 'cloudflare-adapter') {
     await writeEslint(dest, { language });
   }
 

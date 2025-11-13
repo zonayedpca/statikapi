@@ -407,12 +407,15 @@ const WORKER_RUNTIME_JS = `
       return new Response('unauthorized', { status: 401 });
     }
 
+    const url = new URL(req.url);
     const body = await req.json().catch(() => ({}));
     const pretty = body.pretty ?? DEFAULT_PRETTY;
-    const route = body.route;
+
+    // prefer query ?route=... but fall back to body.route for backwards-ish compat
+    const route = url.searchParams.get('route') || body.route;
 
     if (!route || typeof route !== 'string') {
-      return new Response(JSON.stringify({ ok: false, error: 'Missing "route" in body' }), {
+      return new Response(JSON.stringify({ ok: false, error: 'Missing "route" (use ?route=/path) in request' }), {
         status: 400,
         headers: { 'content-type': 'application/json' },
       });
@@ -454,7 +457,6 @@ const WORKER_RUNTIME_JS = `
     await writeManifest(env, next);
 
     // per-route cache purge (worker cache) for all public paths of this route
-    const url = new URL(req.url);
     const origin = url.origin;
     for (const p of publicPathsForRoute(route, env)) {
       await purgeCacheForPath(origin, p);
@@ -539,15 +541,16 @@ const WORKER_RUNTIME_JS = `
         return new Response(null, { status: 204 });
       }
 
-      if (req.method === 'POST' && url.pathname === '/__statikapi/build/route') {
-        return handleBuildRoute(req, env);
-      }
-
-      if (req.method === 'POST' && url.pathname === '/__statikapi/build') {
+      if (req.method === 'POST' && url.pathname === '/build') {
+        // /build?route=/posts/1  -> single route build
+        if (url.searchParams.has('route')) {
+          return handleBuildRoute(req, env);
+        }
+        // /build  -> full build
         return handleBuild(req, env);
       }
 
-      if (req.method === 'GET' && url.pathname === '/__statikapi/manifest') {
+      if (req.method === 'GET' && url.pathname === '/manifest') {
         const list = await readManifest(env);
         return new Response(JSON.stringify(list), { headers: { 'content-type': 'application/json' } });
       }

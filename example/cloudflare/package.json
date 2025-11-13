@@ -3,10 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "cf:bundle": "statikapi-cf --src src-api --out dist/worker.mjs",
+    "cf:bundle": "statikapi-cf --watch --src src-api --out dist/worker.mjs",
     "cf:watch": "chokidar \"src-api/**/*.{js,mjs,cjs}\" -c \"pnpm cf:bundle\"",
-    "cf:dev": "wrangler dev --local",
-    "cf:dev:all": "concurrently -n BUILD,WRANGLER -c yellow,cyan \"pnpm cf:watch\" \"pnpm cf:dev\""
+    "cf:wrangler:dev": "wrangler dev --local",
+    "cf:dev": "concurrently -n BUILD,WRANGLER -c yellow,cyan \"pnpm cf:watch\" \"pnpm cf:wrangler:dev\""
   },
   "devDependencies": {
     "@statikapi/adapter-cf": "workspace:*",

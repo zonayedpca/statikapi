@@ -202,6 +202,47 @@ const WORKER_RUNTIME_JS = `
     return route.replace(/^\\//,'').split('/');
   }
 
+  function matchPattern(patternRoute, concreteRoute) {
+    const pSegs = splitRoute(patternRoute);
+    const cSegs = splitRoute(concreteRoute);
+
+    const params = {};
+    let i = 0, j = 0;
+
+    while (i < pSegs.length && j < cSegs.length) {
+      const p = pSegs[i];
+      const c = cSegs[j];
+
+      if (p.startsWith(':')) {
+        params[p.slice(1)] = decodeURIComponent(c);
+        i++; j++;
+      } else if (p.startsWith('*')) {
+        const name = p.slice(1);
+        const rest = cSegs.slice(j).map((s) => decodeURIComponent(s));
+        params[name] = rest;
+        i = pSegs.length;
+        j = cSegs.length;
+        break;
+      } else {
+        if (p !== c) return null;   // no match
+        i++; j++;
+      }
+    }
+
+    if (i !== pSegs.length || j !== cSegs.length) return null;
+    return params; // matched!
+  }
+
+  function findRouteEntry(registry, concreteRoute) {
+    for (const r of registry) {
+      const params = matchPattern(r.route, concreteRoute);
+      if (params) {
+        return { routeEntry: r, params };
+      }
+    }
+    return null;
+  }
+
   function concreteFromPattern(patternSegs, entry) {
     // entry can be string (for single dynamic) or array for catchall
     const params = {};
@@ -287,6 +328,72 @@ const WORKER_RUNTIME_JS = `
     await env.STATIK_MANIFEST.put(k, JSON.stringify(list));
   }
 
+  async function handleBuildRoute(req, env) {
+    const auth = req.headers.get('authorization') || '';
+    const want = 'Bearer ' + (env.STATIK_BUILD_TOKEN || '');
+    if (!env.STATIK_BUILD_TOKEN || auth !== want) {
+      return new Response('unauthorized', { status: 401 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const projectId = body.projectId || 'default';
+    const pretty = body.pretty ?? DEFAULT_PRETTY;
+    const route = body.route;
+
+    if (!route || typeof route !== 'string') {
+      return new Response(JSON.stringify({ ok: false, error: 'Missing "route" in body' }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+
+    const found = findRouteEntry(REGISTRY, route);
+    if (!found) {
+      return new Response(JSON.stringify({ ok: false, error: 'No matching route in registry' }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+
+    const { routeEntry, params } = found;
+
+    const ctx = { params: params || {}, env };
+    const value = await routeEntry.mod.data(ctx);
+    assertSerializable(value);
+
+    const text = pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value);
+    const key = r2Key(projectId, route);
+    const etag = await digestETag(text);
+
+    await writeJsonToR2(env, key, text, { route, etag });
+
+    // update manifest: remove old entry for this route, then add fresh one
+    const existing = await readManifest(env, projectId);
+    const next = (existing || []).filter((e) => e.route !== route);
+    const bytes = (new TextEncoder().encode(text)).length;
+
+    next.push({
+      route,
+      filePath: key,
+      bytes,
+      mtime: Date.now(),
+      hash: etag.replace(/"/g, ''),
+    });
+
+    await writeManifest(env, projectId, next);
+
+    const resBody = {
+      ok: true,
+      route,
+      filePath: key,
+      bytes,
+    };
+
+    return new Response(JSON.stringify(resBody), {
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+
   async function handleBuild(req, env) {
     const auth = req.headers.get('authorization') || '';
     const want = 'Bearer ' + (env.STATIK_BUILD_TOKEN || '');
@@ -335,6 +442,10 @@ const WORKER_RUNTIME_JS = `
   export default {
     async fetch(req, env) {
       const url = new URL(req.url);
+
+      if (req.method === 'POST' && url.pathname === '/__statikapi/build/route') {
+        return handleBuildRoute(req, env);
+      }
 
       if (req.method === 'POST' && url.pathname === '/__statikapi/build') {
         return handleBuild(req, env);

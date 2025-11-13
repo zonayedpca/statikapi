@@ -15,10 +15,10 @@
     "dev": "concurrently -n API,UI -c cyan,magenta \"pnpm -C example/basic dev --no-ui --keep-alive\" \"pnpm -C packages/ui dev\"",
     "ui:preview": "pnpm -C packages/ui preview",
     "ui:build": "pnpm -C packages/ui build && node packages/cli/scripts/embed-ui.js",
-    "cf:bundle": "pnpm --filter @statikapi/adapter-cf exec statikapi-cf --out dist/worker.mjs",
-    "cf:watch": "pnpm --filter @statikapi/adapter-cf exec statikapi-cf --watch --out dist/worker.mjs",
-    "cf:dev": "wrangler dev --local",
-    "cf:dev:all": "concurrently -n BUILD,WRANGLER -c yellow,cyan \"pnpm cf:watch\" \"pnpm cf:dev\"",
+    "cf:bundle": "pnpm -C example/cloudflare cf:bundle",
+    "cf:watch": "pnpm -C example/cloudflare cf:watch",
+    "cf:dev": "pnpm -C example/cloudflare cf:dev",
+    "cf:dev:all": "pnpm -C example/cloudflare cf:dev:all",
     "prepublishOnly": "pnpm -r test"
   },
   "devDependencies": {

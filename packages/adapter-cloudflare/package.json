@@ -1,6 +1,6 @@
 {
   "name": "@statikapi/adapter-cf",
-  "version": "0.6.0",
+  "version": "0.6.2",
   "type": "module",
   "bin": {
     "statikapi-cf": "bin/statikapi-cf.js"

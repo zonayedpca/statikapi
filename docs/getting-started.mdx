@@ -2,10 +2,11 @@
 
 Welcome to **StatikAPI** — generate **static JSON endpoints** from small JS/TS modules.
 
-This guide shows two flows:
+This guide shows three flows:
 
 - **From scratch** using `create-statikapi`
 - **Inside an existing repo** by adding the CLI and a `src-api/` folder _(this directory is configurable via your [configuration](./config))_
+- **Serverless mode** using the **Cloudflare Worker adapter** (StatikAPI behind a Worker + R2 + KV, with a build webhook)
 
 ---
 
@@ -43,11 +44,41 @@ npm run dev
 
 You will be prompted for:
 
-- **Template**: `basic`, `dynamic`, or `remote-data`
+- **Template**: `basic`, `dynamic`, `remote-data`, or  
+  `cloudflare-adapter` (Cloudflare Worker + R2 + KV + build webhook)
 - **Package manager** and whether to install now
-- Optional ESLint, TS, directories, and deploy presets
+- Optional ESLint, TS, directories, and deploy presets  
+  _(ESLint/TS are disabled for the Cloudflare adapter template; it ships ready-to-run JS Worker boilerplate.)_
 
-The dev server watches your **source directory** (default `src-api/`, configurable via [Configuration](./config)) and serves a local **UI** at `/_ui` with a live manifest, JSON previews, and copy-ready code snippets.
+The dev server for normal templates watches your **source directory** (default `src-api/`, configurable via [Configuration](./config)) and serves a local **UI** at `/_ui` with a live manifest, JSON previews, and copy-ready code snippets.
+
+---
+
+## 1b) Using the Cloudflare Worker adapter (serverless mode)
+
+If you pick the **`cloudflare-adapter`** template, `create-statikapi` scaffolds:
+
+- A **Cloudflare Worker** wired to:
+  - **R2** (stores built JSON)
+  - **KV** (stores the manifest)
+- A **build webhook endpoint** on the Worker (`/build`)
+- A default **JS-only** boilerplate (no TypeScript / ESLint)
+
+From there you can:
+
+- Run the bundled dev commands to iterate locally
+- Deploy the Worker to Cloudflare
+- **Trigger rebuilds via HTTP**:
+  - `POST /build` — rebuild **all routes**
+  - `POST /build?route=/users/1` — rebuild just that route
+
+Authentication is handled via a **`STATIK_BUILD_TOKEN`** env var on the Worker.  
+Clients include this token in requests (see [Cloudflare Worker + R2 Adapter](./serverless/cloudflare-adapter) for full details and `curl` examples).
+
+This mode is ideal when:
+
+- You want StatikAPI’s DX, but need a **serverless endpoint** instead of raw static hosting
+- Your data changes frequently and you want to **trigger updates via webhooks** from other systems
 
 ---
 
@@ -141,3 +172,4 @@ api-out/            # generated JSON (also configurable via Configuration)
 - Read the **CLI Commands** to learn each flag
 - Learn the **Routing** model (static, dynamic, catch-all, remote)
 - Use **data()** and **paths()** to shape your endpoints
+- Explore the **[Cloudflare Worker + R2 adapter](./serverless/cloudflare-adapter)** if you want StatikAPI behind a serverless Worker with a build webhook

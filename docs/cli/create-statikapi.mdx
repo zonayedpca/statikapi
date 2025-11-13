@@ -28,24 +28,32 @@ npx create-statikapi
 
 You will be prompted for:
 
-- **Template**: `basic`, `dynamic`, or `remote-data`
+- **Template**:
+  - `basic` — single endpoint starter
+  - `dynamic` — dynamic + catch-all routes examples
+  - `remote-data` — build-time fetch examples
+  - `cloudflare-adapter` — Cloudflare Worker + R2 + KV with build webhook
 - **Package manager** and whether to install now
-- Optional ESLint, TS, directories, and deploy presets
+- Optional ESLint, TS, directories, and deploy presets  
+  _(For the Cloudflare adapter template, ESLint/TS are effectively skipped; you get a JS Worker-focused boilerplate.)_
 
-> **Note:** The **source** (`src-api/`) and **output** (`api-out/`) directories are defaults. You can **customize** these during scaffolding or later in your [Configuration](../config).
+> **Note:** The **source** (`src-api/`) and **output** (`api-out/`) directories are defaults for the core templates.  
+> You can **customize** these during scaffolding or later in your [Configuration](../config).  
+> For the Cloudflare adapter template, `src-api/` is still the default, but the JSON is pushed to **R2** instead of a local `api-out/` for hosting.
 
 ---
 
 ## Flags
 
-- `--template basic|dynamic|remote-data`
-- `--yes, -y` — accept defaults (non‑interactive)
+- `--template basic|dynamic|remote-data|cloudflare-adapter`
+- `--yes, -y` — accept defaults (non-interactive)
 - `--no-install`
 - `--no-gitignore`
 - `--package-manager pnpm|npm|yarn`
 - `--src-dir <dir>` (default `src-api`, configurable)
-- `--out-dir <dir>` (default `api-out`, configurable)
-- `--deploy cloudflare,netlify,github`
+- `--out-dir <dir>` (default `api-out`, configurable; **ignored by the Cloudflare adapter template**)
+- `--deploy cloudflare,netlify,github`  
+  _(non-Cloudflare templates only; the Cloudflare adapter template always targets Workers)_
 - `--help, -h`
 
 **Examples**
@@ -58,9 +66,36 @@ create-statikapi my-api --template dynamic --no-install
 create-statikapi my-api --src-dir api --out-dir public/api --deploy cloudflare,github
 ```
 
+```bash
+# Cloudflare Worker adapter (serverless mode)
+create-statikapi my-worker --template cloudflare-adapter
+```
+
+---
+
+## Cloudflare adapter template (high-level)
+
+When you choose `cloudflare-adapter`, the scaffolder:
+
+- Copies a **Worker + R2 + KV** boilerplate
+- Prompts you for:
+  - **R2 bucket binding name** and **bucket_name**
+  - **KV namespace binding** and **id**
+  - **`STATIK_BUILD_TOKEN`** (used to authorize `/build`)
+  - **`STATIK_SRC`** (defaults to `src-api`)
+  - **`STATIK_USE_INDEX_JSON`** (whether to favor `/foo/index.json` vs `/foo.json` style)
+- Patches `wrangler.toml` with the values you provide
+
+From there you can:
+
+- Run the dev scripts (based on `wrangler dev` + bundling)
+- Deploy the Worker to Cloudflare
+- Trigger builds via the `/build` webhook documented in  
+  [Serverless Adapters → Cloudflare Worker + R2](../serverless/cloudflare-adapter)
+
 ---
 
 ## Exit codes
 
 - `0` success
-- non‑zero indicates an error (parsing, user module errors, etc.)
+- non-zero indicates an error (parsing, user module errors, etc.)

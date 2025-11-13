@@ -1,0 +1,424 @@
+# Cloudflare Worker + R2 Adapter
+
+The **Cloudflare Worker adapter** lets you run StatikAPI in a **serverless** way:
+
+- A Cloudflare **Worker** exposes control-plane endpoints (build + manifest).
+- Built JSON lives in **R2** and is served **directly** from R2 (optionally via a custom domain).
+- A small **manifest** lives in **KV**.
+- A secure **`/build` webhook** lets you rebuild everything (or a single route) via HTTP.
+
+Think of it as: _“StatikAPI + static JSON, with a Worker that rebuilds and manages your R2-backed API.”_
+
+---
+
+## 1) Scaffolding with `create-statikapi`
+
+The easiest way to get started is via the dedicated template:
+
+```bash
+pnpm dlx create-statikapi my-worker --template cloudflare-adapter
+# or
+npx create-statikapi my-worker --template cloudflare-adapter
+```
+
+You’ll be prompted for:
+
+- **Project name**
+- **Package manager**
+- **R2 bucket binding** (e.g. `STATIK_BUCKET`)
+- **R2 bucket_name** (e.g. `my-statikapi-bucket`)
+- **KV binding** (e.g. `STATIK_MANIFEST`)
+- **KV namespace id**
+- **`STATIK_BUILD_TOKEN`** — a long, random secret used to authorize `/build`
+- **`STATIK_SRC`** — the source directory for StatikAPI (defaults to `src-api`)
+- **`STATIK_USE_INDEX_JSON`** — whether to favor `/foo/index.json`-style keys
+
+The template:
+
+- Writes a ready-to-use **`wrangler.toml`** with your bindings and env vars.
+- Keeps everything **JavaScript-only** (no TypeScript / eslint setup).
+- Includes scripts for local dev + build (using `statikapi-cf` + `wrangler`).
+- Uses a **Worker** purely for:
+  - A `/build` endpoint to (re)generate JSON into R2
+  - Optional manifest/debug endpoints to inspect what’s deployed
+
+After scaffolding:
+
+```bash
+cd my-worker
+pnpm install   # or yarn / npm
+pnpm dev       # runs the local Worker dev loop
+```
+
+> Exact script names may vary slightly, but the template wires dev/build scripts for you.
+
+---
+
+## 2) What the adapter does
+
+At a high level, the Cloudflare adapter Worker:
+
+1. **Writes JSON to R2**  
+   When a build is triggered (locally or via `/build`), StatikAPI generates JSON and the adapter uploads objects into your **R2 bucket**.
+
+2. **Uses KV as a manifest**  
+   The manifest is written by the build step and describes route → object key in R2. You can expose a manifest endpoint from the Worker to inspect which routes exist.
+
+3. **Exposes a `/build` webhook**  
+   When you `POST` to `/build`, the Worker:
+   - Runs a StatikAPI build (via the adapter)
+   - Writes new JSON objects to **R2**
+   - Writes a fresh manifest to **KV**
+
+4. **Leaves reads to R2**  
+   Clients fetch data **directly from R2** (for example via a public or custom R2 domain). The Worker is **not** in the hot path for JSON reads — it is only the control plane.
+
+You get the speed of R2-hosted static JSON, with the convenience of **webhook-triggered updates** and a small Worker for orchestration.
+
+---
+
+## 3) Manual wiring (conceptual)
+
+If you want to wire things manually (or understand the template), the pieces are:
+
+### a) R2 + KV bindings
+
+In **`wrangler.toml`**:
+
+```toml
+[[r2_buckets]]
+binding = "STATIK_BUCKET"
+bucket_name = "my-statikapi-bucket"
+
+[[kv_namespaces]]
+binding = "STATIK_MANIFEST"
+id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+These names should match the ones you passed to `create-statikapi` (or update them consistently).
+
+### b) Env vars
+
+Also in `wrangler.toml`:
+
+```toml
+[vars]
+STATIK_BUILD_TOKEN = "REPLACE_ME_WITH_LONG_RANDOM_STRING"
+STATIK_SRC = "src-api"
+STATIK_USE_INDEX_JSON = "false"
+```
+
+- **`STATIK_BUILD_TOKEN`** — required to hit `/build`.
+- **`STATIK_SRC`** — where your route modules live (same idea as `srcDir`).
+- **`STATIK_USE_INDEX_JSON`** — if `true`, the adapter prefers `index.json` per folder; if `false`, it may write flat file names depending on your setup.
+
+### c) Worker entry
+
+The template ships with a Worker entry file that:
+
+- Parses incoming requests.
+- Routes `/build` requests to the adapter’s build logic.
+- Optionally exposes the manifest (for example via `/manifest`) using the KV contents.
+
+You normally don’t need to touch this unless you want custom logic (e.g., auth, logging, or extra debug endpoints).
+
+---
+
+## 4) Deploying and using custom domains
+
+### a) Deploy the Worker
+
+From your project:
+
+```bash
+pnpm build   # bundles worker + StatikAPI adapter logic
+pnpm deploy  # or `wrangler deploy`, depending on the template scripts
+```
+
+(Use the exact scripts from your generated `package.json`.)
+
+You can also deploy via:
+
+```bash
+wrangler deploy
+```
+
+as long as your `wrangler.toml` and entrypoint match the template.
+
+> **Important:** Deploying the Worker **updates the code and config**, but it does **not** automatically regenerate JSON in R2. You still need to trigger a build (see [Using the build webhook](#5-using-the-build-webhook)).
+
+### b) Attach a custom domain to the Worker (control plane)
+
+In the Cloudflare Dashboard:
+
+1. Go to **Workers & Pages → your Worker**.
+2. Add a **Route** like:
+
+   ```text
+   api.example.com/*
+   ```
+
+3. Ensure `api.example.com` has a DNS record in the same zone.
+
+This gives you URLs such as:
+
+```text
+https://api.example.com/build
+https://api.example.com/manifest   (if you expose one)
+```
+
+### c) Public domain for R2 (data plane)
+
+For clients to fetch JSON **directly from R2**:
+
+1. In R2, either:
+   - Make your bucket public, or
+   - Add a **Custom Domain**.
+2. Example URLs:
+
+   ```text
+   https://my-statikapi-bucket.r2.cloudflarestorage.com/users/1/index.json
+   # or a custom domain mapping:
+   https://cdn.example.com/users/1/index.json
+   ```
+
+In most setups:
+
+- **R2 + custom domain** = where clients read JSON from.
+- **Worker + route** = where builds and manifest/debug live.
+
+### d) CORS for browser clients
+
+If your API is accessed from a frontend (browser) on another domain, configure **CORS**:
+
+- For R2, set **CORS rules** from the Cloudflare Dashboard for the R2 bucket/custom domain.
+- Allow only the specific origins that should be able to read your JSON (e.g. `https://app.example.com`).
+
+This keeps your API consumable from your frontend while avoiding wide-open `*` CORS when you don’t need it.
+
+---
+
+## 5) Using the build webhook
+
+The Worker exposes a **`POST /build`** endpoint.
+
+### a) Rebuild everything
+
+```bash
+curl -X POST "https://api.example.com/build" \
+  -H "Authorization: Bearer YOUR_STATIK_BUILD_TOKEN"
+```
+
+Behavior:
+
+- Runs a **full StatikAPI build** using `STATIK_SRC`.
+- Writes all JSON objects to **R2**.
+- Updates the manifest in **KV**.
+
+### b) Rebuild a single route
+
+You can target a specific route with `?route=`:
+
+```bash
+curl -X POST "https://api.example.com/build?route=/users/1" \
+  -H "Authorization: Bearer YOUR_STATIK_BUILD_TOKEN"
+```
+
+The adapter will:
+
+- Rebuild only that route.
+- Update the corresponding entries in R2 + KV.
+
+> The exact `route` value should match the normalized URL path you serve (e.g. `/users/1`, `/docs/a/b`, etc.).
+
+### c) HTTP clients and webhooks
+
+Any HTTP client can call this endpoint:
+
+- Your own backend
+- A headless CMS webhook
+- CRON job / scheduled Worker
+- CI/CD pipelines
+
+Just remember to:
+
+- Use `POST`
+- Include the **Authorization** header:
+
+```http
+Authorization: Bearer YOUR_STATIK_BUILD_TOKEN
+```
+
+---
+
+## 6) Build token & rotation strategy
+
+### a) Choosing a token
+
+- Generate a **long, random** string (64+ characters).
+- Store it only in:
+  - `wrangler.toml` (or Wrangler secrets)
+  - The systems that need to call `/build`.
+
+Example:
+
+```bash
+# using openssl
+openssl rand -hex 32
+```
+
+### b) Rotating the token
+
+To keep things safe:
+
+1. **Generate a new token**.
+2. Update it in:
+   - Cloudflare (Wrangler secret / `wrangler.toml`)
+   - Any external systems (CMS, CI, backends) that call `/build`.
+3. **Deploy** the Worker.
+
+During rotation, you can:
+
+- Temporarily accept both old + new tokens (if you extend the Worker logic), or
+- Do a short maintenance window where `/build` calls may briefly fail while everything is updated.
+
+Treat `STATIK_BUILD_TOKEN` like an API key:
+
+- Never log it.
+- Never expose it in frontend code.
+- Keep it in secrets managers and CI vaults.
+
+---
+
+## 7) Request flow overview
+
+**Read path (data plane)**:
+
+1. Client requests `GET https://cdn.example.com/users/1/index.json` (or the default R2 public URL).
+2. Cloudflare’s R2 + CDN returns the JSON object.
+3. Optional: CORS rules on R2 allow browser apps on `https://app.example.com` to consume this.
+
+The Worker is **not** involved here.
+
+**Update path (control plane)**:
+
+1. Some system calls `POST https://api.example.com/build?route=/users/1` with the right token.
+2. Adapter runs the StatikAPI build just for `/users/1`.
+3. New JSON is written to R2; manifest in KV is updated.
+4. Next read from the R2 URL sees the updated data (subject to any caching you configure).
+
+---
+
+## 8) Git integration and automatic deploys
+
+The smoothest way to operate the Cloudflare adapter is with **Git + Cloudflare Worker Git integration**:
+
+### a) Put the project in Git
+
+Initialize a repository:
+
+```bash
+git init
+git add .
+git commit -m "init: statikapi cloudflare adapter"
+```
+
+Push it to GitHub/GitLab/Bitbucket.
+
+### b) Connect the repo to Cloudflare as a Worker
+
+In the Cloudflare Dashboard:
+
+1. Go to **Workers & Pages → Create application → Worker → Connect to Git**.
+2. Choose your repository.
+3. Set the **build command** to:
+
+   ```text
+   npm run build
+   # or
+   pnpm build
+   # or
+   yarn build
+   ```
+
+   (Use the command that your template’s `package.json` defines. The important part is that it runs the bundling step for the Worker.)
+
+4. Set the **output directory / entry** as recommended by the template (usually just the Worker script; Cloudflare Workers don’t use a static output dir like Pages).
+
+Now, whenever you push changes to the configured branch, Cloudflare will:
+
+- Pull the latest code.
+- Run `npm run build` (or equivalent).
+- Deploy a new Worker version automatically.
+
+> **Note:** This only updates the Worker code and its environment. It does **not** regenerate your JSON in R2 — that still happens via `/build`.
+
+### c) Local dev & manual deploys with Wrangler
+
+You can also work locally:
+
+```bash
+# watch and test locally
+wrangler dev
+
+# on every change to src-api (or whatever STATIK_SRC is),
+# rebuild and redeploy:
+npm run build
+wrangler deploy
+```
+
+(Replace `npm` with `pnpm`/`yarn` as needed.)
+
+Again, after `wrangler deploy` succeeds:
+
+- Your **Worker** is updated (control plane).
+- Your **R2 JSON** stays as-is until you call `POST /build`.
+
+This separation is intentional: you can adjust Worker logic or configuration without touching the stored JSON until you actually want to rebuild it.
+
+### d) Always trigger `/build` after changes to route source
+
+Whenever you change:
+
+- Files under `STATIK_SRC` (e.g., `src-api/users/[id].js`), or
+- Any logic that affects JSON output,
+
+you should:
+
+1. Commit and push (so Cloudflare redeploys the Worker via Git or `wrangler deploy`).
+2. Then **trigger the build**:
+
+   ```bash
+   curl -X POST "https://api.example.com/build" \
+     -H "Authorization: Bearer YOUR_STATIK_BUILD_TOKEN"
+   ```
+
+   or for a specific route:
+
+   ```bash
+   curl -X POST "https://api.example.com/build?route=/users/1" \
+     -H "Authorization: Bearer YOUR_STATIK_BUILD_TOKEN"
+   ```
+
+Only after this POST completes will your R2-backed JSON be updated.
+
+---
+
+## 9) When to use the Cloudflare adapter
+
+Use the **Cloudflare Worker + R2 adapter** when:
+
+- You want **StatikAPI’s file-based DX**, but:
+  - You don’t want to manage separate static hosting, or
+  - You need a first-class **webhook endpoint** to trigger rebuilds.
+- You’re already on Cloudflare and want:
+  - **R2** for storage
+  - **Workers** for routing, manifests, and build webhooks
+  - KV for a tiny manifest
+
+For pure static hosting of `api-out/` only (no Worker control plane), see:
+
+- [Deployments → Cloudflare Pages & R2](../deployments/cloudflare)
+- [Deployments → S3](../deployments/amazon-s3)
+- [Deployments → Netlify](../deployments/netlify)
+- [Deployments → GitHub Pages](../deployments/github-pages)

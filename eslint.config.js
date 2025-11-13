@@ -20,6 +20,8 @@ export default [
       'packages/cli/ui-dist/**', // or here, depending on your choice
       // API build output
       '**/api-out/**',
+      // examples
+      'example/cloudflare/dist',
     ],
   },
 

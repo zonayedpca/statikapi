@@ -29,7 +29,9 @@ async function findProjectRoot(start) {
     try {
       const f = await fs.readFile(path.join(dir, 'wrangler.toml'), 'utf8');
       return { root: dir, wranglerToml: f };
-    } catch {}
+    } catch {
+      // ignore catch
+    }
     const parent = path.dirname(dir);
     if (parent === dir) return { root: path.resolve(start), wranglerToml: null };
     dir = parent;

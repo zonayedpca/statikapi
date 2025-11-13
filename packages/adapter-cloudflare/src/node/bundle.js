@@ -170,7 +170,9 @@ export const DEFAULT_PRETTY = ${prettyDefault ? 'true' : 'false'};
 
   try {
     await fs.rm(tmpDir, { recursive: true, force: true });
-  } catch {}
+  } catch {
+    // ignore catch
+  }
 }
 
 // -------------------------

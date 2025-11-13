@@ -421,9 +421,10 @@ export default async function devCmd(argv) {
   // Keep process alive until SIGINT
   await new Promise((resolve) => {
     const stop = () =>
-      Promise.allSettled([watcher.close(), new Promise((r) => server.close(() => r()))]).then(() =>
-        resolve()
-      );
+      Promise.allSettled([
+        watcher.close(),
+        new Promise((_resolve) => server.close(() => _resolve())),
+      ]).then(() => resolve());
     process.on('SIGINT', stop);
     process.on('SIGTERM', stop);
   });

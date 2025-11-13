@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import fs, { readdir } from 'node:fs/promises';
+import fs from 'node:fs/promises';
 import fss from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
@@ -544,7 +544,7 @@ async function convertExampleEndpointsToTS(dest, srcDir) {
 
   try {
     await walk(root);
-  } catch (e) {
+  } catch {
     // Non-fatal: srcDir may be empty, or already converted
     // console.warn('TS conversion skipped:', e.message);
   }

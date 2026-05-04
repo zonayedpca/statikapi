@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 
 import { DEFAULT_CONFIG } from './defaults.js';
 import { validateAndNormalize, ConfigError } from './validate.js';
+import { applyListIndexFlagOverrides } from './listIndex.js';
 
 export async function loadConfig({ cwd = process.cwd(), flags = {} } = {}) {
   const file = path.join(cwd, 'statikapi.config.js');
@@ -33,6 +34,10 @@ export async function loadConfig({ cwd = process.cwd(), flags = {} } = {}) {
     ...fileCfg,
     ...pickFlags(flags),
   };
+
+  if (flags.listIndex != null || flags.listIndexPick != null) {
+    merged.listIndex = applyListIndexFlagOverrides(merged.listIndex, flags);
+  }
 
   // Validate & expand absolute paths
   const finalCfg = validateAndNormalize(merged, { cwd });

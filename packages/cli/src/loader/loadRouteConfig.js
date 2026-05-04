@@ -1,9 +1,10 @@
 import path from 'node:path';
 
+import { cloneListIndexConfig, normalizeListIndexValue } from '../config/listIndex.js';
 import { LoaderError } from './errors.js';
 import { importModule } from './importModule.js';
 
-export async function loadRouteConfig(fileAbs, { fresh = false } = {}) {
+export async function loadRouteConfig(fileAbs, { fresh = false, fallback = null } = {}) {
   const fileInfo = short(fileAbs);
   let mod;
 
@@ -13,44 +14,28 @@ export async function loadRouteConfig(fileAbs, { fresh = false } = {}) {
     throw new LoaderError(fileInfo, `Failed to import for config: ${e.message}`);
   }
 
-  return normalizeConfig(mod?.config, fileInfo);
+  return normalizeConfig(mod?.config, fileInfo, fallback);
 }
 
-function normalizeConfig(raw, fileInfo) {
-  const base = { listIndex: { enabled: false, pick: null } };
+function normalizeConfig(raw, fileInfo, fallback) {
+  const base = { listIndex: cloneListIndexConfig(fallback?.listIndex) };
 
   if (raw == null) return base;
   if (typeof raw !== 'object' || Array.isArray(raw)) {
     throw new LoaderError(fileInfo, `config must be an object when exported`);
   }
 
+  if (!Object.hasOwn(raw, 'listIndex')) return base;
+
   const listIndex = raw.listIndex;
-  if (listIndex == null || listIndex === false) return base;
-  if (listIndex === true) return { listIndex: { enabled: true, pick: null } };
-
-  if (typeof listIndex !== 'object' || Array.isArray(listIndex)) {
-    throw new LoaderError(fileInfo, `config.listIndex must be true, false, or an object`);
+  try {
+    return {
+      listIndex: normalizeListIndexValue(listIndex, { label: 'config.listIndex' }),
+    };
+  } catch (err) {
+    if (err instanceof LoaderError) throw err;
+    throw new LoaderError(fileInfo, err.message);
   }
-
-  const enabled = listIndex.enabled == null ? true : listIndex.enabled;
-  if (typeof enabled !== 'boolean') {
-    throw new LoaderError(fileInfo, `config.listIndex.enabled must be a boolean`);
-  }
-
-  let pick = null;
-  if ('pick' in listIndex) {
-    if (!Array.isArray(listIndex.pick)) {
-      throw new LoaderError(fileInfo, `config.listIndex.pick must be an array of strings`);
-    }
-    for (const key of listIndex.pick) {
-      if (typeof key !== 'string' || !key) {
-        throw new LoaderError(fileInfo, `config.listIndex.pick must contain non-empty strings`);
-      }
-    }
-    pick = Array.from(new Set(listIndex.pick));
-  }
-
-  return { listIndex: { enabled, pick } };
 }
 
 function short(p) {

@@ -72,6 +72,137 @@ export async function data({ params }){ return { slug: params.slug.join('/'), bo
   });
 });
 
+test('build emits collection index output from statikapi.config.js global defaults', async (t) => {
+  const tmp = await makeTmp();
+  await fs.mkdir(tmp.join('src-api/users'), { recursive: true });
+  await fs.writeFile(
+    tmp.join('statikapi.config.js'),
+    `
+export default {
+  listIndex: {
+    enabled: true,
+    pick: ['id']
+  }
+};
+`
+  );
+  await fs.writeFile(
+    tmp.join('src-api/users/[id].js'),
+    `
+export async function paths(){ return ['1','2']; }
+export async function data({ params }){ return { id: params.id, role: 'user' }; }
+`
+  );
+
+  const { code, stdout, stderr } = await runBuild(tmp.cwd);
+  assert.equal(code, 0, `build failed\n${stdout}\n${stderr}`);
+
+  const list = JSON.parse(await fs.readFile(tmp.join('api-out/users/index.json'), 'utf8'));
+  assert.deepEqual(list, [{ id: '1' }, { id: '2' }]);
+
+  t.after(async () => {
+    await tmp.cleanup();
+  });
+});
+
+test('build lets local route config override global list index defaults', async (t) => {
+  const tmp = await makeTmp();
+  await fs.mkdir(tmp.join('src-api/users'), { recursive: true });
+  await fs.writeFile(
+    tmp.join('statikapi.config.js'),
+    `
+export default {
+  listIndex: {
+    enabled: true,
+    pick: ['id']
+  }
+};
+`
+  );
+  await fs.writeFile(
+    tmp.join('src-api/users/[id].js'),
+    `
+export const config = { listIndex: true };
+export async function paths(){ return ['1']; }
+export async function data({ params }){ return { id: params.id, role: 'user' }; }
+`
+  );
+
+  const { code, stdout, stderr } = await runBuild(tmp.cwd);
+  assert.equal(code, 0, `build failed\n${stdout}\n${stderr}`);
+
+  const list = JSON.parse(await fs.readFile(tmp.join('api-out/users/index.json'), 'utf8'));
+  assert.deepEqual(list, [{ id: '1', role: 'user' }]);
+
+  t.after(async () => {
+    await tmp.cleanup();
+  });
+});
+
+test('build allows CLI flags to enable global collection index defaults', async (t) => {
+  const tmp = await makeTmp();
+  await fs.mkdir(tmp.join('src-api/docs'), { recursive: true });
+  await fs.writeFile(
+    tmp.join('src-api/docs/[...slug].js'),
+    `
+export async function paths(){ return [['guide'], ['api','intro']]; }
+export async function data({ params }){ return { slug: params.slug.join('/'), body: 'x' }; }
+`
+  );
+
+  const { code, stdout, stderr } = await runBuild(tmp.cwd, [
+    'build',
+    '--pretty',
+    '--listIndex',
+    '--listIndexPick',
+    'slug',
+  ]);
+  assert.equal(code, 0, `build failed\n${stdout}\n${stderr}`);
+
+  const list = JSON.parse(await fs.readFile(tmp.join('api-out/docs/index.json'), 'utf8'));
+  assert.deepEqual(list, [{ slug: 'guide' }, { slug: 'api/intro' }]);
+
+  t.after(async () => {
+    await tmp.cleanup();
+  });
+});
+
+test('build lets explicit CLI list index flags override config file defaults', async (t) => {
+  const tmp = await makeTmp();
+  await fs.mkdir(tmp.join('src-api/users'), { recursive: true });
+  await fs.writeFile(
+    tmp.join('statikapi.config.js'),
+    `
+export default {
+  listIndex: false
+};
+`
+  );
+  await fs.writeFile(
+    tmp.join('src-api/users/[id].js'),
+    `
+export async function paths(){ return ['1']; }
+export async function data({ params }){ return { id: params.id, role: 'user' }; }
+`
+  );
+
+  const { code, stdout, stderr } = await runBuild(tmp.cwd, [
+    'build',
+    '--pretty',
+    '--listIndex',
+    '--listIndexPick',
+    'id',
+  ]);
+  assert.equal(code, 0, `build failed\n${stdout}\n${stderr}`);
+
+  const list = JSON.parse(await fs.readFile(tmp.join('api-out/users/index.json'), 'utf8'));
+  assert.deepEqual(list, [{ id: '1' }]);
+
+  t.after(async () => {
+    await tmp.cleanup();
+  });
+});
+
 test('build fails when collection index route collides with another emitted route', async (t) => {
   const tmp = await makeTmp();
   await fs.mkdir(tmp.join('src-api/users'), { recursive: true });

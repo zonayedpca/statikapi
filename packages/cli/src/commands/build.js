@@ -139,7 +139,7 @@ export default async function buildCmd(argv) {
         skippedDynamic++;
         continue;
       }
-      const routeConfig = await loadRouteConfig(r.file);
+      const routeConfig = await loadRouteConfig(r.file, { fallback: config });
       const seen = new Set();
       const listItems = [];
       for (const segs of list) {
@@ -159,7 +159,7 @@ export default async function buildCmd(argv) {
         skippedDynamic++;
         continue;
       }
-      const routeConfig = await loadRouteConfig(r.file);
+      const routeConfig = await loadRouteConfig(r.file, { fallback: config });
       const seen = new Set();
       const listItems = [];
       for (const segs of list) {

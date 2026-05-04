@@ -144,7 +144,7 @@ export default async function devCmd(argv) {
       lastEmitted.set(r.file, new Set());
       return { written: 0, skipped: 1 };
     }
-    const routeConfig = await loadRouteConfig(r.file, { fresh });
+    const routeConfig = await loadRouteConfig(r.file, { fresh, fallback: config });
     const seen = new Set();
     const emittedRoutes = new Set();
     const listItems = [];

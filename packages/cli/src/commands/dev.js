@@ -7,9 +7,15 @@ import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 
 import { loadConfig } from '../config/loadConfig.js';
+import { loadRouteConfig } from '../loader/loadRouteConfig.js';
 import { loadModuleValue } from '../loader/loadModuleValue.js';
 import { loadPaths } from '../loader/loadPaths.js';
 import { mapRoutes, fileToRoute } from '../router/mapRoutes.js';
+import {
+  collectionRouteForSegments,
+  toConcreteRoute,
+  toParams,
+} from '../router/routeHelpers.js';
 import { readFlags } from '../util/readFlags.js';
 import { writeFileEnsured } from '../util/fsx.js';
 import { routeToOutPath } from '../build/routeOutPath.js';
@@ -22,36 +28,6 @@ function hasIndex(dir) {
 
 function clearScreen() {
   process.stdout.write('\x1Bc'); // ANSI "clear screen"
-}
-
-function toConcrete(routePattern, segTokens, segs) {
-  let idx = 0;
-
-  const parts = routePattern.split('/').map((p) => {
-    if (p.startsWith(':')) return segs[idx++] ?? '';
-    if (p.startsWith('*')) return segs.slice(idx).join('/');
-    return p;
-  });
-
-  return parts.join('/').replace(/\/+/g, '/');
-}
-
-function toParams(segTokens, concreteRoute) {
-  const concreteSegs = concreteRoute.split('/').filter(Boolean);
-  const params = {};
-
-  for (let i = 0; i < segTokens.length; i++) {
-    const tok = segTokens[i];
-
-    if (tok.startsWith(':')) params[tok.slice(1)] = concreteSegs[i] ?? '';
-    else if (tok.startsWith('*')) {
-      params[tok.slice(1)] = concreteSegs.slice(i);
-
-      break;
-    }
-  }
-
-  return params;
 }
 
 export default async function devCmd(argv) {
@@ -98,6 +74,7 @@ export default async function devCmd(argv) {
 
   // Manifest state
   const manifestByRoute = new Map(); // route -> entry
+  const routeOwners = new Map(); // route -> srcFile
 
   const digest = (s) => crypto.createHash('sha1').update(s).digest('hex');
   const relSrc = (abs) => {
@@ -122,6 +99,14 @@ export default async function devCmd(argv) {
     await writeFileEnsured(path.join(config.paths.outAbs, '.statikapi', 'manifest.json'), json);
   }
   async function upsertManifest({ route, srcFile, outFile, json }) {
+    const owner = routeOwners.get(route);
+    if (owner && owner !== srcFile) {
+      throw new Error(
+        `Route collision for ${route}: ${relSrc(srcFile)} conflicts with ${relSrc(owner)}`
+      );
+    }
+    routeOwners.set(route, srcFile);
+
     const st = await fs.stat(outFile).catch(() => null);
 
     const entry = {
@@ -138,6 +123,7 @@ export default async function devCmd(argv) {
   }
   function deleteFromManifest(route) {
     manifestByRoute.delete(route);
+    routeOwners.delete(route);
   }
 
   async function emitStatic(r, { fresh = false } = {}) {
@@ -158,11 +144,13 @@ export default async function devCmd(argv) {
       lastEmitted.set(r.file, new Set());
       return { written: 0, skipped: 1 };
     }
+    const routeConfig = await loadRouteConfig(r.file, { fresh });
     const seen = new Set();
     const emittedRoutes = new Set();
+    const listItems = [];
     let written = 0;
     for (const segs of list) {
-      const concrete = toConcrete(r.route, r.segments, segs);
+      const concrete = toConcreteRoute(r.route, segs);
       if (seen.has(concrete)) continue;
       seen.add(concrete);
       const params = toParams(r.segments, concrete);
@@ -171,7 +159,22 @@ export default async function devCmd(argv) {
       const outFile = routeToOutPath({ outAbs: config.paths.outAbs, route: concrete });
       await writeFileEnsured(outFile, json);
       emittedRoutes.add(concrete);
+      listItems.push(val);
       await upsertManifest({ route: concrete, srcFile: r.file, outFile, json });
+      written++;
+    }
+
+    if (routeConfig.listIndex.enabled) {
+      const collectionRoute = collectionRouteForSegments(r.segments);
+      if (!collectionRoute) {
+        throw new Error(`config.listIndex requires a static parent route for ${r.route}`);
+      }
+      const payload = listItems.map((item) => pickItemFields(item, routeConfig.listIndex.pick, r.route));
+      const json = JSON.stringify(payload, null, 2) + '\n';
+      const outFile = routeToOutPath({ outAbs: config.paths.outAbs, route: collectionRoute });
+      await writeFileEnsured(outFile, json);
+      emittedRoutes.add(collectionRoute);
+      await upsertManifest({ route: collectionRoute, srcFile: r.file, outFile, json });
       written++;
     }
 
@@ -478,4 +481,17 @@ async function openInBrowser(url) {
   const cmd =
     process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
   exec(`${cmd} "${url}"`);
+}
+
+function pickItemFields(item, pick, route) {
+  if (!pick) return item;
+  if (item == null || typeof item !== 'object' || Array.isArray(item)) {
+    throw new Error(`config.listIndex.pick requires plain-object items for ${route}`);
+  }
+
+  const out = {};
+  for (const key of pick) {
+    if (Object.hasOwn(item, key)) out[key] = item[key];
+  }
+  return out;
 }

@@ -32,3 +32,6 @@ example/**/wrangler.toml
 worker-*.mjs
 **/worker-*.mjs
 wrangler.toml.local
+
+# local planning artifacts
+.codex/canonical-plan/

@@ -32,7 +32,7 @@ You will be prompted for:
   - `basic` — single endpoint starter
   - `dynamic` — dynamic + catch-all routes examples
   - `remote-data` — build-time fetch examples
-  - `cloudflare-adapter` — Cloudflare Worker + R2 + KV with build webhook
+  - `cloudflare-adapter` — Cloudflare Worker + public/private R2 + KV with build webhook
 - **Package manager** and whether to install now
 - Optional ESLint, TS, directories, and deploy presets  
   _(For the Cloudflare adapter template, ESLint/TS are effectively skipped; you get a JS Worker-focused boilerplate.)_
@@ -77,14 +77,44 @@ create-statikapi my-worker --template cloudflare-adapter
 
 When you choose `cloudflare-adapter`, the scaffolder:
 
-- Copies a **Worker + R2 + KV** boilerplate
+- Copies a **Worker + dual R2 bucket + KV** boilerplate
+- Writes a `statikapi.config.js` with the project-level Cloudflare defaults
 - Prompts you for:
-  - **R2 bucket binding name** and **bucket_name**
+  - **serving mode**:
+    - `worker` — the Worker serves both `/public/...` and private routes
+    - `r2-public` — public routes are expected to be served from the public R2 bucket or its custom domain, while private routes stay behind the Worker
+  - **public R2 bucket binding** and **bucket_name**
+  - **private R2 bucket binding** and **bucket_name**
   - **KV namespace binding** and **id**
   - **`STATIK_BUILD_TOKEN`** (used to authorize `/build`)
   - **`STATIK_SRC`** (defaults to `src-api`)
-  - **`STATIK_USE_INDEX_JSON`** (whether to favor `/foo/index.json` vs `/foo.json` style)
-- Patches `wrangler.toml` with the values you provide
+  - **`STATIK_USE_INDEX_JSON`**
+  - **private auth header name/value** for private route reads
+  - **Cloudflare account id** and **API token placeholders** for deploy wiring
+  - **runtime request / Class A / Class B limits**
+- Writes:
+  - `wrangler.toml`
+  - `.dev.vars.example`
+  - `statikapi.config.js`
+  - `pnpm deploy` / `npm run deploy` / `yarn deploy` wiring via `wrangler deploy`
+
+Generated route modules can override project defaults with:
+
+```js
+export const config = {
+  cloudflare: {
+    public: true,
+    webhook: true
+  }
+};
+```
+
+Current Cloudflare conventions:
+
+- public routes are emitted under `/public/...`
+- private routes keep their original route paths
+- route-level Cloudflare config overrides the project-level default
+- the generated project assumes a least-privilege Cloudflare API token with Workers Scripts: Edit, R2 Storage: Edit, and Workers KV Storage: Edit
 
 From there you can:
 

@@ -1,6 +1,6 @@
-# Cloudflare Pages & R2
+# Cloudflare Pages, Workers, and R2
 
-Cloudflare is an excellent choice for hosting small or medium static JSON APIs — 
+Cloudflare is an excellent choice for hosting small or medium static JSON APIs —
 especially if you are already hosting your frontend or documentation there.
 
 ---
@@ -51,13 +51,16 @@ If you plan to serve thousands of JSON files or expect high traffic, review thei
 
 ---
 
-## For Larger Projects — Use R2
+## For Larger Projects — Use R2 or the Cloudflare adapter
 
-If your StatikAPI project produces many JSON files or large objects, consider hosting them in **Cloudflare R2**.
+If your StatikAPI project produces many JSON files or large objects, consider either:
+
+- hosting a local `api-out/` build in **Cloudflare R2**, or
+- using the dedicated `cloudflare-adapter` template for a Worker + public/private R2 deployment
 
 R2 is Cloudflare’s object storage service, similar to AWS S3, designed for large data sets and high availability.
 
-### Upload to R2
+### Upload a local build to R2
 
 You can upload your entire `api-out/` directory:
 
@@ -76,6 +79,15 @@ export default {
   }
 };
 ```
+
+If you need:
+
+- authenticated private routes
+- `/public/...` partitioning
+- webhook-triggered rebuilds
+- Cloudflare-specific runtime limits
+
+use the dedicated [Cloudflare Worker + R2 adapter](../serverless/cloudflare-adapter) instead of a plain `api-out/` upload flow.
 
 **Advantages of R2**
 - Handles large-scale APIs efficiently

@@ -1,3 +1,9 @@
+export const config = {
+  cloudflare: {
+    public: false,
+  },
+};
+
 export async function paths() {
   // first 10 posts
   return Array.from({ length: 10 }, (_, i) => String(i + 1));

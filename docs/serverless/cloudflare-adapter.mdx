@@ -1,19 +1,23 @@
 # Cloudflare Worker + R2 Adapter
 
-The **Cloudflare Worker adapter** lets you run StatikAPI in a **serverless** way:
+The **Cloudflare Worker adapter** turns a StatikAPI project into a Cloudflare-oriented deployment with:
 
-- A Cloudflare **Worker** exposes control-plane endpoints (build + manifest).
-- Built JSON lives in **R2** and is served **directly** from R2 (optionally via a custom domain).
-- A small **manifest** lives in **KV**.
-- A secure **`/build` webhook** lets you rebuild everything (or a single route) via HTTP.
+- a Worker control plane
+- a **public** R2 bucket for `/public/...` routes
+- a **private** R2 bucket for private routes
+- a KV-backed manifest plus runtime usage counters
+- an authenticated `/build` webhook
 
-Think of it as: _“StatikAPI + static JSON, with a Worker that rebuilds and manages your R2-backed API.”_
+The current contract is intentionally split:
+
+- **control plane**: Worker endpoints such as `/build` and `/manifest`
+- **data plane**: JSON objects stored in R2
 
 ---
 
 ## 1) Scaffolding with `create-statikapi`
 
-The easiest way to get started is via the dedicated template:
+The easiest way to get started is with the dedicated template:
 
 ```bash
 pnpm dlx create-statikapi my-worker --template cloudflare-adapter
@@ -25,22 +29,26 @@ You’ll be prompted for:
 
 - **Project name**
 - **Package manager**
-- **R2 bucket binding** (e.g. `STATIK_BUCKET`)
-- **R2 bucket_name** (e.g. `my-statikapi-bucket`)
-- **KV binding** (e.g. `STATIK_MANIFEST`)
-- **KV namespace id**
-- **`STATIK_BUILD_TOKEN`** — a long, random secret used to authorize `/build`
-- **`STATIK_SRC`** — the source directory for StatikAPI (defaults to `src-api`)
-- **`STATIK_USE_INDEX_JSON`** — whether to favor `/foo/index.json`-style keys
+- **serving mode**
+  - `worker`
+  - `r2-public`
+- **public R2 bucket binding** and **bucket_name**
+- **private R2 bucket binding** and **bucket_name**
+- **KV binding** and **KV namespace id**
+- **`STATIK_BUILD_TOKEN`**
+- **`STATIK_SRC`**
+- **`STATIK_USE_INDEX_JSON`**
+- **private auth header name/value**
+- **Cloudflare account id** and **API token placeholders**
+- **worker request / R2 Class A / R2 Class B limits**
 
 The template:
 
-- Writes a ready-to-use **`wrangler.toml`** with your bindings and env vars.
-- Keeps everything **JavaScript-only** (no TypeScript / eslint setup).
-- Includes scripts for local dev + build (using `statikapi-cf` + `wrangler`).
-- Uses a **Worker** purely for:
-  - A `/build` endpoint to (re)generate JSON into R2
-  - Optional manifest/debug endpoints to inspect what’s deployed
+- Writes a ready-to-use **`wrangler.toml`** with public/private bucket bindings, KV, and runtime env vars.
+- Writes a **`statikapi.config.js`** with project-level Cloudflare defaults.
+- Writes a **`.dev.vars.example`** file for local secrets and deploy env templates.
+- Keeps everything **JavaScript-only**.
+- Includes scripts for local dev, build, and deploy.
 
 After scaffolding:
 
@@ -54,41 +62,62 @@ pnpm dev       # runs the local Worker dev loop
 
 ---
 
-## 2) What the adapter does
+## 2) Serving modes
+
+### `worker`
+
+- Public routes are emitted under `/public/...`.
+- The Worker serves both public and private routes.
+- Private routes stay at their original route paths and require the configured auth header.
+
+### `r2-public`
+
+- Public routes are still emitted under `/public/...`, but they are expected to be served from the public R2 bucket or its custom domain.
+- Private routes stay on the Worker and keep their original route paths.
+- The Worker does not serve the `/public/...` surface in this mode.
+
+## 3) Route-level Cloudflare config
+
+Route modules can override the project default:
+
+```js
+export const config = {
+  cloudflare: {
+    public: true,
+    webhook: true
+  }
+};
+```
+
+- `public`
+  - `true` writes the route into the public bucket and exposes it from `/public/...`
+  - `false` writes the route into the private bucket and keeps the original route path
+- `webhook`
+  - route-level override for whether `/build` is allowed to rebuild that route
+
+## 4) What the adapter does
 
 At a high level, the Cloudflare adapter Worker:
 
-1. **Writes JSON to R2**  
-   When a build is triggered (locally or via `/build`), StatikAPI generates JSON and the adapter uploads objects into your **R2 bucket**.
+1. **Bundles your route modules into a Worker registry**
+2. **Writes public and private JSON into different R2 buckets**
+3. **Writes a manifest into KV**
+4. **Tracks optional runtime limits in KV**
+5. **Exposes `/build` and `/manifest`**
+6. **Serves private reads, and public reads only in `worker` mode**
 
-2. **Uses KV as a manifest**  
-   The manifest is written by the build step and describes route → object key in R2. You can expose a manifest endpoint from the Worker to inspect which routes exist.
-
-3. **Exposes a `/build` webhook**  
-   When you `POST` to `/build`, the Worker:
-   - Runs a StatikAPI build (via the adapter)
-   - Writes new JSON objects to **R2**
-   - Writes a fresh manifest to **KV**
-
-4. **Leaves reads to R2**  
-   Clients fetch data **directly from R2** (for example via a public or custom R2 domain). The Worker is **not** in the hot path for JSON reads — it is only the control plane.
-
-You get the speed of R2-hosted static JSON, with the convenience of **webhook-triggered updates** and a small Worker for orchestration.
-
----
-
-## 3) Manual wiring (conceptual)
-
-If you want to wire things manually (or understand the template), the pieces are:
-
-### a) R2 + KV bindings
+## 5) Required bindings and env vars
 
 In **`wrangler.toml`**:
 
 ```toml
 [[r2_buckets]]
-binding = "STATIK_BUCKET"
-bucket_name = "my-statikapi-bucket"
+binding = "STATIK_PUBLIC_BUCKET"
+bucket_name = "my-statikapi-public"
+
+[[r2_buckets]]
+binding = "STATIK_PRIVATE_BUCKET"
+bucket_name = "my-statikapi-private"
 
 [[kv_namespaces]]
 binding = "STATIK_MANIFEST"
@@ -106,25 +135,37 @@ Also in `wrangler.toml`:
 STATIK_BUILD_TOKEN = "REPLACE_ME_WITH_LONG_RANDOM_STRING"
 STATIK_SRC = "src-api"
 STATIK_USE_INDEX_JSON = "false"
+STATIK_PUBLIC_BUCKET_BINDING = "STATIK_PUBLIC_BUCKET"
+STATIK_PRIVATE_BUCKET_BINDING = "STATIK_PRIVATE_BUCKET"
+STATIK_PRIVATE_AUTH_HEADER_NAME = "x-statik-private-auth"
+STATIK_PRIVATE_AUTH_HEADER_VALUE = "REPLACE_ME_PRIVATE_AUTH_VALUE"
+STATIK_WORKER_REQUEST_LIMIT = "0"
+STATIK_R2_CLASS_A_LIMIT = "0"
+STATIK_R2_CLASS_B_LIMIT = "0"
 ```
 
-- **`STATIK_BUILD_TOKEN`** — required to hit `/build`.
-- **`STATIK_SRC`** — where your route modules live (same idea as `srcDir`).
-- **`STATIK_USE_INDEX_JSON`** — if `true`, the adapter prefers `index.json` per folder; if `false`, it may write flat file names depending on your setup.
+- `STATIK_BUILD_TOKEN`
+  - required to call `/build`
+- `STATIK_PRIVATE_AUTH_HEADER_NAME` / `STATIK_PRIVATE_AUTH_HEADER_VALUE`
+  - required to read private routes from the Worker
+- `STATIK_WORKER_REQUEST_LIMIT`
+  - hard ceiling for total Worker requests
+- `STATIK_R2_CLASS_A_LIMIT`
+  - hard ceiling for R2 write-class operations performed through the Worker
+- `STATIK_R2_CLASS_B_LIMIT`
+  - hard ceiling for R2 read-class operations performed through the Worker
 
-### c) Worker entry
+## 6) Webhook behavior
 
-The template ships with a Worker entry file that:
+The generated project can disable webhook builds globally in `statikapi.config.js`, and routes can disable them locally.
 
-- Parses incoming requests.
-- Routes `/build` requests to the adapter’s build logic.
-- Optionally exposes the manifest (for example via `/manifest`) using the KV contents.
+- If webhook is disabled globally:
+  - `POST /build` is rejected
+- If webhook is enabled globally but disabled for a route:
+  - full webhook builds skip that route
+  - targeted webhook rebuilds for that route are rejected
 
-You normally don’t need to touch this unless you want custom logic (e.g., auth, logging, or extra debug endpoints).
-
----
-
-## 4) Deploying and using custom domains
+## 7) Deploying and using custom domains
 
 ### a) Deploy the Worker
 
@@ -147,7 +188,7 @@ as long as your `wrangler.toml` and entrypoint match the template.
 
 > **Important:** Deploying the Worker **updates the code and config**, but it does **not** automatically regenerate JSON in R2. You still need to trigger a build (see [Using the build webhook](#5-using-the-build-webhook)).
 
-### b) Attach a custom domain to the Worker (control plane)
+### b) Attach a custom domain to the Worker
 
 In the Cloudflare Dashboard:
 
@@ -167,25 +208,29 @@ https://api.example.com/build
 https://api.example.com/manifest   (if you expose one)
 ```
 
-### c) Public domain for R2 (data plane)
+### c) Public domain for the public bucket
 
 For clients to fetch JSON **directly from R2**:
 
 1. In R2, either:
-   - Make your bucket public, or
-   - Add a **Custom Domain**.
+   - expose the public bucket directly, or
+   - add a **Custom Domain**.
 2. Example URLs:
 
    ```text
-   https://my-statikapi-bucket.r2.cloudflarestorage.com/users/1/index.json
+   https://my-statikapi-public.r2.cloudflarestorage.com/public/users/1/index.json
    # or a custom domain mapping:
-   https://cdn.example.com/users/1/index.json
+   https://cdn.example.com/public/users/1/index.json
    ```
 
-In most setups:
+In `r2-public` mode:
 
-- **R2 + custom domain** = where clients read JSON from.
-- **Worker + route** = where builds and manifest/debug live.
+- public clients read from the public bucket or its custom domain
+- private clients still read through the Worker
+
+In `worker` mode:
+
+- the Worker stays in the request path for both public and private routes
 
 ### d) CORS for browser clients
 
@@ -198,7 +243,7 @@ This keeps your API consumable from your frontend while avoiding wide-open `*` C
 
 ---
 
-## 5) Using the build webhook
+## 8) Using the build webhook
 
 The Worker exposes a **`POST /build`** endpoint.
 
@@ -226,18 +271,20 @@ curl -X POST "https://api.example.com/build?route=/users/1" \
 
 The adapter will:
 
-- Rebuild only that route.
-- Update the corresponding entries in R2 + KV.
+- Rebuild only that route if webhook is enabled for it.
+- Update the corresponding entry in R2 + KV.
 
 > The exact `route` value should match the normalized URL path you serve (e.g. `/users/1`, `/docs/a/b`, etc.).
 
-### c) HTTP clients and webhooks
+## 9) API token guidance
 
-Any HTTP client can call this endpoint:
+If you use a Cloudflare API token for deploy automation, keep it least-privilege. The generated scaffolding expects at least:
 
-- Your own backend
-- A headless CMS webhook
-- CRON job / scheduled Worker
+- Workers Scripts: Edit
+- R2 Storage: Edit
+- Workers KV Storage: Edit
+
+Store account-scoped deploy variables outside the committed source tree. The scaffold writes placeholders into `.dev.vars.example` so contributors can copy them locally without checking secrets into Git.
 - CI/CD pipelines
 
 Just remember to:

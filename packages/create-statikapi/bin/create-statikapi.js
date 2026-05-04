@@ -10,6 +10,18 @@ const DEFAULT_TEMPLATE = 'basic';
 const DEFAULT_PM = 'pnpm';
 const DEFAULT_SRC = 'src-api';
 const DEFAULT_OUT = 'api-out';
+const DEFAULT_CF_SERVING_MODE = 'worker';
+const DEFAULT_CF_PUBLIC_BUCKET_BINDING = 'STATIK_PUBLIC_BUCKET';
+const DEFAULT_CF_PUBLIC_BUCKET_NAME = 'REPLACE_ME_PUBLIC_BUCKET';
+const DEFAULT_CF_PRIVATE_BUCKET_BINDING = 'STATIK_PRIVATE_BUCKET';
+const DEFAULT_CF_PRIVATE_BUCKET_NAME = 'REPLACE_ME_PRIVATE_BUCKET';
+const DEFAULT_CF_KV_BINDING = 'STATIK_MANIFEST';
+const DEFAULT_CF_KV_ID = 'REPLACE_ME_KV_NAMESPACE_ID';
+const DEFAULT_CF_BUILD_TOKEN = 'REPLACE_ME_STATIK_BUILD_TOKEN';
+const DEFAULT_CF_ACCOUNT_ID = 'REPLACE_ME_CLOUDFLARE_ACCOUNT_ID';
+const DEFAULT_CF_API_TOKEN = 'REPLACE_ME_CLOUDFLARE_API_TOKEN';
+const DEFAULT_CF_PRIVATE_AUTH_HEADER_NAME = 'x-statik-private-auth';
+const DEFAULT_CF_PRIVATE_AUTH_HEADER_VALUE = 'REPLACE_ME_PRIVATE_AUTH_VALUE';
 
 // deploy targets (for non-cloudflare templates)
 const DEPLOY_TARGETS = [
@@ -46,13 +58,24 @@ async function main(argv) {
   let deploy = normalizeDeployArg(args.deploy);
 
   // Cloudflare adapter specific config (with placeholder defaults)
-  let r2Binding = 'STATIK_BUCKET';
-  let r2BucketName = 'REPLACE_ME_BUCKET';
-  let kvBinding = 'STATIK_MANIFEST';
-  let kvId = 'REPLACE_ME_KV_NAMESPACE_ID';
-  let buildToken = 'REPLACE_ME_STATIK_BUILD_TOKEN';
+  let servingMode = DEFAULT_CF_SERVING_MODE;
+  let publicBucketBinding = DEFAULT_CF_PUBLIC_BUCKET_BINDING;
+  let publicBucketName = DEFAULT_CF_PUBLIC_BUCKET_NAME;
+  let privateBucketBinding = DEFAULT_CF_PRIVATE_BUCKET_BINDING;
+  let privateBucketName = DEFAULT_CF_PRIVATE_BUCKET_NAME;
+  let kvBinding = DEFAULT_CF_KV_BINDING;
+  let kvId = DEFAULT_CF_KV_ID;
+  let buildToken = DEFAULT_CF_BUILD_TOKEN;
   let statikSrcVar = ''; // defaults to srcDir later
   let statikUseIndexJson = 'false'; // default false as requested
+  let cloudflareAccountId = DEFAULT_CF_ACCOUNT_ID;
+  let cloudflareApiToken = DEFAULT_CF_API_TOKEN;
+  let privateAuthHeaderName = DEFAULT_CF_PRIVATE_AUTH_HEADER_NAME;
+  let privateAuthHeaderValue = DEFAULT_CF_PRIVATE_AUTH_HEADER_VALUE;
+  let webhookEnabled = true;
+  let workerRequestLimit = '0';
+  let classALimit = '0';
+  let classBLimit = '0';
 
   if (interactive) {
     const { default: prompts } = await import('prompts');
@@ -142,20 +165,51 @@ async function main(argv) {
         {
           type: (prev, values) => {
             const tmpl = TEMPLATES.has(template) ? template : values.template;
-            return tmpl === 'cloudflare-adapter' ? 'text' : null;
+            return tmpl === 'cloudflare-adapter' ? 'select' : null;
           },
-          name: 'r2Binding',
-          message: 'R2 bucket binding name ([[r2_buckets]].binding)',
-          initial: r2Binding,
+          name: 'servingMode',
+          message: 'Cloudflare serving mode',
+          choices: [
+            { title: 'Worker-served (public + private through the Worker)', value: 'worker' },
+            { title: 'R2-public (public from R2, private through the Worker)', value: 'r2-public' },
+          ],
+          initial: 0,
         },
         {
           type: (prev, values) => {
             const tmpl = TEMPLATES.has(template) ? template : values.template;
             return tmpl === 'cloudflare-adapter' ? 'text' : null;
           },
-          name: 'r2BucketName',
-          message: 'R2 bucket_name',
-          initial: r2BucketName,
+          name: 'publicBucketBinding',
+          message: 'Public R2 bucket binding name ([[r2_buckets]].binding)',
+          initial: publicBucketBinding,
+        },
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'text' : null;
+          },
+          name: 'publicBucketName',
+          message: 'Public R2 bucket_name',
+          initial: publicBucketName,
+        },
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'text' : null;
+          },
+          name: 'privateBucketBinding',
+          message: 'Private R2 bucket binding name ([[r2_buckets]].binding)',
+          initial: privateBucketBinding,
+        },
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'text' : null;
+          },
+          name: 'privateBucketName',
+          message: 'Private R2 bucket_name',
+          initial: privateBucketName,
         },
         {
           type: (prev, values) => {
@@ -189,6 +243,24 @@ async function main(argv) {
             const tmpl = TEMPLATES.has(template) ? template : values.template;
             return tmpl === 'cloudflare-adapter' ? 'text' : null;
           },
+          name: 'cloudflareAccountId',
+          message: 'CLOUDFLARE_ACCOUNT_ID (for deploy instructions)',
+          initial: cloudflareAccountId,
+        },
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'text' : null;
+          },
+          name: 'cloudflareApiToken',
+          message: 'CLOUDFLARE_API_TOKEN (template only; use least-privilege token)',
+          initial: cloudflareApiToken,
+        },
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'text' : null;
+          },
           name: 'statikSrc',
           message: 'STATIK_SRC (source dir for worker; usually matches srcDir)',
           initial: (answers) => answers.srcDir || srcDir || DEFAULT_SRC,
@@ -203,6 +275,62 @@ async function main(argv) {
           active: 'true',
           inactive: 'false',
           initial: 0, // default false
+        },
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'text' : null;
+          },
+          name: 'privateAuthHeaderName',
+          message: 'STATIK_PRIVATE_AUTH_HEADER_NAME',
+          initial: privateAuthHeaderName,
+        },
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'text' : null;
+          },
+          name: 'privateAuthHeaderValue',
+          message: 'STATIK_PRIVATE_AUTH_HEADER_VALUE',
+          initial: privateAuthHeaderValue,
+        },
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'toggle' : null;
+          },
+          name: 'webhookEnabled',
+          message: 'Enable build webhook globally?',
+          active: 'true',
+          inactive: 'false',
+          initial: 1,
+        },
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'text' : null;
+          },
+          name: 'workerRequestLimit',
+          message: 'STATIK_WORKER_REQUEST_LIMIT (0 disables limit)',
+          initial: workerRequestLimit,
+        },
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'text' : null;
+          },
+          name: 'classALimit',
+          message: 'STATIK_R2_CLASS_A_LIMIT (0 disables limit)',
+          initial: classALimit,
+        },
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'text' : null;
+          },
+          name: 'classBLimit',
+          message: 'STATIK_R2_CLASS_B_LIMIT (0 disables limit)',
+          initial: classBLimit,
         },
 
         {
@@ -250,21 +378,32 @@ async function main(argv) {
     // language: if cloudflare-adapter, force JS
     language = template === 'cloudflare-adapter' ? 'js' : answers.language || language || 'js';
 
-    srcDir = answers.srcDir || DEFAULT_SRC;
+    srcDir = template === 'cloudflare-adapter' ? srcDir || DEFAULT_SRC : answers.srcDir || DEFAULT_SRC;
     outDir = template === 'cloudflare-adapter' ? DEFAULT_OUT : answers.outDir || DEFAULT_OUT;
-    wantGitignore = !!answers.gitignore;
+    wantGitignore = template === 'cloudflare-adapter' ? wantGitignore : !!answers.gitignore;
 
     if (template === 'cloudflare-adapter') {
-      r2Binding = answers.r2Binding || r2Binding;
-      r2BucketName = answers.r2BucketName || r2BucketName;
+      servingMode = answers.servingMode || servingMode;
+      publicBucketBinding = answers.publicBucketBinding || publicBucketBinding;
+      publicBucketName = answers.publicBucketName || publicBucketName;
+      privateBucketBinding = answers.privateBucketBinding || privateBucketBinding;
+      privateBucketName = answers.privateBucketName || privateBucketName;
       kvBinding = answers.kvBinding || kvBinding;
       kvId = answers.kvId || kvId;
       buildToken = answers.buildToken || buildToken;
+      cloudflareAccountId = answers.cloudflareAccountId || cloudflareAccountId;
+      cloudflareApiToken = answers.cloudflareApiToken || cloudflareApiToken;
       statikSrcVar = answers.statikSrc || srcDir || DEFAULT_SRC;
       statikUseIndexJson =
         typeof answers.statikUseIndexJson === 'string'
           ? answers.statikUseIndexJson
           : String(answers.statikUseIndexJson ?? false);
+      privateAuthHeaderName = answers.privateAuthHeaderName || privateAuthHeaderName;
+      privateAuthHeaderValue = answers.privateAuthHeaderValue || privateAuthHeaderValue;
+      webhookEnabled = Boolean(answers.webhookEnabled ?? true);
+      workerRequestLimit = answers.workerRequestLimit || workerRequestLimit;
+      classALimit = answers.classALimit || classALimit;
+      classBLimit = answers.classBLimit || classBLimit;
       deploy = []; // never used for this template
     } else {
       deploy = deploy.length ? deploy : answers.deploy || [];
@@ -323,13 +462,31 @@ async function main(argv) {
   if (template === 'cloudflare-adapter') {
     await patchCloudflareWrangler(dest, {
       srcDir,
-      r2Binding,
-      r2BucketName,
+      publicBucketBinding,
+      publicBucketName,
+      privateBucketBinding,
+      privateBucketName,
       kvBinding,
       kvId,
       buildToken,
       statikSrc: statikSrcVar || srcDir || DEFAULT_SRC,
       statikUseIndexJson,
+      privateAuthHeaderName,
+      privateAuthHeaderValue,
+      workerRequestLimit,
+      classALimit,
+      classBLimit,
+    });
+    await writeCloudflareProjectConfig(dest, {
+      servingMode,
+      webhookEnabled,
+    });
+    await writeCloudflareEnvTemplate(dest, {
+      cloudflareAccountId,
+      cloudflareApiToken,
+      buildToken,
+      privateAuthHeaderName,
+      privateAuthHeaderValue,
     });
   }
 
@@ -348,8 +505,11 @@ async function main(argv) {
   console.log(`- .gitignore: ${wantGitignore ? 'yes' : 'no'}`);
 
   if (template === 'cloudflare-adapter') {
-    console.log(`- Cloudflare R2 binding: ${r2Binding}`);
-    console.log(`- R2 bucket_name: ${r2BucketName}`);
+    console.log(`- Cloudflare serving mode: ${servingMode}`);
+    console.log(`- Public R2 binding: ${publicBucketBinding}`);
+    console.log(`- Public R2 bucket_name: ${publicBucketName}`);
+    console.log(`- Private R2 binding: ${privateBucketBinding}`);
+    console.log(`- Private R2 bucket_name: ${privateBucketName}`);
     console.log(`- KV binding: ${kvBinding}`);
     console.log(`- KV id: ${kvId}`);
     console.log(`- STATIK_SRC: ${statikSrcVar || srcDir}`);
@@ -377,10 +537,13 @@ async function main(argv) {
     console.log(
       '  ' + scriptHint(pkgMgr, 'dev') + '     # start Cloudflare dev (statikapi-cf + wrangler)'
     );
-    console.log('  ' + scriptHint(pkgMgr, 'build') + '   # bundle worker to dist/worker.mjs\n');
+    console.log('  ' + scriptHint(pkgMgr, 'build') + '   # bundle worker to dist/worker.mjs');
+    console.log('  ' + scriptHint(pkgMgr, 'deploy') + '  # deploy the Worker with wrangler\n');
     console.log('Then:');
-    console.log('  - Inspect wrangler.toml (bindings, bucket, KV, STATIK_*)');
-    console.log('  - Configure R2 bucket & KV namespace in Cloudflare dashboard\n');
+    console.log('  - Inspect wrangler.toml and statikapi.config.js');
+    console.log('  - Copy .dev.vars.example to .dev.vars for local secrets if needed');
+    console.log('  - Create two R2 buckets (public + private) and one KV namespace');
+    console.log('  - Use a Cloudflare API token with Workers Scripts:Edit, R2:Edit, and KV:Edit\n');
   } else {
     console.log('  ' + scriptHint(pkgMgr, 'dev') + '     # run dev server with UI');
     console.log(
@@ -506,6 +669,7 @@ async function patchPkgJson(dest, appName, { pkgMgr, template, srcDir }) {
   if (template === 'cloudflare-adapter') {
     const scripts = json.scripts || {};
     const buildScript = scripts.build || '';
+    const watchScript = scripts.watch || '';
 
     if (buildScript.includes('statikapi-cf')) {
       if (/--src\s+\S+/.test(buildScript)) {
@@ -514,6 +678,10 @@ async function patchPkgJson(dest, appName, { pkgMgr, template, srcDir }) {
         scripts.build = `${buildScript} --src ${srcDir}`;
       }
     }
+    if (watchScript.includes('src-api')) {
+      scripts.watch = watchScript.replace(/src-api/g, srcDir);
+    }
+    scripts.deploy = scripts.deploy || 'wrangler deploy';
 
     json.scripts = scripts;
     await fs.writeFile(p, JSON.stringify(json, null, 2) + '\n', 'utf8');
@@ -734,6 +902,40 @@ async function writeStatikConfig(dest, { srcDir, outDir }) {
   await fs.writeFile(cfgPath, body, 'utf8');
 }
 
+async function writeCloudflareProjectConfig(dest, { servingMode, webhookEnabled }) {
+  const cfgPath = path.join(dest, 'statikapi.config.js');
+  const body = `export default {
+  cloudflare: {
+    servingMode: ${JSON.stringify(servingMode)},
+    webhook: ${webhookEnabled ? 'true' : 'false'},
+    publicByDefault: false,
+  },
+};\n`;
+  await fs.writeFile(cfgPath, body, 'utf8');
+}
+
+async function writeCloudflareEnvTemplate(
+  dest,
+  {
+    cloudflareAccountId,
+    cloudflareApiToken,
+    buildToken,
+    privateAuthHeaderName,
+    privateAuthHeaderValue,
+  }
+) {
+  const body = `# Cloudflare account-scoped deploy variables
+CLOUDFLARE_ACCOUNT_ID=${cloudflareAccountId}
+CLOUDFLARE_API_TOKEN=${cloudflareApiToken}
+
+# Worker runtime secrets
+STATIK_BUILD_TOKEN=${buildToken}
+STATIK_PRIVATE_AUTH_HEADER_NAME=${privateAuthHeaderName}
+STATIK_PRIVATE_AUTH_HEADER_VALUE=${privateAuthHeaderValue}
+`;
+  await fs.writeFile(path.join(dest, '.dev.vars.example'), body, 'utf8');
+}
+
 async function writeGitignore(dest, { outDir, template }) {
   const p = path.join(dest, '.gitignore');
   if (fss.existsSync(p)) return;
@@ -902,7 +1104,23 @@ ${pmSetup.replace(/^/gm, '      ')}
 // Cloudflare-adapter: patch wrangler.toml (template ships as wrangler.toml now)
 async function patchCloudflareWrangler(
   dest,
-  { srcDir, r2Binding, r2BucketName, kvBinding, kvId, buildToken, statikSrc, statikUseIndexJson }
+  {
+    srcDir,
+    publicBucketBinding,
+    publicBucketName,
+    privateBucketBinding,
+    privateBucketName,
+    kvBinding,
+    kvId,
+    buildToken,
+    statikSrc,
+    statikUseIndexJson,
+    privateAuthHeaderName,
+    privateAuthHeaderValue,
+    workerRequestLimit,
+    classALimit,
+    classBLimit,
+  }
 ) {
   const finalPath = path.join(dest, 'wrangler.toml');
 
@@ -914,9 +1132,11 @@ async function patchCloudflareWrangler(
   let body = await fs.readFile(finalPath, 'utf8');
 
   body = body
-    // R2 bucket
-    .replace(/binding\s*=\s*"STATIK_BUCKET"/, `binding = "${r2Binding}"`)
-    .replace(/bucket_name\s*=\s*"REPLACE_ME_BUCKET"/, `bucket_name = "${r2BucketName}"`)
+    // R2 buckets
+    .replace(/binding\s*=\s*"STATIK_PUBLIC_BUCKET"/, `binding = "${publicBucketBinding}"`)
+    .replace(/bucket_name\s*=\s*"REPLACE_ME_PUBLIC_BUCKET"/, `bucket_name = "${publicBucketName}"`)
+    .replace(/binding\s*=\s*"STATIK_PRIVATE_BUCKET"/, `binding = "${privateBucketBinding}"`)
+    .replace(/bucket_name\s*=\s*"REPLACE_ME_PRIVATE_BUCKET"/, `bucket_name = "${privateBucketName}"`)
 
     // KV namespace
     .replace(/binding\s*=\s*"STATIK_MANIFEST"/, `binding = "${kvBinding}"`)
@@ -926,6 +1146,28 @@ async function patchCloudflareWrangler(
     .replace(/STATIK_BUILD_TOKEN\s*=\s*".*"/, `STATIK_BUILD_TOKEN = "${buildToken}"`)
     .replace(/STATIK_SRC\s*=\s*".*"/, `STATIK_SRC = "${statikSrc}"`)
     .replace(/STATIK_USE_INDEX_JSON\s*=\s*".*"/, `STATIK_USE_INDEX_JSON = "${statikUseIndexJson}"`)
+    .replace(
+      /STATIK_PUBLIC_BUCKET_BINDING\s*=\s*".*"/,
+      `STATIK_PUBLIC_BUCKET_BINDING = "${publicBucketBinding}"`
+    )
+    .replace(
+      /STATIK_PRIVATE_BUCKET_BINDING\s*=\s*".*"/,
+      `STATIK_PRIVATE_BUCKET_BINDING = "${privateBucketBinding}"`
+    )
+    .replace(
+      /STATIK_PRIVATE_AUTH_HEADER_NAME\s*=\s*".*"/,
+      `STATIK_PRIVATE_AUTH_HEADER_NAME = "${privateAuthHeaderName}"`
+    )
+    .replace(
+      /STATIK_PRIVATE_AUTH_HEADER_VALUE\s*=\s*".*"/,
+      `STATIK_PRIVATE_AUTH_HEADER_VALUE = "${privateAuthHeaderValue}"`
+    )
+    .replace(
+      /STATIK_WORKER_REQUEST_LIMIT\s*=\s*".*"/,
+      `STATIK_WORKER_REQUEST_LIMIT = "${workerRequestLimit}"`
+    )
+    .replace(/STATIK_R2_CLASS_A_LIMIT\s*=\s*".*"/, `STATIK_R2_CLASS_A_LIMIT = "${classALimit}"`)
+    .replace(/STATIK_R2_CLASS_B_LIMIT\s*=\s*".*"/, `STATIK_R2_CLASS_B_LIMIT = "${classBLimit}"`)
 
     // NEW: make STATIK_MANIFEST_BINDING follow whatever kvBinding the user chose
     .replace(/STATIK_MANIFEST_BINDING\s*=\s*".*"/, `STATIK_MANIFEST_BINDING = "${kvBinding}"`);

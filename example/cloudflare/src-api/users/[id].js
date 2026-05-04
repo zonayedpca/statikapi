@@ -1,3 +1,9 @@
+export const config = {
+  cloudflare: {
+    webhook: false,
+  },
+};
+
 export async function paths() {
   return ['1', '2', '3', '4', '5', '6'];
 }

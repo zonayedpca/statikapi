@@ -32,14 +32,14 @@ You will be prompted for:
   - `basic` — single endpoint starter
   - `dynamic` — dynamic + catch-all routes examples
   - `remote-data` — build-time fetch examples
-  - `cloudflare-adapter` — Cloudflare Worker + public/private R2 + KV with build webhook
+  - `cloudflare-adapter` — Cloudflare Worker + Static Assets for public routes + private R2 + KV with build webhook
 - **Package manager** and whether to install now
 - Optional ESLint, TS, directories, and deploy presets  
   _(For the Cloudflare adapter template, ESLint/TS are effectively skipped; you get a JS Worker-focused boilerplate.)_
 
 > **Note:** The **source** (`src-api/`) and **output** (`api-out/`) directories are defaults for the core templates.  
 > You can **customize** these during scaffolding or later in your [Configuration](../config).  
-> For the Cloudflare adapter template, `src-api/` is still the default, but the JSON is pushed to **R2** instead of a local `api-out/` for hosting.
+> For the Cloudflare adapter template, `src-api/` is still the default. Public JSON is generated into the Worker's `public/` static-assets directory, while private JSON stays behind the Worker.
 
 ---
 
@@ -77,13 +77,9 @@ create-statikapi my-worker --template cloudflare-adapter
 
 When you choose `cloudflare-adapter`, the scaffolder:
 
-- Copies a **Worker + dual R2 bucket + KV** boilerplate
+- Copies a **Worker + Static Assets + private R2 + KV** boilerplate
 - Writes a `statikapi.config.js` with the project-level Cloudflare defaults
 - Prompts you for:
-  - **serving mode**:
-    - `worker` — the Worker serves both `/public/...` and private routes
-    - `r2-public` — public routes are expected to be served from the public R2 bucket or its custom domain, while private routes stay behind the Worker
-  - **public R2 bucket binding** and **bucket_name**
   - **private R2 bucket binding** and **bucket_name**
   - **KV namespace binding** and **id**
   - **`STATIK_BUILD_TOKEN`** (used to authorize `/build`)
@@ -111,8 +107,9 @@ export const config = {
 
 Current Cloudflare conventions:
 
-- public routes are emitted under `/public/...`
+- public routes are emitted under `/public/...` and served through Cloudflare Static Assets
 - private routes keep their original route paths
+- public is the default; mark a route private with `config.cloudflare.public = false`
 - route-level Cloudflare config overrides the project-level default
 - the generated project assumes a least-privilege Cloudflare API token with Workers Scripts: Edit, R2 Storage: Edit, and Workers KV Storage: Edit
 
@@ -121,7 +118,7 @@ From there you can:
 - Run the dev scripts (based on `wrangler dev` + bundling)
 - Deploy the Worker to Cloudflare
 - Trigger builds via the `/build` webhook documented in  
-  [Serverless Adapters → Cloudflare Worker + R2](../serverless/cloudflare-adapter)
+  [Serverless Adapters → Cloudflare Worker + Static Assets](../serverless/cloudflare-adapter)
 
 ---
 

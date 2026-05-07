@@ -1,9 +1,9 @@
-# Cloudflare Worker + R2 Adapter
+# Cloudflare Worker + Static Assets Adapter
 
 The **Cloudflare Worker adapter** turns a StatikAPI project into a Cloudflare-oriented deployment with:
 
 - a Worker control plane
-- a **public** R2 bucket for `/public/...` routes
+- Cloudflare **Static Assets** for `/public/...` routes
 - a **private** R2 bucket for private routes
 - a KV-backed manifest plus runtime usage counters
 - an authenticated `/build` webhook
@@ -11,7 +11,7 @@ The **Cloudflare Worker adapter** turns a StatikAPI project into a Cloudflare-or
 The current contract is intentionally split:
 
 - **control plane**: Worker endpoints such as `/build` and `/manifest`
-- **data plane**: JSON objects stored in R2
+- **data plane**: public JSON in Static Assets, private JSON in R2
 
 ---
 
@@ -29,10 +29,6 @@ You’ll be prompted for:
 
 - **Project name**
 - **Package manager**
-- **serving mode**
-  - `worker`
-  - `r2-public`
-- **public R2 bucket binding** and **bucket_name**
 - **private R2 bucket binding** and **bucket_name**
 - **KV binding** and **KV namespace id**
 - **`STATIK_BUILD_TOKEN`**
@@ -44,7 +40,7 @@ You’ll be prompted for:
 
 The template:
 
-- Writes a ready-to-use **`wrangler.toml`** with public/private bucket bindings, KV, and runtime env vars.
+- Writes a ready-to-use **`wrangler.toml`** with Static Assets, private bucket, KV, and runtime env vars.
 - Writes a **`statikapi.config.js`** with project-level Cloudflare defaults.
 - Writes a **`.dev.vars.example`** file for local secrets and deploy env templates.
 - Keeps everything **JavaScript-only**.
@@ -61,20 +57,12 @@ pnpm dev       # runs the local Worker dev loop
 > Exact script names may vary slightly, but the template wires dev/build scripts for you.
 
 ---
-
-## 2) Serving modes
-
-### `worker`
+## 2) Serving model
 
 - Public routes are emitted under `/public/...`.
-- The Worker serves both public and private routes.
+- Public routes are generated into the project `public/` assets directory during `statikapi-cf build`.
+- The Worker serves public requests through its `ASSETS` binding and serves private requests from private storage.
 - Private routes stay at their original route paths and require the configured auth header.
-
-### `r2-public`
-
-- Public routes are still emitted under `/public/...`, but they are expected to be served from the public R2 bucket or its custom domain.
-- Private routes stay on the Worker and keep their original route paths.
-- The Worker does not serve the `/public/...` surface in this mode.
 
 ## 3) Route-level Cloudflare config
 
@@ -90,7 +78,7 @@ export const config = {
 ```
 
 - `public`
-  - `true` writes the route into the public bucket and exposes it from `/public/...`
+  - `true` or omitted emits the route as a public Static Asset under `/public/...`
   - `false` writes the route into the private bucket and keeps the original route path
 - `webhook`
   - route-level override for whether `/build` is allowed to rebuild that route
@@ -100,20 +88,21 @@ export const config = {
 At a high level, the Cloudflare adapter Worker:
 
 1. **Bundles your route modules into a Worker registry**
-2. **Writes public and private JSON into different R2 buckets**
-3. **Writes a manifest into KV**
+2. **Writes public JSON into Static Assets and private JSON into the private bucket**
+3. **Writes the private manifest into KV and merges public routes from the embedded build manifest**
 4. **Tracks optional runtime limits in KV**
 5. **Exposes `/build` and `/manifest`**
-6. **Serves private reads, and public reads only in `worker` mode**
+6. **Serves private reads from R2 and public reads from `env.ASSETS`**
 
 ## 5) Required bindings and env vars
 
 In **`wrangler.toml`**:
 
 ```toml
-[[r2_buckets]]
-binding = "STATIK_PUBLIC_BUCKET"
-bucket_name = "my-statikapi-public"
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
 
 [[r2_buckets]]
 binding = "STATIK_PRIVATE_BUCKET"
@@ -135,7 +124,6 @@ Also in `wrangler.toml`:
 STATIK_BUILD_TOKEN = "REPLACE_ME_WITH_LONG_RANDOM_STRING"
 STATIK_SRC = "src-api"
 STATIK_USE_INDEX_JSON = "false"
-STATIK_PUBLIC_BUCKET_BINDING = "STATIK_PUBLIC_BUCKET"
 STATIK_PRIVATE_BUCKET_BINDING = "STATIK_PRIVATE_BUCKET"
 STATIK_PRIVATE_AUTH_HEADER_NAME = "x-statik-private-auth"
 STATIK_PRIVATE_AUTH_HEADER_VALUE = "REPLACE_ME_PRIVATE_AUTH_VALUE"
@@ -208,29 +196,16 @@ https://api.example.com/build
 https://api.example.com/manifest   (if you expose one)
 ```
 
-### c) Public domain for the public bucket
+### c) Public routes
 
-For clients to fetch JSON **directly from R2**:
+Public routes are served from the same Worker deployment through Cloudflare Static Assets.
 
-1. In R2, either:
-   - expose the public bucket directly, or
-   - add a **Custom Domain**.
-2. Example URLs:
+Example URLs:
 
-   ```text
-   https://my-statikapi-public.r2.cloudflarestorage.com/public/users/1/index.json
-   # or a custom domain mapping:
-   https://cdn.example.com/public/users/1/index.json
-   ```
-
-In `r2-public` mode:
-
-- public clients read from the public bucket or its custom domain
-- private clients still read through the Worker
-
-In `worker` mode:
-
-- the Worker stays in the request path for both public and private routes
+```text
+https://api.example.com/public/users/1
+https://api.example.com/public/docs/getting-started
+```
 
 ### d) CORS for browser clients
 
@@ -256,9 +231,9 @@ curl -X POST "https://api.example.com/build" \
 
 Behavior:
 
-- Runs a **full StatikAPI build** using `STATIK_SRC`.
-- Writes all JSON objects to **R2**.
-- Updates the manifest in **KV**.
+- Rebuilds the private side of the Worker-managed data plane using `STATIK_SRC`.
+- Updates the private manifest in **KV**.
+- Public Static Assets are generated by `statikapi-cf build` and require a fresh deploy to change.
 
 ### b) Rebuild a single route
 
@@ -271,8 +246,10 @@ curl -X POST "https://api.example.com/build?route=/users/1" \
 
 The adapter will:
 
-- Rebuild only that route if webhook is enabled for it.
-- Update the corresponding entry in R2 + KV.
+- Rebuild only that private route if webhook is enabled for it.
+- Update the corresponding entry in the private bucket + KV.
+
+> Targeted rebuilds for public routes are rejected, because public routes are emitted as Static Assets during the local build step.
 
 > The exact `route` value should match the normalized URL path you serve (e.g. `/users/1`, `/docs/a/b`, etc.).
 

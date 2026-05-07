@@ -1,9 +1,3 @@
-export const config = {
-  cloudflare: {
-    public: true,
-  },
-};
-
 export async function paths() {
   return [['a', 'b'], ['guide']];
 }

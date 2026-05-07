@@ -4,11 +4,11 @@ This file is the release QA board for StatikAPI.
 
 Use these statuses:
 
-- `QA Ready`: the task is defined and can be tested now
-- `QA In Progress`: someone is actively testing it
-- `Done`: the task has been tested and passed
+- `🟦 QA Ready`: the task is defined and can be tested now
+- `🟨 QA In Progress`: someone is actively testing it
+- `✅ Done`: the task has been tested and passed
 
-Do not publish until every required task in this file is `Done`.
+Do not publish until every required task in this file is `✅ Done`.
 
 ## Release Gate
 
@@ -26,31 +26,31 @@ Required before publish:
 
 | ID      | Area       | Task                                                                                                                  | Status   | Verification                                                                                 |
 | ------- | ---------- | --------------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------- |
-| QA-0001 | Repo       | Install dependencies in a clean working tree with `pnpm install`                                                      | Done     | `pnpm install` passed locally                                                                |
-| QA-0002 | Repo       | Run lint with `pnpm -w lint`                                                                                          | Done     | `pnpm -w lint` passed locally                                                                |
-| QA-0003 | Repo       | Run format check with `pnpm -w format`                                                                                | Done     | `pnpm -w format` passed locally                                                              |
-| QA-0004 | Repo       | Run automated tests with `pnpm -w test`                                                                               | QA Ready | Command exits `0`                                                                            |
-| QA-0005 | UI         | Build embedded UI with `pnpm ui:build`                                                                                | QA Ready | `packages/cli/ui/index.html` exists and assets are present                                   |
-| QA-0006 | CLI        | Verify `statikapi --help` and `statikapi --version` work                                                              | QA Ready | Commands print expected output and exit `0`                                                  |
-| QA-0007 | CLI        | Verify local build flow in `example/basic`                                                                            | QA Ready | `pnpm -C example/basic build` writes `api-out/index.json`                                    |
-| QA-0008 | CLI        | Verify local dev preview in `example/basic`                                                                           | QA Ready | `pnpm -C example/basic dev` serves `http://127.0.0.1:8788/_ui/`                              |
-| QA-0009 | CLI        | Verify dynamic and catch-all routes in `example/dynamic`                                                              | QA Ready | `pnpm -C example/dynamic build` writes expected dynamic outputs                              |
-| QA-0010 | CLI        | Verify collection index output in local CLI path                                                                      | QA Ready | dynamic/catch-all routes with `config.listIndex` emit parent `index.json`                    |
-| QA-0011 | CLI        | Verify preview UI route browsing and JSON rendering                                                                   | QA Ready | UI shows manifest routes and loads JSON successfully                                         |
-| QA-0012 | Scaffolder | Scaffold a normal app with `node packages/create-statikapi/bin/create-statikapi.js ... --template basic --no-install` | QA Ready | expected files are created                                                                   |
-| QA-0013 | Scaffolder | Scaffold a dynamic app with `--template dynamic --no-install`                                                         | QA Ready | `users/[id]` and `docs/[...slug]` examples are created                                       |
-| QA-0014 | Scaffolder | Scaffold a Cloudflare app with `--template cloudflare-adapter --no-install`                                           | QA Ready | `wrangler.toml`, `.dev.vars.example`, `statikapi.config.js`, preview script exist            |
-| QA-0015 | Cloudflare | Verify Worker bundle build with `pnpm -C example/cloudflare build`                                                    | QA Ready | `example/cloudflare/dist/worker.mjs` exists                                                  |
-| QA-0016 | Cloudflare | Verify local Worker runtime with `pnpm -C example/cloudflare wrangler:dev -- --port 8787`                             | QA Ready | local Worker serves manifest and routes                                                      |
-| QA-0017 | Cloudflare | Verify local preview proxy with `statikapi-cf preview --worker http://127.0.0.1:8787 --port 8788`                     | QA Ready | `http://127.0.0.1:8788/_ui/` loads                                                           |
-| QA-0018 | Cloudflare | Verify public routes in preview                                                                                       | QA Ready | public routes load through preview UI and direct local Worker                                |
-| QA-0019 | Cloudflare | Verify private routes in preview using `.dev.vars` auth injection                                                     | QA Ready | private routes load in preview without manual browser headers                                |
-| QA-0020 | Cloudflare | Verify Cloudflare `listIndex` outputs                                                                                 | QA Ready | collection/index routes appear in manifest and load correctly                                |
-| QA-0021 | Cloudflare | Verify targeted rebuilds keep collection indexes in sync                                                              | QA Ready | `/build?route=...` updates both item and derived collection route                            |
-| QA-0022 | Cloudflare | Verify `worker` serving mode locally                                                                                  | QA Ready | `/public/...` and private routes behave as documented                                        |
-| QA-0023 | Cloudflare | Verify `r2-public` serving mode locally                                                                               | QA Ready | Worker does not serve public route reads while manifest/build still work                     |
-| QA-0024 | Docs       | Check root README, scaffold README, and Cloudflare instructions against actual commands                               | QA Ready | no obvious command drift remains                                                             |
-| QA-0025 | Publish    | Confirm package contents before release                                                                               | QA Ready | `statikapi`, `create-statikapi`, and `@statikapi/adapter-cf` include expected runtime assets |
+| QA-0001 | Repo       | Install dependencies in a clean working tree with `pnpm install`                                                      | ✅ Done            | `pnpm install` passed locally                                                                |
+| QA-0002 | Repo       | Run lint with `pnpm -w lint`                                                                                          | ✅ Done            | `pnpm -w lint` passed locally                                                                |
+| QA-0003 | Repo       | Run format check with `pnpm -w format`                                                                                | ✅ Done            | `pnpm -w format` passed locally                                                              |
+| QA-0004 | Repo       | Run automated tests with `pnpm -w test`                                                                               | ✅ Done           | `pnpm -w test` passed locally                                                                |
+| QA-0005 | UI         | Build embedded UI with `pnpm ui:build`                                                                                | ✅ Done           | `pnpm ui:build` passed and embedded UI assets are present                                    |
+| QA-0006 | CLI        | Verify `statikapi --help` and `statikapi --version` work                                                              | ✅ Done           | help/version commands passed locally                                                         |
+| QA-0007 | CLI        | Verify local build flow in `example/basic`                                                                            | ✅ Done           | `pnpm -C example/basic build` passed and emitted expected output                             |
+| QA-0008 | CLI        | Verify local dev preview in `example/basic`                                                                           | ✅ Done           | `example/basic` dev preview served and loaded correctly locally                              |
+| QA-0009 | CLI        | Verify dynamic and catch-all routes in `example/dynamic`                                                              | ✅ Done           | `example/dynamic` build passed and emitted expected dynamic/catch-all outputs                |
+| QA-0010 | CLI        | Verify collection index output in local CLI path                                                                      | ✅ Done           | local `config.listIndex` verification passed, including derived parent collection routes      |
+| QA-0011 | CLI        | Verify preview UI route browsing and JSON rendering                                                                   | ✅ Done           | local preview UI verification passed, including route browsing and JSON rendering            |
+| QA-0012 | Scaffolder | Scaffold a normal app with `node packages/create-statikapi/bin/create-statikapi.js ... --template basic --no-install` | ✅ Done           | basic scaffolder verification passed and expected files were created                         |
+| QA-0013 | Scaffolder | Scaffold a dynamic app with `--template dynamic --no-install`                                                         | ✅ Done           | dynamic scaffolder verification passed and example routes were created                       |
+| QA-0014 | Scaffolder | Scaffold a Cloudflare app with `--template cloudflare-adapter --no-install`                                           | 🟦 QA Ready       | `wrangler.toml`, `.dev.vars.example`, `statikapi.config.js`, and preview script exist for the single Worker + Static Assets model |
+| QA-0015 | Cloudflare | Verify Worker bundle build with `pnpm -C example/cloudflare build`                                                    | 🟦 QA Ready       | `example/cloudflare/dist/worker.mjs` exists                                                  |
+| QA-0016 | Cloudflare | Verify local Worker runtime with `pnpm -C example/cloudflare wrangler:dev -- --port 8787`                            | 🟦 QA Ready       | local Worker serves manifest, `/build`, and private routes                                  |
+| QA-0017 | Cloudflare | Verify local preview proxy with `statikapi-cf preview --worker http://127.0.0.1:8787 --port 8788`                   | 🟦 QA Ready       | `http://127.0.0.1:8788/_ui/` loads                                                           |
+| QA-0018 | Cloudflare | Verify public-by-default route behavior                                                       | 🟦 QA Ready       | routes without `config.cloudflare.public = false` are emitted under `/public/...` and preview correctly |
+| QA-0019 | Cloudflare | Verify private routes in preview using `.dev.vars` auth injection                                                     | 🟦 QA Ready       | private routes load in preview without manual browser headers                                |
+| QA-0020 | Cloudflare | Verify Cloudflare `listIndex` outputs                                                                                 | 🟦 QA Ready       | collection/index routes appear in manifest and load correctly                                |
+| QA-0021 | Cloudflare | Verify targeted private rebuilds and public-route rejection                                                           | 🟦 QA Ready       | private `/build?route=...` updates Worker-managed output, while public routes are rejected   |
+| QA-0022 | Cloudflare | Verify Worker + Static Assets contract locally                                                                        | 🟦 QA Ready       | public routes are exposed from `/public/...` while private routes stay behind the Worker     |
+| QA-0023 | Cloudflare | Verify route-level opt-out from public-by-default behavior                                                            | 🟦 QA Ready       | routes marked private are not treated as public Static Assets and require Worker auth        |
+| QA-0024 | Docs       | Check root README, scaffold README, and Cloudflare instructions against actual commands                               | 🟦 QA Ready       | no obvious command drift remains                                                             |
+| QA-0025 | Publish    | Confirm package contents before release                                                                               | 🟦 QA Ready       | `statikapi`, `create-statikapi`, and `@statikapi/adapter-cf` include expected runtime assets |
 
 ## Detailed Tasks
 
@@ -58,7 +58,7 @@ Required before publish:
 
 #### QA-0001
 
-Status: `Done`
+Status: `✅ Done`
 
 Command:
 
@@ -72,7 +72,7 @@ Pass when:
 
 #### QA-0002
 
-Status: `Done`
+Status: `✅ Done`
 
 Command:
 
@@ -86,7 +86,7 @@ Pass when:
 
 #### QA-0003
 
-Status: `Done`
+Status: `✅ Done`
 
 Command:
 
@@ -100,7 +100,7 @@ Pass when:
 
 #### QA-0004
 
-Status: `QA Ready`
+Status: `✅ Done`
 
 Command:
 
@@ -116,7 +116,7 @@ Pass when:
 
 #### QA-0005
 
-Status: `QA Ready`
+Status: `✅ Done`
 
 Command:
 
@@ -130,7 +130,7 @@ Pass when:
 
 #### QA-0006
 
-Status: `QA Ready`
+Status: `✅ Done`
 
 Commands:
 
@@ -146,7 +146,7 @@ Pass when:
 
 #### QA-0007
 
-Status: `QA Ready`
+Status: `✅ Done`
 
 Command:
 
@@ -161,7 +161,7 @@ Pass when:
 
 #### QA-0008
 
-Status: `QA Ready`
+Status: `✅ Done`
 
 Command:
 
@@ -176,7 +176,7 @@ Pass when:
 
 #### QA-0009
 
-Status: `QA Ready`
+Status: `✅ Done`
 
 Command:
 
@@ -191,7 +191,7 @@ Pass when:
 
 #### QA-0010
 
-Status: `QA Ready`
+Status: `✅ Done`
 
 Suggested verification:
 
@@ -205,7 +205,7 @@ Pass when:
 
 #### QA-0011
 
-Status: `QA Ready`
+Status: `✅ Done`
 
 Pass when:
 
@@ -217,7 +217,7 @@ Pass when:
 
 #### QA-0012
 
-Status: `QA Ready`
+Status: `✅ Done`
 
 Command:
 
@@ -232,7 +232,7 @@ Pass when:
 
 #### QA-0013
 
-Status: `QA Ready`
+Status: `✅ Done`
 
 Command:
 
@@ -246,7 +246,7 @@ Pass when:
 
 #### QA-0014
 
-Status: `QA Ready`
+Status: `🟦 QA Ready`
 
 Command:
 
@@ -260,12 +260,13 @@ Pass when:
 - `.dev.vars.example` exists
 - `package.json` contains `preview`
 - `package.json` `dev` script includes preview process
+- scaffold does not depend on a separate serving-mode selection prompt or `r2-public` contract
 
 ### 4. Cloudflare Adapter
 
 #### QA-0015
 
-Status: `QA Ready`
+Status: `🟦 QA Ready`
 
 Command:
 
@@ -276,10 +277,13 @@ pnpm -C example/cloudflare build
 Pass when:
 
 - [example/cloudflare/dist/worker.mjs](/Users/zonayedpca/Desktop/Workspace/statapi/statikapi/example/cloudflare/dist/worker.mjs) exists
+- [example/cloudflare/public/public](/Users/zonayedpca/Desktop/Workspace/statapi/statikapi/example/cloudflare/public/public) contains generated public JSON assets
+- generated public asset paths match the example's `STATIK_USE_INDEX_JSON` setting
+- at least one emitted public asset can be opened locally and parsed as valid JSON
 
 #### QA-0016
 
-Status: `QA Ready`
+Status: `🟦 QA Ready`
 
 Command:
 
@@ -290,11 +294,14 @@ pnpm -C example/cloudflare wrangler:dev -- --port 8787
 Pass when:
 
 - `GET /manifest` responds locally
-- at least one public route responds locally
+- `/manifest` includes both public `/public/...` routes and private Worker-managed routes
+- `POST /build` is available locally
+- at least one private route responds through the Worker path
+- a targeted private `POST /build?route=...` succeeds locally
 
 #### QA-0017
 
-Status: `QA Ready`
+Status: `🟦 QA Ready`
 
 Command:
 
@@ -308,16 +315,16 @@ Pass when:
 
 #### QA-0018
 
-Status: `QA Ready`
+Status: `🟦 QA Ready`
 
 Pass when:
 
-- public route payloads load in preview UI
-- public route payloads also load directly from local Worker in `worker` mode
+- routes without `config.cloudflare.public = false` are treated as public by default
+- those public route payloads load in preview UI under `/public/...`
 
 #### QA-0019
 
-Status: `QA Ready`
+Status: `🟦 QA Ready`
 
 Setup:
 
@@ -329,45 +336,52 @@ Pass when:
 
 #### QA-0020
 
-Status: `QA Ready`
+Status: `🟦 QA Ready`
 
 Pass when:
 
 - Cloudflare routes using `config.listIndex` emit collection/index outputs
 - those derived routes appear in manifest
-- those derived routes load in preview
+- public derived routes load from `/public/...`
+- private derived routes load through the Worker path when auth is supplied
 
 #### QA-0021
 
-Status: `QA Ready`
+Status: `🟦 QA Ready`
 
 Pass when:
 
-- targeted rebuilds through `/build?route=...` refresh both concrete route output and collection/index output
+- targeted rebuilds through `/build?route=...` refresh private Worker-managed output
+- targeted rebuilds for public routes return a rejection that instructs the user to rebuild and redeploy static assets
+- rejected public targeted rebuilds do not remove or corrupt existing manifest/private-route data
 
 #### QA-0022
 
-Status: `QA Ready`
+Status: `🟦 QA Ready`
 
 Pass when:
 
-- in `worker` mode, public routes are reachable under `/public/...`
+- public routes are reachable under `/public/...`
 - private routes stay on original paths and require auth
+- public routes are served from generated Static Assets
+- the same local deployment still serves `/build` and `/manifest` from the Worker
+- the Cloudflare app does not rely on a separate `r2-public` mode
 
 #### QA-0023
 
-Status: `QA Ready`
+Status: `🟦 QA Ready`
 
 Pass when:
 
-- in `r2-public` mode, Worker preview/build still functions
-- Worker does not serve `/public/...` route reads directly
+- routes marked private via route config are not treated as public
+- those private routes are served through the Worker path only
+- private route reads without auth fail as expected
 
 ### 5. Docs and Publish Checks
 
 #### QA-0024
 
-Status: `QA Ready`
+Status: `🟦 QA Ready`
 
 Check:
 
@@ -381,7 +395,7 @@ Pass when:
 
 #### QA-0025
 
-Status: `QA Ready`
+Status: `🟦 QA Ready`
 
 Suggested checks:
 

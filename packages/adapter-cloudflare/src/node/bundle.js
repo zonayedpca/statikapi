@@ -1,13 +1,13 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import esbuild from 'esbuild';
 
 const IGNORED = /^_|\/_/;
 const DEFAULT_GLOBAL_CF = {
-  servingMode: 'worker',
   webhook: true,
-  publicByDefault: false,
+  publicByDefault: true,
 };
 const DEFAULT_LIST_INDEX_CONFIG = Object.freeze({
   enabled: false,
@@ -55,8 +55,6 @@ async function loadProjectConfig(cwd) {
 
     return {
       cloudflare: {
-        servingMode:
-          cloudflare?.servingMode === 'r2-public' ? 'r2-public' : DEFAULT_GLOBAL_CF.servingMode,
         webhook:
           typeof cloudflare?.webhook === 'boolean' ? cloudflare.webhook : DEFAULT_GLOBAL_CF.webhook,
         publicByDefault:
@@ -103,6 +101,7 @@ async function loadRouteModule(fileAbs) {
   return {
     code: out,
     routeConfig,
+    mod,
   };
 }
 
@@ -202,6 +201,8 @@ export async function bundle({
   srcDir = 'src-api',
   outFile = 'dist/worker.mjs',
   prettyDefault = false,
+  publicOutDir = 'public',
+  useIndexJson = false,
   watch = false,
 }) {
   const root = path.resolve(cwd, srcDir);
@@ -213,7 +214,7 @@ export async function bundle({
     if (IGNORED.test(fileAbs.replace(root, ''))) continue;
     const route = fileToRoute(root, fileAbs);
     const type = routeTypeFromPattern(route);
-    const { code, routeConfig } = await loadRouteModule(fileAbs);
+    const { code, routeConfig, mod } = await loadRouteModule(fileAbs);
 
     entries.push({
       file: path.relative(cwd, fileAbs).replace(/\\/g, '/'),
@@ -223,10 +224,18 @@ export async function bundle({
       pathsSrc: code.paths || null,
       cloudflareConfig: routeConfig.cloudflare,
       listIndexConfig: routeConfig.listIndex,
+      runtimeModule: mod,
     });
   }
 
   const list = stableSortRoutes(entries);
+  const publicManifest = await emitPublicAssets({
+    cwd,
+    entries: list,
+    outDir: publicOutDir,
+    projectConfig,
+    useIndexJson,
+  });
   const registrySource = `
 export const REGISTRY = [
 ${list
@@ -249,6 +258,7 @@ ${list
 export const DEFAULT_PRETTY = ${prettyDefault ? 'true' : 'false'};
 export const PROJECT_CLOUDFLARE = ${JSON.stringify(projectConfig.cloudflare)};
 export const PROJECT_LIST_INDEX = ${JSON.stringify(projectConfig.listIndex)};
+export const PUBLIC_MANIFEST = ${JSON.stringify(publicManifest)};
 `;
 
   const tmpDir = path.join(cwd, '.statikapi-cf-tmp');
@@ -285,8 +295,193 @@ export const PROJECT_LIST_INDEX = ${JSON.stringify(projectConfig.listIndex)};
   }
 }
 
+function outputKeyForRoute(concreteRoute, useIndexJson, isPublicRoute) {
+  const prefix = isPublicRoute ? 'public/' : '';
+  if (concreteRoute === '/') {
+    return prefix + (useIndexJson ? 'index.json' : 'index.json');
+  }
+
+  const clean = concreteRoute.replace(/^\/+/, '');
+  if (useIndexJson) return prefix + clean + '/index.json';
+  return prefix + clean + '.json';
+}
+
+async function textHash(text) {
+  return createHash('sha256').update(text).digest('hex');
+}
+
+function publicManifestEntryFor(sourceRoute, concreteRoute, key, body) {
+  return {
+    route: concreteRoute === '/' ? '/public' : '/public' + concreteRoute,
+    srcRoute: sourceRoute,
+    filePath: key,
+    bytes: new TextEncoder().encode(body).length,
+    mtime: Date.now(),
+    hash: null,
+    public: true,
+  };
+}
+
+async function emitPublicAssets({ cwd, entries, outDir, projectConfig, useIndexJson }) {
+  const outRoot = path.resolve(cwd, outDir);
+  await fs.rm(outRoot, { recursive: true, force: true });
+  await fs.mkdir(outRoot, { recursive: true });
+  const manifest = [];
+  const owners = new Map();
+
+  for (const entry of entries) {
+    const policy = getNodeRoutePolicy(entry, projectConfig);
+    if (!policy.public) continue;
+
+    const outputs = await expandNodeEntry(entry, projectConfig);
+    for (const output of outputs) {
+      const body = JSON.stringify(output.value, null, 2) + '\n';
+      const key = outputKeyForRoute(output.route, useIndexJson, true);
+      const target = path.join(outRoot, key);
+      await fs.mkdir(path.dirname(target), { recursive: true });
+      await fs.writeFile(target, body, 'utf8');
+
+      const manifestEntry = publicManifestEntryFor(entry.route, output.route, key, body);
+      manifestEntry.hash = await textHash(body);
+      const owner = owners.get(manifestEntry.route);
+      if (owner && owner !== manifestEntry.srcRoute) {
+        throw new Error(
+          'Route collision for ' +
+            manifestEntry.route +
+            ': ' +
+            manifestEntry.srcRoute +
+            ' conflicts with ' +
+            owner
+        );
+      }
+      owners.set(manifestEntry.route, manifestEntry.srcRoute);
+      manifest.push(manifestEntry);
+    }
+  }
+
+  manifest.sort((a, b) => a.route.localeCompare(b.route));
+  return manifest;
+}
+
+function getNodeRoutePolicy(entry, projectConfig) {
+  const local = entry.cloudflareConfig || {};
+  return {
+    public:
+      typeof local.public === 'boolean'
+        ? local.public
+        : projectConfig.cloudflare.publicByDefault !== false,
+    webhook:
+      typeof local.webhook === 'boolean'
+        ? local.webhook
+        : projectConfig.cloudflare.webhook !== false,
+  };
+}
+
+function getNodeRouteListIndex(entry, projectConfig) {
+  if (entry.listIndexConfig == null) {
+    return cloneListIndexConfig(projectConfig.listIndex);
+  }
+  return cloneListIndexConfig(entry.listIndexConfig);
+}
+
+async function expandNodeEntry(entry, projectConfig) {
+  const policy = getNodeRoutePolicy(entry, projectConfig);
+  const listIndex = getNodeRouteListIndex(entry, projectConfig);
+  const outputs = [];
+
+  if (entry.type === 'static') {
+    outputs.push({ route: entry.route, value: await resolveNodeValue(entry.runtimeModule, {}) });
+    return outputs;
+  }
+
+  if (typeof entry.runtimeModule?.paths !== 'function') return outputs;
+  const values = await entry.runtimeModule.paths();
+  const seen = new Set();
+  const items = [];
+  const patternSegs = splitPattern(entry.route);
+
+  for (const value of values) {
+    const concrete = concreteFromPatternNode(patternSegs, value);
+    if (seen.has(concrete.route)) continue;
+    seen.add(concrete.route);
+    const item = await resolveNodeValue(entry.runtimeModule, { params: concrete.params });
+    items.push(item);
+    outputs.push({ route: concrete.route, value: item });
+  }
+
+  if (listIndex.enabled) {
+    const collectionRoute = collectionRouteForPatternNode(entry.route);
+    if (!collectionRoute) {
+      throw new Error('config.listIndex requires a static parent route for ' + entry.route);
+    }
+    outputs.push({
+      route: collectionRoute,
+      value: items.map((item) => pickNodeItemFields(item, listIndex.pick, entry.route)),
+    });
+  }
+
+  return outputs;
+}
+
+async function resolveNodeValue(mod, args) {
+  if (typeof mod?.data === 'function') return mod.data(args);
+  if (typeof mod?.default === 'function') return mod.default(args);
+  return mod?.default;
+}
+
+function splitPattern(route) {
+  return route === '/' ? [] : route.replace(/^\//, '').split('/');
+}
+
+function concreteFromPatternNode(patternSegs, entry) {
+  const params = {};
+  const segs = [];
+  let dynamicIndex = 0;
+
+  for (const segment of patternSegs) {
+    if (segment.startsWith(':')) {
+      const value = Array.isArray(entry) ? entry[dynamicIndex++] : entry;
+      params[segment.slice(1)] = String(value);
+      segs.push(String(value));
+      continue;
+    }
+    if (segment.startsWith('*')) {
+      const name = segment.slice(1);
+      const value = Array.isArray(entry) ? entry.slice(dynamicIndex) : [entry];
+      params[name] = value.map(String);
+      segs.push(...params[name]);
+      break;
+    }
+    segs.push(segment);
+  }
+
+  return { route: '/' + segs.join('/'), params };
+}
+
+function collectionRouteForPatternNode(route) {
+  const segs = splitPattern(route);
+  const last = segs[segs.length - 1];
+  if (!last || (!last.startsWith(':') && !last.startsWith('*'))) return null;
+
+  const parent = segs.slice(0, -1);
+  if (parent.some((segment) => segment.startsWith(':') || segment.startsWith('*'))) return null;
+  return parent.length ? '/' + parent.join('/') : '/';
+}
+
+function pickNodeItemFields(item, pick, route) {
+  if (!pick) return item;
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    throw new Error('config.listIndex.pick requires plain-object items for ' + route);
+  }
+  const out = {};
+  for (const key of pick) {
+    if (Object.prototype.hasOwnProperty.call(item, key)) out[key] = item[key];
+  }
+  return out;
+}
+
 const WORKER_RUNTIME_JS = `
-  import { DEFAULT_PRETTY, PROJECT_CLOUDFLARE, PROJECT_LIST_INDEX, REGISTRY } from './entry.mjs';
+  import { DEFAULT_PRETTY, PROJECT_CLOUDFLARE, PROJECT_LIST_INDEX, PUBLIC_MANIFEST, REGISTRY } from './entry.mjs';
 
   const MANIFEST_KEY = 'manifest';
   const LIMIT_PREFIX = '__statik_limit__:';
@@ -333,13 +528,12 @@ const WORKER_RUNTIME_JS = `
 
   function effectiveProjectConfig() {
     return {
-      servingMode: PROJECT_CLOUDFLARE?.servingMode === 'r2-public' ? 'r2-public' : 'worker',
       webhook:
         typeof PROJECT_CLOUDFLARE?.webhook === 'boolean' ? PROJECT_CLOUDFLARE.webhook : true,
       publicByDefault:
         typeof PROJECT_CLOUDFLARE?.publicByDefault === 'boolean'
           ? PROJECT_CLOUDFLARE.publicByDefault
-          : false,
+          : true,
     };
   }
 
@@ -387,6 +581,12 @@ const WORKER_RUNTIME_JS = `
   async function writeManifest(env, list) {
     const ns = getManifestNS(env);
     await ns.put(MANIFEST_KEY, JSON.stringify(list));
+  }
+
+  function combineManifest(privateEntries) {
+    const combined = [...PUBLIC_MANIFEST, ...privateEntries];
+    combined.sort((a, b) => a.route.localeCompare(b.route));
+    return combined;
   }
 
   async function readCounter(env, key) {
@@ -632,12 +832,12 @@ const WORKER_RUNTIME_JS = `
   function keyForRoute(concreteRoute, env, isPublicRoute) {
     const prefix = isPublicRoute ? 'public/' : '';
     if (concreteRoute === '/') {
-      return prefix + (useIndexJson(env) ? 'index.json' : 'index');
+      return prefix + 'index.json';
     }
 
     const clean = concreteRoute.replace(/^\\/+/, '');
     if (useIndexJson(env)) return prefix + clean + '/index.json';
-    return prefix + clean;
+    return prefix + clean + '.json';
   }
 
   function publicPathsForRoute(concreteRoute, env) {
@@ -650,9 +850,11 @@ const WORKER_RUNTIME_JS = `
 
   function privatePathsForRoute(concreteRoute, env) {
     if (concreteRoute === '/') {
-      return useIndexJson(env) ? ['/', '/index.json'] : ['/', '/index'];
+      return useIndexJson(env) ? ['/', '/index.json'] : ['/', '/index.json'];
     }
-    return useIndexJson(env) ? [concreteRoute, concreteRoute + '/index.json'] : [concreteRoute, concreteRoute + '.json'];
+    return useIndexJson(env)
+      ? [concreteRoute, concreteRoute + '/index.json']
+      : [concreteRoute, concreteRoute + '.json'];
   }
 
   async function purgeCacheForPath(origin, pathname) {
@@ -676,22 +878,29 @@ const WORKER_RUNTIME_JS = `
     return req.headers.get(name) === value;
   }
 
-  function getPublicBucket(env) {
-    const bindingName = env.STATIK_PUBLIC_BUCKET_BINDING || 'STATIK_PUBLIC_BUCKET';
-    return env[bindingName];
-  }
-
   function getPrivateBucket(env) {
     const bindingName = env.STATIK_PRIVATE_BUCKET_BINDING || 'STATIK_PRIVATE_BUCKET';
     return env[bindingName];
   }
 
+  function getAssetsBinding(env) {
+    return env.ASSETS || null;
+  }
+
+  function assetRequestPathForRoute(pathname, env) {
+    const normalized = normalizeRoutePath(pathname, env, true);
+    if (normalized === '/') {
+      return useIndexJson(env) ? '/public/index.json' : '/public/index.json';
+    }
+    return useIndexJson(env) ? '/public' + normalized + '/index.json' : '/public' + normalized + '.json';
+  }
+
   async function writeRouteOutput(env, concreteRoute, value, policy, pretty) {
     const body = pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value);
-    const key = keyForRoute(concreteRoute, env, policy.public);
-    const bucket = policy.public ? getPublicBucket(env) : getPrivateBucket(env);
+    const key = keyForRoute(concreteRoute, env, false);
+    const bucket = getPrivateBucket(env);
     if (!bucket) {
-      throw new Error(policy.public ? 'STATIK_PUBLIC_BUCKET binding missing' : 'STATIK_PRIVATE_BUCKET binding missing');
+      throw new Error('STATIK_PRIVATE_BUCKET binding missing');
     }
 
     const limitError = await enforceClassALimit(env, 1);
@@ -704,7 +913,7 @@ const WORKER_RUNTIME_JS = `
         cacheControl: 'public, max-age=0, s-maxage=31536000',
       },
       customMetadata: {
-        route: exposedRouteFor(concreteRoute, policy.public),
+        route: exposedRouteFor(concreteRoute, false),
         etag,
       },
     });
@@ -751,6 +960,20 @@ const WORKER_RUNTIME_JS = `
     const purgeTargets = [];
     let writtenBytes = 0;
     const items = [];
+
+    if (sourceEntry.policy.public) {
+      for (const output of sourceEntry.outputs) {
+        const value = await sourceEntry.mod.data({ params: output.params || {}, env });
+        assertSerializable(value);
+        items.push(value);
+      }
+
+      return {
+        manifestEntries: [],
+        purgeTargets: [],
+        writtenBytes: 0,
+      };
+    }
 
     for (const output of sourceEntry.outputs) {
       const value = await sourceEntry.mod.data({ params: output.params || {}, env });
@@ -864,6 +1087,19 @@ const WORKER_RUNTIME_JS = `
       });
     }
 
+    if (policy.public) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: 'Public routes are emitted as static assets. Re-run statikapi-cf build and deploy.',
+        }),
+        {
+          status: 409,
+          headers: { 'content-type': 'application/json' },
+        }
+      );
+    }
+
     const expanded = await expandSourceEntry(found, { webhookOnly: true });
     const built = await buildSourceOutputs(expanded, env, pretty);
     if (built.error) return built.error;
@@ -931,7 +1167,7 @@ const WORKER_RUNTIME_JS = `
     return new Response(
       JSON.stringify({
         ok: true,
-        files: manifest.length,
+        files: PUBLIC_MANIFEST.length + manifest.length,
         bytes: writtenBytes,
         skipped: 0,
       }),
@@ -940,17 +1176,26 @@ const WORKER_RUNTIME_JS = `
   }
 
   async function findManifestEntryForRequest(pathname, env, isPublicRoute) {
-    const manifest = await readManifest(env);
+    const manifest = isPublicRoute ? PUBLIC_MANIFEST : await readManifest(env);
     const normalized = normalizeRoutePath(pathname, env, isPublicRoute);
     const target = exposedRouteFor(normalized, isPublicRoute);
     return manifest.find((entry) => entry.route === target) || null;
   }
 
   async function serveRoute(req, env, pathname, isPublicRoute) {
-    const project = effectiveProjectConfig();
-    if (isPublicRoute && project.servingMode === 'r2-public') {
-      return new Response('Not found', { status: 404 });
+    if (isPublicRoute) {
+      const manifestEntry = await findManifestEntryForRequest(pathname, env, true);
+      if (!manifestEntry) return new Response('Not found', { status: 404 });
+
+      const assets = getAssetsBinding(env);
+      if (!assets || typeof assets.fetch !== 'function') {
+        return new Response('assets binding missing', { status: 500 });
+      }
+
+      const assetPath = assetRequestPathForRoute(pathname, env);
+      return assets.fetch(new Request(new URL(assetPath, req.url), req));
     }
+
     if (!isPublicRoute && !requirePrivateAuth(req, env)) {
       return new Response('forbidden', { status: 403 });
     }
@@ -961,7 +1206,7 @@ const WORKER_RUNTIME_JS = `
     const limitError = await enforceClassBLimit(env, 1);
     if (limitError) return limitError;
 
-    const bucket = isPublicRoute ? getPublicBucket(env) : getPrivateBucket(env);
+    const bucket = getPrivateBucket(env);
     if (!bucket) return new Response('storage binding missing', { status: 500 });
     const object = await bucket.get(manifestEntry.filePath);
     if (!object) return new Response('Not found', { status: 404 });
@@ -989,7 +1234,7 @@ const WORKER_RUNTIME_JS = `
       }
 
       if (req.method === 'GET' && url.pathname === '/manifest') {
-        const list = await readManifest(env);
+        const list = combineManifest(await readManifest(env));
         return new Response(JSON.stringify(list), {
           headers: { 'content-type': 'application/json' },
         });

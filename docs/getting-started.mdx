@@ -6,7 +6,7 @@ This guide shows three flows:
 
 - **From scratch** using `create-statikapi`
 - **Inside an existing repo** by adding the CLI and a `src-api/` folder _(this directory is configurable via your [configuration](./config))_
-- **Serverless mode** using the **Cloudflare Worker adapter** (StatikAPI behind a Worker + R2 + KV, with a build webhook)
+- **Serverless mode** using the **Cloudflare Worker adapter** (Worker + Static Assets for public routes, private R2 + KV, with a build webhook)
 
 ---
 
@@ -45,7 +45,7 @@ npm run dev
 You will be prompted for:
 
 - **Template**: `basic`, `dynamic`, `remote-data`, or  
-  `cloudflare-adapter` (Cloudflare Worker + R2 + KV + build webhook)
+  `cloudflare-adapter` (Cloudflare Worker + Static Assets + private R2 + KV + build webhook)
 - **Package manager** and whether to install now
 - Optional ESLint, TS, directories, and deploy presets  
   _(ESLint/TS are disabled for the Cloudflare adapter template; it ships ready-to-run JS Worker boilerplate.)_

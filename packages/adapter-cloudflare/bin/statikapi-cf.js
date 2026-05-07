@@ -86,6 +86,9 @@ function readTomlVar(toml, key) {
   // Resolve srcDir preference: flag > [vars]STATIK_SRC > env > default
   let srcDir =
     args.srcDir || readTomlVar(wranglerToml, 'STATIK_SRC') || process.env.STATIK_SRC || 'src-api';
+  const useIndexJson = String(
+    readTomlVar(wranglerToml, 'STATIK_USE_INDEX_JSON') || process.env.STATIK_USE_INDEX_JSON || 'false'
+  ).toLowerCase() === 'true';
 
   const outFile = args.outFile || 'dist/worker.mjs';
 
@@ -95,6 +98,7 @@ function readTomlVar(toml, key) {
       srcDir,
       outFile,
       prettyDefault: args.prettyDefault,
+      useIndexJson,
       watch: args.watch,
     });
     if (!args.watch) console.log(`✔ worker emitted → ${path.relative(root, outFile)}`);

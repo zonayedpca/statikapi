@@ -1,10 +1,10 @@
-# APP_NAME — Cloudflare Worker + R2 via StatikAPI
+# APP_NAME — Cloudflare Worker + Static Assets via StatikAPI
 
 This project uses **@statikapi/adapter-cf** to:
 
 - Discover your `src-api/` routes
 - Bundle a Cloudflare Worker to `dist/worker.mjs`
-- Write **public** route output into a `/public` partition in a public R2 bucket
+- Treat **public** route output as public-by-default and expose it from the `/public` partition
 - Write **private** route output into a private R2 bucket
 - Store a manifest and runtime limit counters in KV
 - Trigger rebuilds via authenticated `/build` endpoints
@@ -52,6 +52,8 @@ from `.dev.vars` so you can inspect private outputs locally without manually att
 
 Public routes are exposed under `/public/...`.
 
+Routes are public by default unless route config marks them private.
+
 Private routes stay at their original route paths and require the configured auth header when the Worker serves them.
 
 Each route can override the project default with:
@@ -59,7 +61,7 @@ Each route can override the project default with:
 ```js
 export const config = {
   cloudflare: {
-    public: true,
+    public: false,
     webhook: true,
   },
 };
@@ -69,7 +71,6 @@ export const config = {
 
 Create:
 
-- one public R2 bucket
 - one private R2 bucket
 - one KV namespace for the manifest and runtime limit counters
 
@@ -79,9 +80,8 @@ For deploy automation, use a Cloudflare API token with only the permissions you 
 - R2 Storage: Edit
 - Workers KV Storage: Edit
 
-## Serving modes
+## Static assets
 
-`statikapi.config.js` sets one of:
+Public outputs under `/public/...` are intended to be served as Cloudflare Static Assets through the Worker configuration.
 
-- `worker`: the Worker serves both `/public/...` and private routes
-- `r2-public`: public routes are expected to be served from the public R2 bucket or its custom domain, while private routes stay behind the Worker
+Private outputs stay behind the Worker and require the configured auth header.

@@ -27,6 +27,25 @@ class MockR2Bucket {
   }
 }
 
+class MockAssetsBinding {
+  constructor(rootDir) {
+    this.rootDir = rootDir;
+  }
+
+  async fetch(input) {
+    const url = new URL(typeof input === 'string' ? input : input.url);
+    const filePath = path.join(this.rootDir, decodeURIComponent(url.pathname).replace(/^\/+/, ''));
+    const body = await fs.readFile(filePath, 'utf8').catch(() => null);
+    if (body == null) {
+      return new Response('Not found', { status: 404 });
+    }
+    return new Response(body, {
+      status: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+    });
+  }
+}
+
 class MockKVNamespace {
   constructor() {
     this.values = new Map();
@@ -60,16 +79,16 @@ async function makeProject(files) {
 }
 
 async function loadWorker(cwd) {
-  await bundle({ cwd, srcDir: 'src-api', outFile: 'dist/worker.mjs' });
+  await bundle({ cwd, srcDir: 'src-api', outFile: 'dist/worker.mjs', useIndexJson: true });
   const mod = await import(
     pathToFileURL(path.join(cwd, 'dist/worker.mjs')).href + `?t=${Date.now()}`
   );
   return mod.default;
 }
 
-function makeEnv(overrides = {}) {
+function makeEnv(cwd, overrides = {}) {
   return {
-    STATIK_PUBLIC_BUCKET: new MockR2Bucket(),
+    ASSETS: new MockAssetsBinding(path.join(cwd, 'public')),
     STATIK_PRIVATE_BUCKET: new MockR2Bucket(),
     STATIK_MANIFEST: new MockKVNamespace(),
     STATIK_MANIFEST_BINDING: 'STATIK_MANIFEST',
@@ -92,24 +111,22 @@ test('worker mode builds public and private outputs, skips webhook-disabled rout
     pick: ['id']
   },
   cloudflare: {
-    servingMode: 'worker',
     webhook: true,
-    publicByDefault: false,
+    publicByDefault: true,
   },
 };`,
-    'src-api/index.js': `export const config = { cloudflare: { public: true } };
-export default { scope: 'public-root' };`,
-    'src-api/posts/[id].js': `export const config = { cloudflare: { public: true } };
-export async function paths() { return ['1']; }
+    'src-api/index.js': `export default { scope: 'public-root' };`,
+    'src-api/posts/[id].js': `export async function paths() { return ['1']; }
 export async function data({ params }) { return { id: params.id, scope: 'public-post' }; }`,
-    'src-api/account/index.js': `export default { scope: 'private-account' };`,
-    'src-api/users/[id].js': `export const config = { cloudflare: { webhook: false } };
+    'src-api/account/index.js': `export const config = { cloudflare: { public: false } };
+export default { scope: 'private-account' };`,
+    'src-api/users/[id].js': `export const config = { cloudflare: { public: false, webhook: false } };
 export async function paths() { return ['1']; }
 export async function data({ params }) { return { id: params.id, scope: 'private-user' }; }`,
   });
 
   const worker = await loadWorker(cwd);
-  const env = makeEnv();
+  const env = makeEnv(cwd);
 
   const buildRes = await worker.fetch(
     new Request('https://example.test/build', {
@@ -122,6 +139,10 @@ export async function data({ params }) { return { id: params.id, scope: 'private
   assert.equal(buildRes.status, 200);
   const buildBody = await buildRes.json();
   assert.equal(buildBody.files, 4);
+  assert.equal(
+    JSON.parse(await fs.readFile(path.join(cwd, 'public/public/posts/index.json'), 'utf8'))[0].id,
+    '1'
+  );
 
   const manifestRes = await worker.fetch(new Request('https://example.test/manifest'), env);
   const manifest = await manifestRes.json();
@@ -168,27 +189,26 @@ export async function data({ params }) { return { id: params.id, scope: 'private
     }),
     env
   );
-  assert.equal(targetedCollection.status, 200);
-  const targetedCollectionBody = await targetedCollection.json();
-  assert.equal(targetedCollectionBody.files, 2);
-  assert.deepEqual(targetedCollectionBody.routes, ['/public/posts', '/public/posts/1']);
+  assert.equal(targetedCollection.status, 409);
+  assert.match(
+    (await targetedCollection.json()).error,
+    /Public routes are emitted as static assets/
+  );
 });
 
-test('r2-public mode hides /public worker reads and enforces worker request limit', async () => {
+test('public routes are public by default and worker request limit is enforced', async () => {
   const cwd = await makeProject({
     'statikapi.config.js': `export default {
   cloudflare: {
-    servingMode: 'r2-public',
     webhook: true,
-    publicByDefault: false,
+    publicByDefault: true,
   },
 };`,
-    'src-api/index.js': `export const config = { cloudflare: { public: true } };
-export default { scope: 'public-root' };`,
+    'src-api/index.js': `export default { scope: 'public-root' };`,
   });
 
   const worker = await loadWorker(cwd);
-  const env = makeEnv({ STATIK_WORKER_REQUEST_LIMIT: '3' });
+  const env = makeEnv(cwd, { STATIK_WORKER_REQUEST_LIMIT: '3' });
 
   const buildRes = await worker.fetch(
     new Request('https://example.test/build', {
@@ -201,9 +221,12 @@ export default { scope: 'public-root' };`,
   assert.equal(buildRes.status, 200);
 
   const publicRes = await worker.fetch(new Request('https://example.test/public'), env);
-  assert.equal(publicRes.status, 404);
+  assert.equal(publicRes.status, 200);
 
-  assert.ok(env.STATIK_PUBLIC_BUCKET.objects.has('public/index.json'));
+  assert.equal(
+    JSON.parse(await fs.readFile(path.join(cwd, 'public/public/index.json'), 'utf8')).scope,
+    'public-root'
+  );
 
   const manifestRes = await worker.fetch(new Request('https://example.test/manifest'), env);
   assert.equal(manifestRes.status, 200);

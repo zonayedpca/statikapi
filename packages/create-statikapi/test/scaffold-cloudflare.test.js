@@ -19,7 +19,7 @@ function runScaffold(cwd, args = []) {
   });
 }
 
-test('scaffolds CLOUDFLARE template with dual buckets, config, and deploy wiring', async (t) => {
+test('scaffolds CLOUDFLARE template with static assets, private storage, config, and deploy wiring', async (t) => {
   const tmp = await makeTmp();
   const appName = 'my-cloudflare-api';
 
@@ -54,15 +54,19 @@ test('scaffolds CLOUDFLARE template with dual buckets, config, and deploy wiring
   assert.match(pkg.scripts.dev, /PREVIEW/);
 
   const wrangler = await fs.readFile(path.join(appDir, 'wrangler.toml'), 'utf8');
-  assert.match(wrangler, /STATIK_PUBLIC_BUCKET/);
+  assert.match(wrangler, /\[assets\]/);
+  assert.match(wrangler, /binding = "ASSETS"/);
+  assert.match(wrangler, /run_worker_first = true/);
   assert.match(wrangler, /STATIK_PRIVATE_BUCKET/);
   assert.match(wrangler, /STATIK_PRIVATE_AUTH_HEADER_NAME/);
   assert.match(wrangler, /STATIK_WORKER_REQUEST_LIMIT/);
   assert.match(wrangler, /STATIK_R2_CLASS_A_LIMIT/);
   assert.match(wrangler, /STATIK_R2_CLASS_B_LIMIT/);
+  assert.doesNotMatch(wrangler, /STATIK_PUBLIC_BUCKET/);
 
   const config = await fs.readFile(path.join(appDir, 'statikapi.config.js'), 'utf8');
-  assert.match(config, /servingMode: "worker"/);
+  assert.doesNotMatch(config, /servingMode/);
+  assert.match(config, /publicByDefault: true/);
   assert.match(config, /webhook: true/);
 
   const envTemplate = await fs.readFile(path.join(appDir, '.dev.vars.example'), 'utf8');

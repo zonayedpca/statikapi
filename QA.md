@@ -26,7 +26,7 @@ Required before publish:
 
 | ID | Area | Task | Status | Verification |
 | --- | --- | --- | --- | --- |
-| QA-0001 | Repo | Install dependencies in a clean working tree with `pnpm install` | QA Ready | Command exits `0` |
+| QA-0001 | Repo | Install dependencies in a clean working tree with `pnpm install` | Done | `pnpm install` passed locally |
 | QA-0002 | Repo | Run lint with `pnpm -w lint` | QA Ready | Command exits `0` |
 | QA-0003 | Repo | Run format check with `pnpm -w format` | QA Ready | Command exits `0` |
 | QA-0004 | Repo | Run automated tests with `pnpm -w test` | QA Ready | Command exits `0` |
@@ -58,7 +58,7 @@ Required before publish:
 
 #### QA-0001
 
-Status: `QA Ready`
+Status: `Done`
 
 Command:
 

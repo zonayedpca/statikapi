@@ -1105,7 +1105,6 @@ ${pmSetup.replace(/^/gm, '      ')}
 async function patchCloudflareWrangler(
   dest,
   {
-    srcDir,
     publicBucketBinding,
     publicBucketName,
     privateBucketBinding,

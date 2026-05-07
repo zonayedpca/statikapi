@@ -138,7 +138,8 @@ export async function data({ params }) { return { id: params.id, scope: 'private
   );
   assert.equal(buildRes.status, 200);
   const buildBody = await buildRes.json();
-  assert.equal(buildBody.files, 4);
+  assert.equal(buildBody.files, 1);
+  assert.equal(buildBody.publicStaticFiles, 3);
   assert.equal(
     JSON.parse(await fs.readFile(path.join(cwd, 'public/public/posts/index.json'), 'utf8'))[0].id,
     '1'
@@ -155,7 +156,15 @@ export async function data({ params }) { return { id: params.id, scope: 'private
     ['/public', '/public/posts', '/public/posts/1']
   );
 
-  const manifestRes = await worker.fetch(new Request('https://example.test/_manifest'), env);
+  const manifestDenied = await worker.fetch(new Request('https://example.test/_manifest'), env);
+  assert.equal(manifestDenied.status, 403);
+
+  const manifestRes = await worker.fetch(
+    new Request('https://example.test/_manifest', {
+      headers: { 'x-private-key': 'let-me-in' },
+    }),
+    env
+  );
   const manifest = await manifestRes.json();
   assert.deepEqual(
     manifest.map((entry) => entry.route),
@@ -193,7 +202,7 @@ export async function data({ params }) { return { id: params.id, scope: 'private
   assert.equal(targetedBlocked.status, 403);
 
   const targetedCollection = await worker.fetch(
-    new Request('https://example.test/public/posts', {
+    new Request('https://example.test/posts', {
       method: 'POST',
       headers: { authorization: 'Bearer build-secret' },
       body: JSON.stringify({}),
@@ -205,6 +214,63 @@ export async function data({ params }) { return { id: params.id, scope: 'private
     (await targetedCollection.json()).error,
     /Public routes are emitted as static assets/
   );
+});
+
+test('targeted private webhook rebuild updates stored private output', async () => {
+  const cwd = await makeProject({
+    'statikapi.config.js': `export default {
+  cloudflare: {
+    webhook: true,
+    publicByDefault: true,
+  },
+};`,
+    'src-api/account/index.js': `export const config = { cloudflare: { public: false } };
+export default function data({ env }) {
+  return { revision: env.STATIK_TEST_REVISION || 'one' };
+};`,
+  });
+
+  const worker = await loadWorker(cwd);
+  const env = makeEnv(cwd, { STATIK_TEST_REVISION: 'one' });
+
+  const initial = await worker.fetch(
+    new Request('https://example.test/account', {
+      method: 'POST',
+      headers: { authorization: 'Bearer build-secret' },
+      body: JSON.stringify({}),
+    }),
+    env
+  );
+  assert.equal(initial.status, 200);
+
+  const before = await worker.fetch(
+    new Request('https://example.test/account', {
+      headers: { 'x-private-key': 'let-me-in' },
+    }),
+    env
+  );
+  assert.deepEqual(await before.json(), { revision: 'one' });
+
+  env.STATIK_TEST_REVISION = 'two';
+
+  const updated = await worker.fetch(
+    new Request('https://example.test/account', {
+      method: 'POST',
+      headers: { authorization: 'Bearer build-secret' },
+      body: JSON.stringify({}),
+    }),
+    env
+  );
+  assert.equal(updated.status, 200);
+  assert.equal((await updated.json()).updated, true);
+
+  const after = await worker.fetch(
+    new Request('https://example.test/account', {
+      headers: { 'x-private-key': 'let-me-in' },
+    }),
+    env
+  );
+  assert.deepEqual(await after.json(), { revision: 'two' });
 });
 
 test('public routes are public by default and worker request limit is enforced', async () => {
@@ -245,10 +311,20 @@ test('public routes are public by default and worker request limit is enforced',
   );
   assert.equal(publicManifestRes.status, 200);
 
-  const manifestRes = await worker.fetch(new Request('https://example.test/_manifest'), env);
+  const manifestRes = await worker.fetch(
+    new Request('https://example.test/_manifest', {
+      headers: { 'x-private-key': 'let-me-in' },
+    }),
+    env
+  );
   assert.equal(manifestRes.status, 200);
 
-  const limitedRes = await worker.fetch(new Request('https://example.test/_manifest'), env);
+  const limitedRes = await worker.fetch(
+    new Request('https://example.test/_manifest', {
+      headers: { 'x-private-key': 'let-me-in' },
+    }),
+    env
+  );
   assert.equal(limitedRes.status, 429);
 });
 

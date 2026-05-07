@@ -40,6 +40,7 @@ test('preview helpers load local auth env, fetch manifest/routes, and resolve UI
     }
 
     if (url.endsWith('/_manifest')) {
+      assert.equal(calls.at(-1).headers.get('x-private-key'), 'let-me-in');
       return new Response(JSON.stringify([{ route: '/account', hash: 'b' }]), {
         status: 200,
         headers: { 'content-type': 'application/json; charset=utf-8' },
@@ -64,7 +65,8 @@ test('preview helpers load local auth env, fetch manifest/routes, and resolve UI
   try {
     const manifest = await fetchManifest(
       'http://127.0.0.1:8787',
-      makeUiMeta('http://127.0.0.1:8787', { useIndexJson: true })
+      makeUiMeta('http://127.0.0.1:8787', { useIndexJson: true }),
+      localEnv
     );
     assert.deepEqual(manifest, [
       { route: '/account', hash: 'b' },

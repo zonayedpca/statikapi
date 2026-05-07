@@ -40,7 +40,7 @@ export async function startPreviewServer({
       }
 
       if (pathname === '/ui/index' && req.method === 'GET') {
-        const manifest = await fetchManifest(workerOrigin, uiMeta);
+        const manifest = await fetchManifest(workerOrigin, uiMeta, localEnv);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify(manifest));
         return;
@@ -106,7 +106,7 @@ export async function startPreviewServer({
 
   pollTimer = setInterval(async () => {
     try {
-      const next = await fetchManifest(workerOrigin, uiMeta);
+      const next = await fetchManifest(workerOrigin, uiMeta, localEnv);
       if (!lastManifest) {
         lastManifest = next;
         return;
@@ -147,20 +147,27 @@ export async function startPreviewServer({
   };
 }
 
-export async function fetchManifest(workerOrigin, uiMeta = makeUiMeta(workerOrigin)) {
+export async function fetchManifest(
+  workerOrigin,
+  uiMeta = makeUiMeta(workerOrigin),
+  localEnv = {}
+) {
   const [publicList, privateList] = await Promise.all([
     fetchManifestList(workerOrigin, uiMeta.publicManifestPath, 'public manifest'),
-    fetchManifestList(workerOrigin, '/_manifest', 'private manifest'),
+    fetchManifestList(workerOrigin, '/_manifest', 'private manifest', {
+      headers: privateAuthHeaders(localEnv),
+    }),
   ]);
   const combined = [...publicList, ...privateList];
   combined.sort((a, b) => String(a.route || '').localeCompare(String(b.route || '')));
   return combined;
 }
 
-async function fetchManifestList(workerOrigin, pathname, label) {
+async function fetchManifestList(workerOrigin, pathname, label, init = {}) {
   const res = await fetch(new URL(pathname, workerOrigin), {
     headers: { accept: 'application/json' },
     cache: 'no-store',
+    ...init,
   });
   if (!res.ok) {
     throw new Error(`${label} failed: ${res.status}`);
@@ -181,17 +188,10 @@ export function makeUiMeta(workerOrigin, options = {}) {
 }
 
 export async function fetchRoute(workerOrigin, route, localEnv, options = {}) {
-  const headers = new Headers();
+  const headers = privateAuthHeaders(localEnv);
   const isPublic =
     options.isPublic === true || route === '/public' || route.startsWith('/public/');
-  const name =
-    localEnv.STATIK_PRIVATE_AUTH_HEADER_NAME || process.env.STATIK_PRIVATE_AUTH_HEADER_NAME;
-  const value =
-    localEnv.STATIK_PRIVATE_AUTH_HEADER_VALUE || process.env.STATIK_PRIVATE_AUTH_HEADER_VALUE;
-
-  if (!isPublic && name && value) {
-    headers.set(name, value);
-  }
+  if (isPublic) headers.delete(privateAuthHeaderName(localEnv) || '');
 
   const target = isPublic && options.filePath ? '/' + options.filePath.replace(/^\/+/, '') : route;
   const res = await fetch(new URL(target, workerOrigin), {
@@ -204,6 +204,26 @@ export async function fetchRoute(workerOrigin, route, localEnv, options = {}) {
     headers: res.headers,
     body: await res.text(),
   };
+}
+
+function privateAuthHeaderName(localEnv) {
+  return localEnv.STATIK_PRIVATE_AUTH_HEADER_NAME || process.env.STATIK_PRIVATE_AUTH_HEADER_NAME;
+}
+
+function privateAuthHeaderValue(localEnv) {
+  return (
+    localEnv.STATIK_PRIVATE_AUTH_HEADER_VALUE || process.env.STATIK_PRIVATE_AUTH_HEADER_VALUE
+  );
+}
+
+function privateAuthHeaders(localEnv) {
+  const headers = new Headers();
+  const name = privateAuthHeaderName(localEnv);
+  const value = privateAuthHeaderValue(localEnv);
+  if (name && value) {
+    headers.set(name, value);
+  }
+  return headers;
 }
 
 async function loadUiMeta(cwd, workerOrigin) {

@@ -1046,14 +1046,11 @@ const WORKER_RUNTIME_JS = `
   }
 
   async function findSourceEntryForRequestedRoute(requested, env) {
-    const isPublicRoute = requested.startsWith('/public');
-    const normalized = normalizeRoutePath(requested, env, isPublicRoute);
-    const exposedRequested = exposedRouteFor(normalized, isPublicRoute);
+    const normalized = normalizeRoutePath(requested, env, false);
 
     for (const entry of REGISTRY) {
-      const policy = getRoutePolicy(entry);
       const params = matchPattern(entry.route, normalized);
-      if (params && exposedRouteFor(normalized, policy.public) === exposedRequested) {
+      if (params) {
         return entry;
       }
 
@@ -1062,7 +1059,7 @@ const WORKER_RUNTIME_JS = `
 
       const collectionRoute = collectionRouteForPattern(entry.route);
       if (!collectionRoute) continue;
-      if (exposedRouteFor(collectionRoute, policy.public) === exposedRequested) {
+      if (collectionRoute === normalized) {
         return entry;
       }
     }
@@ -1139,6 +1136,7 @@ const WORKER_RUNTIME_JS = `
         files: built.manifestEntries.length,
         bytes: built.writtenBytes,
         routes: built.manifestEntries.map((entry) => entry.route).sort(),
+        updated: true,
       }),
       { headers: { 'content-type': 'application/json' } }
     );
@@ -1183,9 +1181,11 @@ const WORKER_RUNTIME_JS = `
     return new Response(
       JSON.stringify({
         ok: true,
-        files: PUBLIC_MANIFEST.length + manifest.length,
+        files: manifest.length,
         bytes: writtenBytes,
         skipped: 0,
+        publicStaticFiles: PUBLIC_MANIFEST.length,
+        updated: true,
       }),
       { headers: { 'content-type': 'application/json' } }
     );
@@ -1258,6 +1258,9 @@ const WORKER_RUNTIME_JS = `
       }
 
       if (req.method === 'GET' && url.pathname === '/_manifest') {
+        if (!requirePrivateAuth(req, env)) {
+          return new Response('forbidden', { status: 403 });
+        }
         const list = await readManifest(env);
         return new Response(JSON.stringify(list), {
           headers: { 'content-type': 'application/json' },

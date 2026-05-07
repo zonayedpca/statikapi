@@ -299,12 +299,13 @@ Pass when:
 
 - `GET /public/_manifest` responds locally as a public Static Asset
 - `GET /public/_manifest` includes only public `/public/...` routes
-- `GET /_manifest` responds locally from the Worker
+- unauthenticated `GET /_manifest` is rejected
+- authenticated `GET /_manifest` responds locally from the Worker
 - `GET /_manifest` includes only private Worker-managed routes
 - authorized `POST /` is available locally for full rebuilds
 - a private route returns `403` without the configured auth header
 - the same private route responds successfully through the Worker path with the configured auth header
-- an authorized targeted private `POST <route-path>` succeeds locally
+- an authorized targeted private `POST <route-path>` succeeds locally and updates that private route's stored output
 
 #### QA-0017
 
@@ -378,7 +379,7 @@ Status: `🟦 QA Ready`
 Pass when:
 
 - targeted rebuilds through route-path `POST` refresh private Worker-managed output
-- public-route `POST` requests return a rejection that instructs the user to rebuild and redeploy static assets
+- public-route root-path `POST` requests return a rejection that instructs the user to rebuild and redeploy static assets
 - rejected public targeted rebuilds do not remove or corrupt existing manifest/private-route data
 
 #### QA-0022

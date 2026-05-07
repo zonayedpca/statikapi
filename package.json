@@ -2,7 +2,7 @@
   "name": "@statikapi/monorepo",
   "private": true,
   "type": "module",
-  "version": "0.6.4",
+  "version": "1.0.0-rc.1",
   "workspaces": [
     "packages/*"
   ],

@@ -402,7 +402,6 @@ function getNodeRouteListIndex(entry, projectConfig) {
 }
 
 async function expandNodeEntry(entry, projectConfig) {
-  const policy = getNodeRoutePolicy(entry, projectConfig);
   const listIndex = getNodeRouteListIndex(entry, projectConfig);
   const outputs = [];
 

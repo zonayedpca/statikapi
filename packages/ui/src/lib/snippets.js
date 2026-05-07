@@ -13,7 +13,7 @@ function normalizeOrigin(origin) {
 }
 
 /** Build an absolute endpoint URL for a given route (e.g., "/users/1"). */
-export function endpointUrl(route, { entry, meta } = {}) {
+export function endpointUrl(route, { meta } = {}) {
   const origin = normalizeOrigin(meta?.origin);
 
   if (meta?.mode === 'cloudflare') {
@@ -30,9 +30,7 @@ export function makeSnippets(route, { entry, meta } = {}) {
   const isPrivateCloudflare = meta?.mode === 'cloudflare' && entry?.public === false;
   const privateHeaderName = meta?.privateAuthHeaderName || 'x-private-auth';
   const privateHeaderValue = '<YOUR_PRIVATE_AUTH_VALUE>';
-  const curlAuth = isPrivateCloudflare
-    ? ` -H "${privateHeaderName}: ${privateHeaderValue}"`
-    : '';
+  const curlAuth = isPrivateCloudflare ? ` -H "${privateHeaderName}: ${privateHeaderValue}"` : '';
   const jsHeaderBlock = isPrivateCloudflare
     ? `,
   ${JSON.stringify(privateHeaderName)}: ${JSON.stringify(privateHeaderValue)}`

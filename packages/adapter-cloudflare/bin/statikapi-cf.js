@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import fs from 'node:fs/promises';
-import fss from 'node:fs';
 import path from 'node:path';
 import { exec, spawn } from 'node:child_process';
 
@@ -385,11 +384,12 @@ async function triggerPrivateRebuild(workerOrigin, buildToken, reason) {
     readTomlAssetsDirectory(wranglerToml) ||
     process.env.STATIK_PUBLIC_OUT ||
     'public';
-  const useIndexJson = String(
-    readTomlVar(wranglerToml, 'STATIK_USE_INDEX_JSON') ||
-      process.env.STATIK_USE_INDEX_JSON ||
-      'false'
-  ).toLowerCase() === 'true';
+  const useIndexJson =
+    String(
+      readTomlVar(wranglerToml, 'STATIK_USE_INDEX_JSON') ||
+        process.env.STATIK_USE_INDEX_JSON ||
+        'false'
+    ).toLowerCase() === 'true';
   const outFile = args.outFile || 'dist/worker.mjs';
   const localEnv = await loadLocalEnv(root);
   const buildToken =

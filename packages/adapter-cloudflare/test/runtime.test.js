@@ -234,3 +234,23 @@ test('public routes are public by default and worker request limit is enforced',
   const limitedRes = await worker.fetch(new Request('https://example.test/manifest'), env);
   assert.equal(limitedRes.status, 429);
 });
+
+test('rebundling picks up edited route module contents', async () => {
+  const cwd = await makeProject({
+    'src-api/index.js': `export default { value: 'one' };`,
+  });
+
+  await bundle({ cwd, srcDir: 'src-api', outFile: 'dist/worker.mjs', useIndexJson: true });
+  assert.deepEqual(
+    JSON.parse(await fs.readFile(path.join(cwd, 'public/public/index.json'), 'utf8')),
+    { value: 'one' }
+  );
+
+  await fs.writeFile(path.join(cwd, 'src-api/index.js'), `export default { value: 'two' };`, 'utf8');
+
+  await bundle({ cwd, srcDir: 'src-api', outFile: 'dist/worker.mjs', useIndexJson: true });
+  assert.deepEqual(
+    JSON.parse(await fs.readFile(path.join(cwd, 'public/public/index.json'), 'utf8')),
+    { value: 'two' }
+  );
+});

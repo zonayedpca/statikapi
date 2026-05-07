@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 
-import { getManifest, getRoute } from './api.js';
+import { getManifest, getRoute, getUiMeta } from './api.js';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
@@ -21,6 +21,7 @@ export default function App() {
   const [rawText, setRawText] = useState('Select a route…');
   const [jsonVal, setJsonVal] = useState(null);
   const [headers, setHeaders] = useState({});
+  const [originOverride, setOriginOverride] = useState('');
   const [loading, setLoading] = useState(false);
   const [hi, setHi] = useState(0); // highlight index in filtered list
   const listRef = useRef(null);
@@ -28,7 +29,32 @@ export default function App() {
   const [tab, setTab] = useState('tree'); // 'tree' | 'pretty' | 'raw'
 
   useEffect(() => {
-    getManifest().then(setManifest).catch(console.error);
+    let cancelled = false;
+
+    async function loadManifestWithRetry() {
+      while (!cancelled) {
+        try {
+          const next = await getManifest();
+          if (!cancelled) setManifest(next);
+          return;
+        } catch (error) {
+          if (cancelled) return;
+          console.error(error);
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      }
+    }
+
+    loadManifestWithRetry();
+    getUiMeta()
+      .then((meta) => {
+        if (meta && typeof meta.origin === 'string') setOriginOverride(meta.origin);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -230,7 +256,7 @@ export default function App() {
                 </TabsContent>
               </Tabs>
               {/* Snippets */}
-              <Snippets route={active} />
+              <Snippets route={active} origin={originOverride} />
             </>
           )}
         </section>

@@ -45,6 +45,12 @@ export async function startPreviewServer({
         return;
       }
 
+      if (pathname === '/ui/meta' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(makeUiMeta(workerOrigin)));
+        return;
+      }
+
       if (pathname === '/_ui/file' && req.method === 'GET') {
         const route = url.searchParams.get('route') || '';
         if (!route.startsWith('/')) {
@@ -149,6 +155,10 @@ export async function fetchManifest(workerOrigin) {
 
   const list = await res.json();
   return Array.isArray(list) ? list : [];
+}
+
+export function makeUiMeta(workerOrigin) {
+  return { origin: workerOrigin };
 }
 
 export async function fetchRoute(workerOrigin, route, localEnv) {

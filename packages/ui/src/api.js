@@ -5,6 +5,12 @@ export async function getManifest() {
   return res.json();
 }
 
+export async function getUiMeta() {
+  const res = await fetch('/ui/meta', { cache: 'no-store' });
+  if (!res.ok) throw new Error(`ui meta failed: ${res.status}`);
+  return res.json();
+}
+
 export async function getRoute(route) {
   const res = await fetch('/_ui/file?route=' + encodeURIComponent(route), { cache: 'no-store' });
   if (!res.ok) throw new Error(`route ${route} failed: ${res.status}`);

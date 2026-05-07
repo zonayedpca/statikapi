@@ -49,7 +49,7 @@ async function walkJs(dir) {
 async function loadProjectConfig(cwd) {
   const configPath = path.join(cwd, 'statikapi.config.js');
   try {
-    const mod = await import(pathToFileURL(configPath).href);
+    const mod = await importFresh(configPath);
     const value = mod.default ?? mod.config ?? mod;
     const cloudflare = value?.cloudflare;
 
@@ -73,7 +73,7 @@ async function loadProjectConfig(cwd) {
 }
 
 async function loadRouteModule(fileAbs) {
-  const mod = await import(pathToFileURL(fileAbs).href);
+  const mod = await importFresh(fileAbs);
   let hasData = false;
   const out = {};
 
@@ -103,6 +103,14 @@ async function loadRouteModule(fileAbs) {
     routeConfig,
     mod,
   };
+}
+
+async function importFresh(fileAbs) {
+  const body = await fs.readFile(fileAbs);
+  const version = createHash('sha1').update(body).digest('hex').slice(0, 12);
+  const url = pathToFileURL(fileAbs);
+  url.searchParams.set('v', version);
+  return import(url.href);
 }
 
 function normalizeRouteConfig(config) {

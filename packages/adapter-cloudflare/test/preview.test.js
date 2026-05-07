@@ -9,6 +9,7 @@ import {
   fetchManifest,
   fetchRoute,
   loadLocalEnv,
+  makeUiMeta,
   pickForwardHeaders,
   resolveUiDist,
 } from '../src/node/preview.js';
@@ -86,4 +87,8 @@ test('preview helpers load local auth env, fetch manifest/routes, and resolve UI
   const uiRoot = resolveUiDist();
   const indexHtml = await fs.readFile(path.join(uiRoot, 'index.html'), 'utf8');
   assert.match(indexHtml, /<div id="root">/i);
+});
+
+test('preview metadata exposes worker origin for UI snippets', () => {
+  assert.deepEqual(makeUiMeta('http://127.0.0.1:8787'), { origin: 'http://127.0.0.1:8787' });
 });

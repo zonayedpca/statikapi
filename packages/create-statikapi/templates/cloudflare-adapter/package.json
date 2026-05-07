@@ -5,8 +5,9 @@
   "scripts": {
     "build": "statikapi-cf --src src-api --out dist/worker.mjs",
     "watch": "chokidar \"src-api/**/*.{js,mjs,cjs}\" -c \"pnpm build\"",
-    "wrangler:dev": "wrangler dev --local",
-    "dev": "concurrently -n BUILD,WRANGLER -c yellow,cyan \"pnpm watch\" \"pnpm wrangler:dev\"",
+    "wrangler:dev": "wrangler dev --local --port 8787",
+    "preview": "statikapi-cf preview --worker http://127.0.0.1:8787 --port 8788",
+    "dev": "concurrently -n BUILD,WRANGLER,PREVIEW -c yellow,cyan,green \"pnpm watch\" \"pnpm wrangler:dev\" \"pnpm preview\"",
     "deploy": "wrangler deploy"
   },
   "devDependencies": {

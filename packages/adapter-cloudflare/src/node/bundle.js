@@ -9,6 +9,10 @@ const DEFAULT_GLOBAL_CF = {
   webhook: true,
   publicByDefault: false,
 };
+const DEFAULT_LIST_INDEX_CONFIG = Object.freeze({
+  enabled: false,
+  pick: null,
+});
 
 function fileToRoute(root, fileAbs) {
   const rel = path.posix
@@ -50,17 +54,23 @@ async function loadProjectConfig(cwd) {
     const cloudflare = value?.cloudflare;
 
     return {
-      servingMode:
-        cloudflare?.servingMode === 'r2-public' ? 'r2-public' : DEFAULT_GLOBAL_CF.servingMode,
-      webhook:
-        typeof cloudflare?.webhook === 'boolean' ? cloudflare.webhook : DEFAULT_GLOBAL_CF.webhook,
-      publicByDefault:
-        typeof cloudflare?.publicByDefault === 'boolean'
-          ? cloudflare.publicByDefault
-          : DEFAULT_GLOBAL_CF.publicByDefault,
+      cloudflare: {
+        servingMode:
+          cloudflare?.servingMode === 'r2-public' ? 'r2-public' : DEFAULT_GLOBAL_CF.servingMode,
+        webhook:
+          typeof cloudflare?.webhook === 'boolean' ? cloudflare.webhook : DEFAULT_GLOBAL_CF.webhook,
+        publicByDefault:
+          typeof cloudflare?.publicByDefault === 'boolean'
+            ? cloudflare.publicByDefault
+            : DEFAULT_GLOBAL_CF.publicByDefault,
+      },
+      listIndex: normalizeListIndexValue(value?.listIndex),
     };
   } catch {
-    return { ...DEFAULT_GLOBAL_CF };
+    return {
+      cloudflare: { ...DEFAULT_GLOBAL_CF },
+      listIndex: cloneListIndexConfig(),
+    };
   }
 }
 
@@ -89,22 +99,86 @@ async function loadRouteModule(fileAbs) {
     out.data = `async function data(){ return { _error: "No data() or default export" }; }`;
   }
 
-  const routeConfig = normalizeRouteCloudflareConfig(mod.config);
+  const routeConfig = normalizeRouteConfig(mod.config);
   return {
     code: out,
     routeConfig,
   };
 }
 
-function normalizeRouteCloudflareConfig(config) {
-  if (!config || typeof config !== 'object') return {};
-  const cloudflare = config.cloudflare;
-  if (!cloudflare || typeof cloudflare !== 'object') return {};
+function normalizeRouteConfig(config) {
+  const out = {
+    cloudflare: {},
+    listIndex: null,
+  };
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return out;
 
-  const out = {};
-  if (typeof cloudflare.public === 'boolean') out.public = cloudflare.public;
-  if (typeof cloudflare.webhook === 'boolean') out.webhook = cloudflare.webhook;
+  const cloudflare = config.cloudflare;
+  if (cloudflare && typeof cloudflare === 'object' && !Array.isArray(cloudflare)) {
+    if (typeof cloudflare.public === 'boolean') out.cloudflare.public = cloudflare.public;
+    if (typeof cloudflare.webhook === 'boolean') out.cloudflare.webhook = cloudflare.webhook;
+  }
+
+  if (Object.hasOwn(config, 'listIndex')) {
+    out.listIndex = normalizeListIndexValue(config.listIndex);
+  }
+
   return out;
+}
+
+function cloneListIndexConfig(cfg = DEFAULT_LIST_INDEX_CONFIG) {
+  return {
+    enabled: cfg.enabled,
+    pick: cfg.pick ? [...cfg.pick] : null,
+  };
+}
+
+function normalizeListIndexValue(raw) {
+  const base = cloneListIndexConfig();
+
+  if (raw == null || raw === false) return base;
+  if (raw === true) {
+    base.enabled = true;
+    return base;
+  }
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('listIndex must be true, false, or an object');
+  }
+
+  const enabled = raw.enabled == null ? true : raw.enabled;
+  if (typeof enabled !== 'boolean') {
+    throw new Error('listIndex.enabled must be a boolean');
+  }
+
+  let pick = null;
+  if (Object.hasOwn(raw, 'pick') && raw.pick != null) {
+    pick = normalizePick(raw.pick, 'listIndex.pick');
+  }
+
+  return { enabled, pick };
+}
+
+function normalizePick(raw, label) {
+  const list = Array.isArray(raw)
+    ? raw
+    : typeof raw === 'string'
+      ? raw
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean)
+      : null;
+
+  if (!list) {
+    throw new Error(`${label} must be an array of strings`);
+  }
+
+  for (const key of list) {
+    if (typeof key !== 'string' || !key) {
+      throw new Error(`${label} must contain non-empty strings`);
+    }
+  }
+
+  return Array.from(new Set(list));
 }
 
 function routeTypeFromPattern(route) {
@@ -147,7 +221,8 @@ export async function bundle({
       type,
       dataSrc: code.data,
       pathsSrc: code.paths || null,
-      cloudflareConfig: routeConfig,
+      cloudflareConfig: routeConfig.cloudflare,
+      listIndexConfig: routeConfig.listIndex,
     });
   }
 
@@ -161,6 +236,7 @@ ${list
     type: ${JSON.stringify(entry.type)},
     file: ${JSON.stringify(entry.file)},
     cloudflare: ${JSON.stringify(entry.cloudflareConfig)},
+    listIndex: ${JSON.stringify(entry.listIndexConfig)},
     mod: (function(){
       ${entry.pathsSrc ? `const paths = ${entry.pathsSrc};` : ''}
       const data = ${entry.dataSrc};
@@ -171,7 +247,8 @@ ${list
   .join(',\n')}
 ];
 export const DEFAULT_PRETTY = ${prettyDefault ? 'true' : 'false'};
-export const PROJECT_CLOUDFLARE = ${JSON.stringify(projectConfig)};
+export const PROJECT_CLOUDFLARE = ${JSON.stringify(projectConfig.cloudflare)};
+export const PROJECT_LIST_INDEX = ${JSON.stringify(projectConfig.listIndex)};
 `;
 
   const tmpDir = path.join(cwd, '.statikapi-cf-tmp');
@@ -209,7 +286,7 @@ export const PROJECT_CLOUDFLARE = ${JSON.stringify(projectConfig)};
 }
 
 const WORKER_RUNTIME_JS = `
-  import { DEFAULT_PRETTY, PROJECT_CLOUDFLARE, REGISTRY } from './entry.mjs';
+  import { DEFAULT_PRETTY, PROJECT_CLOUDFLARE, PROJECT_LIST_INDEX, REGISTRY } from './entry.mjs';
 
   const MANIFEST_KEY = 'manifest';
   const LIMIT_PREFIX = '__statik_limit__:';
@@ -264,6 +341,18 @@ const WORKER_RUNTIME_JS = `
           ? PROJECT_CLOUDFLARE.publicByDefault
           : false,
     };
+  }
+
+  function cloneListIndexConfig(cfg = PROJECT_LIST_INDEX || { enabled: false, pick: null }) {
+    return {
+      enabled: cfg?.enabled === true,
+      pick: Array.isArray(cfg?.pick) ? [...cfg.pick] : null,
+    };
+  }
+
+  function getRouteListIndex(entry) {
+    if (entry.listIndex == null) return cloneListIndexConfig(PROJECT_LIST_INDEX);
+    return cloneListIndexConfig(entry.listIndex);
   }
 
   function getRoutePolicy(entry) {
@@ -415,44 +504,90 @@ const WORKER_RUNTIME_JS = `
     };
   }
 
-  async function expandAllRoutes(registry, options = {}) {
-    const out = [];
+  function collectionRouteForPattern(route) {
+    const segs = splitRoute(route);
+    const last = segs[segs.length - 1];
+    if (!last || (!last.startsWith(':') && !last.startsWith('*'))) return null;
 
-    for (const entry of registry) {
-      const policy = getRoutePolicy(entry);
-      if (options.webhookOnly && !policy.webhook) continue;
+    const parent = segs.slice(0, -1);
+    if (parent.some((segment) => segment.startsWith(':') || segment.startsWith('*'))) return null;
+    return parent.length ? '/' + parent.join('/') : '/';
+  }
 
-      const patternSegs = splitRoute(entry.route);
-      if (entry.type === 'static') {
-        out.push({ ...entry, concreteRoute: entry.route, params: {}, policy });
-        continue;
+  function pickItemFields(item, pick, route) {
+    if (!pick) return item;
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error('config.listIndex.pick requires plain-object items for ' + route);
+    }
+
+    const out = {};
+    for (const key of pick) {
+      if (Object.prototype.hasOwnProperty.call(item, key)) out[key] = item[key];
+    }
+    return out;
+  }
+
+  async function expandSourceEntry(entry, options = {}) {
+    const policy = getRoutePolicy(entry);
+    if (options.webhookOnly && !policy.webhook) return null;
+
+    const listIndex = getRouteListIndex(entry);
+    const outputs = [];
+    const patternSegs = splitRoute(entry.route);
+
+    if (entry.type === 'static') {
+      outputs.push({ concreteRoute: entry.route, params: {} });
+      return { ...entry, policy, listIndex, outputs, collectionRoute: null };
+    }
+
+    if (!entry.mod || typeof entry.mod.paths !== 'function') {
+      return { ...entry, policy, listIndex, outputs, collectionRoute: null };
+    }
+
+    const values = await entry.mod.paths();
+    if (!Array.isArray(values)) throw new Error('paths() must return an array');
+
+    const seen = new Set();
+    for (const value of values) {
+      if (entry.type === 'dynamic') {
+        if (typeof value !== 'string' || !value || value.includes('/')) {
+          throw new Error('paths() for ' + entry.route + ' must be string[] without "/"');
+        }
+      }
+      if (entry.type === 'catchall') {
+        const segments = typeof value === 'string' ? [value] : value;
+        if (!Array.isArray(segments) || !segments.length) {
+          throw new Error('paths() for ' + entry.route + ' must be non-empty string[] arrays');
+        }
+        if (segments.some((segment) => typeof segment !== 'string' || !segment || segment.includes('/'))) {
+          throw new Error('catch-all entries must be non-empty strings without "/"');
+        }
       }
 
-      if (!entry.mod || typeof entry.mod.paths !== 'function') continue;
+      const concrete = concreteFromPattern(patternSegs, value);
+      if (seen.has(concrete.route)) continue;
+      seen.add(concrete.route);
+      outputs.push({ concreteRoute: concrete.route, params: concrete.params });
+    }
 
-      const values = await entry.mod.paths();
-      if (!Array.isArray(values)) throw new Error('paths() must return an array');
-
-      for (const value of values) {
-        if (entry.type === 'dynamic') {
-          if (typeof value !== 'string' || !value || value.includes('/')) {
-            throw new Error('paths() for ' + entry.route + ' must be string[] without "/"');
-          }
-        }
-        if (entry.type === 'catchall') {
-          if (!Array.isArray(value) || !value.length) {
-            throw new Error('paths() for ' + entry.route + ' must be non-empty string[] arrays');
-          }
-          if (value.some((segment) => typeof segment !== 'string' || !segment)) {
-            throw new Error('catch-all entries must be non-empty strings');
-          }
-        }
-
-        const concrete = concreteFromPattern(patternSegs, value);
-        out.push({ ...entry, concreteRoute: concrete.route, params: concrete.params, policy });
+    let collectionRoute = null;
+    if (listIndex.enabled) {
+      collectionRoute = collectionRouteForPattern(entry.route);
+      if (!collectionRoute) {
+        throw new Error('config.listIndex requires a static parent route for ' + entry.route);
       }
     }
 
+    return { ...entry, policy, listIndex, outputs, collectionRoute };
+  }
+
+  async function expandAllRoutes(registry, options = {}) {
+    const out = [];
+    for (const entry of registry) {
+      const expanded = await expandSourceEntry(entry, options);
+      if (!expanded) continue;
+      out.push(expanded);
+    }
     return out;
   }
 
@@ -582,6 +717,112 @@ const WORKER_RUNTIME_JS = `
     };
   }
 
+  function manifestEntryFor(sourceRoute, concreteRoute, policy, written) {
+    return {
+      route: exposedRouteFor(concreteRoute, policy.public),
+      srcRoute: sourceRoute,
+      filePath: written.key,
+      bytes: written.bytes,
+      mtime: Date.now(),
+      hash: written.etag.replace(/"/g, ''),
+      public: policy.public,
+    };
+  }
+
+  function addManifestEntry(manifest, entry, owners) {
+    const owner = owners.get(entry.route);
+    if (owner && owner !== entry.srcRoute) {
+      throw new Error('Route collision for ' + entry.route + ': ' + entry.srcRoute + ' conflicts with ' + owner);
+    }
+    owners.set(entry.route, entry.srcRoute);
+    manifest.push(entry);
+  }
+
+  function buildOwnersMap(manifest) {
+    const owners = new Map();
+    for (const entry of manifest) {
+      owners.set(entry.route, entry.srcRoute || entry.route);
+    }
+    return owners;
+  }
+
+  async function buildSourceOutputs(sourceEntry, env, pretty) {
+    const manifestEntries = [];
+    const purgeTargets = [];
+    let writtenBytes = 0;
+    const items = [];
+
+    for (const output of sourceEntry.outputs) {
+      const value = await sourceEntry.mod.data({ params: output.params || {}, env });
+      assertSerializable(value);
+      items.push(value);
+
+      const written = await writeRouteOutput(env, output.concreteRoute, value, sourceEntry.policy, pretty);
+      if (written.error) return { error: written.error };
+
+      writtenBytes += written.bytes;
+      manifestEntries.push(
+        manifestEntryFor(sourceEntry.route, output.concreteRoute, sourceEntry.policy, written)
+      );
+
+      const paths = sourceEntry.policy.public
+        ? publicPathsForRoute(output.concreteRoute, env)
+        : privatePathsForRoute(output.concreteRoute, env);
+      purgeTargets.push(...paths);
+    }
+
+    if (sourceEntry.collectionRoute) {
+      const payload = items.map((item) =>
+        pickItemFields(item, sourceEntry.listIndex.pick, sourceEntry.route)
+      );
+      const written = await writeRouteOutput(
+        env,
+        sourceEntry.collectionRoute,
+        payload,
+        sourceEntry.policy,
+        pretty
+      );
+      if (written.error) return { error: written.error };
+
+      writtenBytes += written.bytes;
+      manifestEntries.push(
+        manifestEntryFor(sourceEntry.route, sourceEntry.collectionRoute, sourceEntry.policy, written)
+      );
+
+      const paths = sourceEntry.policy.public
+        ? publicPathsForRoute(sourceEntry.collectionRoute, env)
+        : privatePathsForRoute(sourceEntry.collectionRoute, env);
+      purgeTargets.push(...paths);
+    }
+
+    return { manifestEntries, purgeTargets, writtenBytes };
+  }
+
+  async function findSourceEntryForRequestedRoute(requested, env) {
+    const isPublicRoute = requested.startsWith('/public');
+    const normalized = normalizeRoutePath(requested, env, isPublicRoute);
+    const exposedRequested = exposedRouteFor(normalized, isPublicRoute);
+
+    for (const entry of REGISTRY) {
+      const policy = getRoutePolicy(entry);
+      const params = matchPattern(entry.route, normalized);
+      if (params && exposedRouteFor(normalized, policy.public) === exposedRequested) {
+        return entry;
+      }
+
+      const listIndex = getRouteListIndex(entry);
+      if (!listIndex.enabled) continue;
+
+      const collectionRoute = collectionRouteForPattern(entry.route);
+      if (!collectionRoute) continue;
+      if (exposedRouteFor(collectionRoute, policy.public) === exposedRequested) {
+        return entry;
+      }
+    }
+
+    return null;
+  }
+
   async function handleBuildRoute(req, env) {
     if (!requireBuildAuth(req, env)) {
       return new Response('unauthorized', { status: 401 });
@@ -607,15 +848,7 @@ const WORKER_RUNTIME_JS = `
       });
     }
 
-    const normalized = normalizeRoutePath(requested, env, requested.startsWith('/public'));
-    let found = null;
-    for (const entry of REGISTRY) {
-      const params = matchPattern(entry.route, normalized);
-      if (!params) continue;
-      found = { entry, params, requested };
-      break;
-    }
-
+    const found = await findSourceEntryForRequestedRoute(requested, env);
     if (!found) {
       return new Response(JSON.stringify({ ok: false, error: 'No matching route in registry' }), {
         status: 404,
@@ -623,7 +856,7 @@ const WORKER_RUNTIME_JS = `
       });
     }
 
-    const policy = getRoutePolicy(found.entry);
+    const policy = getRoutePolicy(found);
     if (!policy.webhook) {
       return new Response(JSON.stringify({ ok: false, error: 'Webhook builds are disabled for this route' }), {
         status: 403,
@@ -631,41 +864,29 @@ const WORKER_RUNTIME_JS = `
       });
     }
 
-    const value = await found.entry.mod.data({ params: found.params || {}, env });
-    assertSerializable(value);
+    const expanded = await expandSourceEntry(found, { webhookOnly: true });
+    const built = await buildSourceOutputs(expanded, env, pretty);
+    if (built.error) return built.error;
 
-    const written = await writeRouteOutput(env, normalized, value, policy, pretty);
-    if (written.error) return written.error;
+    const existing = (await readManifest(env)).filter((item) => item.srcRoute !== found.route);
+    const owners = buildOwnersMap(existing);
+    for (const entry of built.manifestEntries) {
+      addManifestEntry(existing, entry, owners);
+    }
+    existing.sort((a, b) => a.route.localeCompare(b.route));
+    await writeManifest(env, existing);
 
-    const exposedRoute = exposedRouteFor(normalized, policy.public);
-    const manifest = (await readManifest(env)).filter((item) => item.route !== exposedRoute);
-    manifest.push({
-      route: exposedRoute,
-      srcRoute: found.entry.route,
-      filePath: written.key,
-      bytes: written.bytes,
-      mtime: Date.now(),
-      hash: written.etag.replace(/"/g, ''),
-      public: policy.public,
-    });
-    manifest.sort((a, b) => a.route.localeCompare(b.route));
-    await writeManifest(env, manifest);
-
-    const origin = url.origin;
-    const purgeTargets = policy.public
-      ? publicPathsForRoute(normalized, env)
-      : privatePathsForRoute(normalized, env);
-    for (const target of purgeTargets) {
-      await purgeCacheForPath(origin, target);
+    for (const target of built.purgeTargets) {
+      await purgeCacheForPath(url.origin, target);
     }
 
     return new Response(
       JSON.stringify({
         ok: true,
-        route: exposedRouteFor(normalized, policy.public),
-        filePath: written.key,
-        bytes: written.bytes,
-        public: policy.public,
+        sourceRoute: found.route,
+        files: built.manifestEntries.length,
+        bytes: built.writtenBytes,
+        routes: built.manifestEntries.map((entry) => entry.route).sort(),
       }),
       { headers: { 'content-type': 'application/json' } }
     );
@@ -686,40 +907,21 @@ const WORKER_RUNTIME_JS = `
 
     const body = await req.json().catch(() => ({}));
     const pretty = body.pretty ?? DEFAULT_PRETTY;
-    const expanded = await expandAllRoutes(REGISTRY, { webhookOnly: true });
     const manifest = [];
-    const url = new URL(req.url);
-    const origin = url.origin;
+    const expanded = await expandAllRoutes(REGISTRY, { webhookOnly: true });
+    const owners = new Map();
     let writtenBytes = 0;
 
-    for (const routeEntry of expanded) {
-      const value = await routeEntry.mod.data({ params: routeEntry.params || {}, env });
-      assertSerializable(value);
-      const written = await writeRouteOutput(
-        env,
-        routeEntry.concreteRoute,
-        value,
-        routeEntry.policy,
-        pretty
-      );
-      if (written.error) return written.error;
+    for (const sourceEntry of expanded) {
+      const built = await buildSourceOutputs(sourceEntry, env, pretty);
+      if (built.error) return built.error;
 
-      writtenBytes += written.bytes;
-      manifest.push({
-        route: exposedRouteFor(routeEntry.concreteRoute, routeEntry.policy.public),
-        srcRoute: routeEntry.route,
-        filePath: written.key,
-        bytes: written.bytes,
-        mtime: Date.now(),
-        hash: written.etag.replace(/"/g, ''),
-        public: routeEntry.policy.public,
-      });
-
-      const purgeTargets = routeEntry.policy.public
-        ? publicPathsForRoute(routeEntry.concreteRoute, env)
-        : privatePathsForRoute(routeEntry.concreteRoute, env);
-      for (const target of purgeTargets) {
-        await purgeCacheForPath(origin, target);
+      writtenBytes += built.writtenBytes;
+      for (const entry of built.manifestEntries) {
+        addManifestEntry(manifest, entry, owners);
+      }
+      for (const target of built.purgeTargets) {
+        await purgeCacheForPath(new URL(req.url).origin, target);
       }
     }
 

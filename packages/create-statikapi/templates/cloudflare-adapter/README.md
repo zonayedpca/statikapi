@@ -12,7 +12,11 @@ This project uses **@statikapi/adapter-cf** to:
 ## Commands
 
 - `pnpm dev`  
-  Run `statikapi-cf` in watch mode and start `wrangler dev --local`.
+  Run the worker bundle watcher, `wrangler dev --local`, and a local preview UI.
+- Local preview UI:
+  - `http://127.0.0.1:8788/_ui/`
+  - reads manifest and route payloads from the local Worker runtime
+  - injects the private-route auth header from `.dev.vars` for previewing private endpoints
 
 - `pnpm build`
   One-off build: bundle worker to `dist/worker.mjs`.
@@ -26,6 +30,23 @@ This project uses **@statikapi/adapter-cf** to:
 - `statikapi.config.js` — project-level Cloudflare defaults
 - `wrangler.toml` — public/private bucket bindings, KV binding, and runtime env vars
 - `.dev.vars.example` — copy to `.dev.vars` for local secrets and account-scoped deploy envs
+
+## Local preview
+
+`pnpm dev` starts three processes:
+
+- a watcher that rebuilds `dist/worker.mjs`
+- `wrangler dev --local` on `http://127.0.0.1:8787`
+- a preview proxy on `http://127.0.0.1:8788/_ui/`
+
+The preview proxy serves the shared StatikAPI UI and forwards route reads to the local Worker.
+
+For private routes, it reads:
+
+- `STATIK_PRIVATE_AUTH_HEADER_NAME`
+- `STATIK_PRIVATE_AUTH_HEADER_VALUE`
+
+from `.dev.vars` so you can inspect private outputs locally without manually attaching headers in the browser.
 
 ## Route visibility
 

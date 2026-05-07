@@ -85,6 +85,10 @@ function makeEnv(overrides = {}) {
 test('worker mode builds public and private outputs, skips webhook-disabled routes, and serves private data with auth', async () => {
   const cwd = await makeProject({
     'statikapi.config.js': `export default {
+  listIndex: {
+    enabled: true,
+    pick: ['id']
+  },
   cloudflare: {
     servingMode: 'worker',
     webhook: true,
@@ -115,18 +119,22 @@ export async function data({ params }) { return { id: params.id, scope: 'private
   );
   assert.equal(buildRes.status, 200);
   const buildBody = await buildRes.json();
-  assert.equal(buildBody.files, 3);
+  assert.equal(buildBody.files, 4);
 
   const manifestRes = await worker.fetch(new Request('https://example.test/manifest'), env);
   const manifest = await manifestRes.json();
   assert.deepEqual(
     manifest.map((entry) => entry.route),
-    ['/account', '/public', '/public/posts/1']
+    ['/account', '/public', '/public/posts', '/public/posts/1']
   );
 
   const publicRes = await worker.fetch(new Request('https://example.test/public/posts/1'), env);
   assert.equal(publicRes.status, 200);
   assert.equal((await publicRes.json()).scope, 'public-post');
+
+  const publicIndexRes = await worker.fetch(new Request('https://example.test/public/posts'), env);
+  assert.equal(publicIndexRes.status, 200);
+  assert.deepEqual(await publicIndexRes.json(), [{ id: '1' }]);
 
   const privateDenied = await worker.fetch(new Request('https://example.test/account'), env);
   assert.equal(privateDenied.status, 403);
@@ -149,6 +157,19 @@ export async function data({ params }) { return { id: params.id, scope: 'private
     env
   );
   assert.equal(targetedBlocked.status, 403);
+
+  const targetedCollection = await worker.fetch(
+    new Request('https://example.test/build?route=/public/posts', {
+      method: 'POST',
+      headers: { authorization: 'Bearer build-secret' },
+      body: JSON.stringify({}),
+    }),
+    env
+  );
+  assert.equal(targetedCollection.status, 200);
+  const targetedCollectionBody = await targetedCollection.json();
+  assert.equal(targetedCollectionBody.files, 2);
+  assert.deepEqual(targetedCollectionBody.routes, ['/public/posts', '/public/posts/1']);
 });
 
 test('r2-public mode hides /public worker reads and enforces worker request limit', async () => {

@@ -41,6 +41,8 @@ test('scaffolds CLOUDFLARE template with dual buckets, config, and deploy wiring
 
   const pkg = JSON.parse(await fs.readFile(path.join(appDir, 'package.json'), 'utf8'));
   assert.equal(pkg.scripts.deploy, 'wrangler deploy');
+  assert.equal(pkg.scripts.preview, 'statikapi-cf preview --worker http://127.0.0.1:8787 --port 8788');
+  assert.match(pkg.scripts.dev, /PREVIEW/);
 
   const wrangler = await fs.readFile(path.join(appDir, 'wrangler.toml'), 'utf8');
   assert.match(wrangler, /STATIK_PUBLIC_BUCKET/);

@@ -2,19 +2,39 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { bundle } from '../src/node/bundle.js';
+import { startPreviewServer } from '../src/node/preview.js';
 
 function parseArgs(argv) {
-  const out = { srcDir: null, outFile: null, prettyDefault: false, cwd: null, watch: false };
+  const out = {
+    command: 'build',
+    srcDir: null,
+    outFile: null,
+    prettyDefault: false,
+    cwd: null,
+    watch: false,
+    host: '127.0.0.1',
+    port: 8788,
+    workerOrigin: 'http://127.0.0.1:8787',
+  };
+  if (argv[0] === 'preview') {
+    out.command = 'preview';
+    argv = argv.slice(1);
+  }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--src' && argv[i + 1]) out.srcDir = argv[++i];
     else if (a === '--out' && argv[i + 1]) out.outFile = argv[++i];
     else if (a === '--cwd' && argv[i + 1]) out.cwd = argv[++i];
+    else if (a === '--host' && argv[i + 1]) out.host = argv[++i];
+    else if (a === '--port' && argv[i + 1]) out.port = Number(argv[++i]);
+    else if (a === '--worker' && argv[i + 1]) out.workerOrigin = argv[++i];
     else if (a === '--pretty') out.prettyDefault = true;
     else if (a === '--watch') out.watch = true;
     else if (a === '--help' || a === '-h') {
       console.log(
-        `Usage: statikapi-cf [--src src-api] [--out dist/worker.mjs] [--pretty] [--cwd DIR] [--watch]\n` +
+        `Usage:\n` +
+          `  statikapi-cf [--src src-api] [--out dist/worker.mjs] [--pretty] [--cwd DIR] [--watch]\n` +
+          `  statikapi-cf preview [--cwd DIR] [--host 127.0.0.1] [--port 8788] [--worker http://127.0.0.1:8787]\n` +
           `Auto-detects src from wrangler.toml [vars] STATIK_SRC if present.`
       );
       process.exit(0);
@@ -69,7 +89,7 @@ function readTomlVar(toml, key) {
 
   const outFile = args.outFile || 'dist/worker.mjs';
 
-  const run = async () => {
+  const runBuild = async () => {
     await bundle({
       cwd: root,
       srcDir,
@@ -82,7 +102,19 @@ function readTomlVar(toml, key) {
   };
 
   try {
-    await run();
+    if (args.command === 'preview') {
+      const preview = await startPreviewServer({
+        cwd: root,
+        host: args.host,
+        port: Number.isFinite(args.port) ? args.port : 8788,
+        workerOrigin: args.workerOrigin,
+      });
+      console.log(`statikapi-cf preview → serving on http://${preview.host}:${preview.port}/_ui/`);
+      await new Promise(() => {});
+      return;
+    }
+
+    await runBuild();
   } catch (e) {
     console.error(e?.stack || e?.message || String(e));
     process.exit(1);

@@ -9,6 +9,7 @@ tmp
 coverage
 api-out
 example/**/api-out
+example/**/public
 
 # editors
 .DS_Store

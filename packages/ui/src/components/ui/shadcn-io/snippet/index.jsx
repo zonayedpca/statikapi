@@ -1,29 +1,25 @@
-'use client';;
+'use client';
 import { CheckIcon, CopyIcon } from 'lucide-react';
 import { cloneElement, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
-export const Snippet = ({
-  className,
-  ...props
-}) => (
+export const Snippet = ({ className, ...props }) => (
   <Tabs
     className={cn('group w-full gap-0 overflow-hidden rounded-md border', className)}
-    {...props} />
+    {...props}
+  />
 );
 
-export const SnippetHeader = ({
-  className,
-  ...props
-}) => (
+export const SnippetHeader = ({ className, ...props }) => (
   <div
     className={cn(
       'flex flex-row items-center justify-between border-b bg-secondary p-1',
       className
     )}
-    {...props} />
+    {...props}
+  />
 );
 
 export const SnippetCopyButton = ({
@@ -38,11 +34,7 @@ export const SnippetCopyButton = ({
   const [isCopied, setIsCopied] = useState(false);
 
   const copyToClipboard = () => {
-    if (
-      typeof window === 'undefined' ||
-      !navigator.clipboard.writeText ||
-      !value
-    ) {
+    if (typeof window === 'undefined' || !navigator.clipboard.writeText || !value) {
       return;
     }
 
@@ -69,7 +61,8 @@ export const SnippetCopyButton = ({
       onClick={copyToClipboard}
       size="icon"
       variant="ghost"
-      {...props}>
+      {...props}
+    >
       {children ?? icon}
     </Button>
   );
@@ -77,22 +70,12 @@ export const SnippetCopyButton = ({
 
 export const SnippetTabsList = TabsList;
 
-export const SnippetTabsTrigger = ({
-  className,
-  ...props
-}) => (
+export const SnippetTabsTrigger = ({ className, ...props }) => (
   <TabsTrigger className={cn('gap-1.5', className)} {...props} />
 );
 
-export const SnippetTabsContent = ({
-  className,
-  children,
-  ...props
-}) => (
-  <TabsContent
-    asChild
-    className={cn('mt-0 bg-background p-4 text-sm', className)}
-    {...props}>
+export const SnippetTabsContent = ({ className, children, ...props }) => (
+  <TabsContent asChild className={cn('mt-0 bg-background p-4 text-sm', className)} {...props}>
     <pre className="truncate">{children}</pre>
   </TabsContent>
 );

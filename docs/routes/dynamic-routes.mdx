@@ -11,17 +11,16 @@ src-api/users/[id].js  → /users/1/index.json, /users/2/index.json, ...
 ```js
 // src-api/users/[id].js
 export async function paths() {
-  return ["1", "2", "3"];
+  return ['1', '2', '3'];
 }
 
 export async function data({ params }) {
   return {
     id: params.id,
-    role: Number(params.id) % 2 === 0 ? "editor" : "viewer",
-    generatedAt: new Date().toISOString()
+    role: Number(params.id) % 2 === 0 ? 'editor' : 'viewer',
+    generatedAt: new Date().toISOString(),
   };
 }
-
 ```
 
 `paths()` returns an array of **strings** for the bracketed param.

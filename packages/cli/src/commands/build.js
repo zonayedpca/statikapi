@@ -8,11 +8,7 @@ import { loadPaths } from '../loader/loadPaths.js';
 import { loadRouteConfig } from '../loader/loadRouteConfig.js';
 import { loadModuleValue } from '../loader/loadModuleValue.js';
 import { mapRoutes } from '../router/mapRoutes.js';
-import {
-  collectionRouteForSegments,
-  toConcreteRoute,
-  toParams,
-} from '../router/routeHelpers.js';
+import { collectionRouteForSegments, toConcreteRoute, toParams } from '../router/routeHelpers.js';
 import { readFlags } from '../util/readFlags.js';
 import { emptyDir, writeFileEnsured } from '../util/fsx.js';
 import { formatBytes } from '../util/bytes.js';

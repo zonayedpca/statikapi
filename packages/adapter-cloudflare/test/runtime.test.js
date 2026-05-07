@@ -61,7 +61,9 @@ async function makeProject(files) {
 
 async function loadWorker(cwd) {
   await bundle({ cwd, srcDir: 'src-api', outFile: 'dist/worker.mjs' });
-  const mod = await import(pathToFileURL(path.join(cwd, 'dist/worker.mjs')).href + `?t=${Date.now()}`);
+  const mod = await import(
+    pathToFileURL(path.join(cwd, 'dist/worker.mjs')).href + `?t=${Date.now()}`
+  );
   return mod.default;
 }
 

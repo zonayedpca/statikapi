@@ -60,8 +60,8 @@ Each route can override the project default with:
 export const config = {
   cloudflare: {
     public: true,
-    webhook: true
-  }
+    webhook: true,
+  },
 };
 ```
 

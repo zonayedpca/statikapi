@@ -84,8 +84,8 @@ Route modules can override the project default:
 export const config = {
   cloudflare: {
     public: true,
-    webhook: true
-  }
+    webhook: true,
+  },
 };
 ```
 
@@ -285,6 +285,7 @@ If you use a Cloudflare API token for deploy automation, keep it least-privilege
 - Workers KV Storage: Edit
 
 Store account-scoped deploy variables outside the committed source tree. The scaffold writes placeholders into `.dev.vars.example` so contributors can copy them locally without checking secrets into Git.
+
 - CI/CD pipelines
 
 Just remember to:

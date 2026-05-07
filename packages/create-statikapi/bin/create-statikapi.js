@@ -378,7 +378,8 @@ async function main(argv) {
     // language: if cloudflare-adapter, force JS
     language = template === 'cloudflare-adapter' ? 'js' : answers.language || language || 'js';
 
-    srcDir = template === 'cloudflare-adapter' ? srcDir || DEFAULT_SRC : answers.srcDir || DEFAULT_SRC;
+    srcDir =
+      template === 'cloudflare-adapter' ? srcDir || DEFAULT_SRC : answers.srcDir || DEFAULT_SRC;
     outDir = template === 'cloudflare-adapter' ? DEFAULT_OUT : answers.outDir || DEFAULT_OUT;
     wantGitignore = template === 'cloudflare-adapter' ? wantGitignore : !!answers.gitignore;
 
@@ -1135,7 +1136,10 @@ async function patchCloudflareWrangler(
     .replace(/binding\s*=\s*"STATIK_PUBLIC_BUCKET"/, `binding = "${publicBucketBinding}"`)
     .replace(/bucket_name\s*=\s*"REPLACE_ME_PUBLIC_BUCKET"/, `bucket_name = "${publicBucketName}"`)
     .replace(/binding\s*=\s*"STATIK_PRIVATE_BUCKET"/, `binding = "${privateBucketBinding}"`)
-    .replace(/bucket_name\s*=\s*"REPLACE_ME_PRIVATE_BUCKET"/, `bucket_name = "${privateBucketName}"`)
+    .replace(
+      /bucket_name\s*=\s*"REPLACE_ME_PRIVATE_BUCKET"/,
+      `bucket_name = "${privateBucketName}"`
+    )
 
     // KV namespace
     .replace(/binding\s*=\s*"STATIK_MANIFEST"/, `binding = "${kvBinding}"`)

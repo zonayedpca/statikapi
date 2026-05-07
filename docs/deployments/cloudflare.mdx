@@ -26,6 +26,7 @@ Cloudflare also supports **build hooks and webhooks**, which can trigger rebuild
 > Example: You can configure a webhook in Cloudflare Pages and have your StatikAPI build process call it whenever `api-out/` is regenerated.
 
 This approach works great for:
+
 - Small APIs
 - Public demo endpoints
 - Combined projects (for example, your documentation and JSON API in one Pages site)
@@ -33,6 +34,7 @@ This approach works great for:
 Your JSON files will be served from the same global CDN edge network that powers Cloudflare Pages.
 
 **Example URL**
+
 ```
 https://my-statikapi.pages.dev/api/users/1/index.json
 ```
@@ -45,6 +47,7 @@ Cloudflare Pages is primarily designed for **websites**, not large API systems.
 If you plan to serve thousands of JSON files or expect high traffic, review their **fair use policy** and bandwidth limits.
 
 **Summary:**
+
 - Occasional JSON requests are fine.
 - Heavy API-like workloads may be rate-limited or blocked.
 - Limits and caching behavior vary per plan — always review the [Cloudflare Pages Limits](https://developers.cloudflare.com/pages/platform/limits/) and Terms of Service.
@@ -76,7 +79,7 @@ You can make your R2 bucket public or serve it behind a Worker:
 export default {
   async fetch(request) {
     // Example: Proxy JSON files from R2
-  }
+  },
 };
 ```
 
@@ -90,6 +93,7 @@ If you need:
 use the dedicated [Cloudflare Worker + R2 adapter](../serverless/cloudflare-adapter) instead of a plain `api-out/` upload flow.
 
 **Advantages of R2**
+
 - Handles large-scale APIs efficiently
 - No egress bandwidth fees within Cloudflare
 - Can integrate seamlessly with Workers and KV
@@ -102,5 +106,5 @@ use the dedicated [Cloudflare Worker + R2 adapter](../serverless/cloudflare-adap
 - For **small projects** or when combining with an existing site → use **Cloudflare Pages**
 - For **large datasets** or when serving JSON like an API → use **Cloudflare R2**
 - Always follow Cloudflare’s current **usage policies and terms** to stay within fair-use limits
-- You can also host your APIs directly with **StatikAPI Cloud** *(coming soon)* — a managed hosting solution built for static JSON APIs, automatic builds, and versioned deployments.  
+- You can also host your APIs directly with **StatikAPI Cloud** _(coming soon)_ — a managed hosting solution built for static JSON APIs, automatic builds, and versioned deployments.  
   [Join the waitlist](#subscription) to get early access.

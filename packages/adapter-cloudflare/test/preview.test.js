@@ -71,8 +71,14 @@ test('preview helpers load local auth env, fetch manifest/routes, and resolve UI
 
   assert.deepEqual(
     diffManifestRoutes(
-      [{ route: '/public', hash: 'a' }, { route: '/account', hash: 'b' }],
-      [{ route: '/public', hash: 'c' }, { route: '/posts', hash: 'd' }]
+      [
+        { route: '/public', hash: 'a' },
+        { route: '/account', hash: 'b' },
+      ],
+      [
+        { route: '/public', hash: 'c' },
+        { route: '/posts', hash: 'd' },
+      ]
     ),
     ['/account', '/posts', '/public']
   );

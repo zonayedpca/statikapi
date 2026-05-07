@@ -11,11 +11,7 @@ import { loadRouteConfig } from '../loader/loadRouteConfig.js';
 import { loadModuleValue } from '../loader/loadModuleValue.js';
 import { loadPaths } from '../loader/loadPaths.js';
 import { mapRoutes, fileToRoute } from '../router/mapRoutes.js';
-import {
-  collectionRouteForSegments,
-  toConcreteRoute,
-  toParams,
-} from '../router/routeHelpers.js';
+import { collectionRouteForSegments, toConcreteRoute, toParams } from '../router/routeHelpers.js';
 import { readFlags } from '../util/readFlags.js';
 import { writeFileEnsured } from '../util/fsx.js';
 import { routeToOutPath } from '../build/routeOutPath.js';
@@ -169,7 +165,9 @@ export default async function devCmd(argv) {
       if (!collectionRoute) {
         throw new Error(`config.listIndex requires a static parent route for ${r.route}`);
       }
-      const payload = listItems.map((item) => pickItemFields(item, routeConfig.listIndex.pick, r.route));
+      const payload = listItems.map((item) =>
+        pickItemFields(item, routeConfig.listIndex.pick, r.route)
+      );
       const json = JSON.stringify(payload, null, 2) + '\n';
       const outFile = routeToOutPath({ outAbs: config.paths.outAbs, route: collectionRoute });
       await writeFileEnsured(outFile, json);

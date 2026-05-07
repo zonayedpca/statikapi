@@ -12,7 +12,8 @@ This project uses **@statikapi/adapter-cf** to:
 ## Commands
 
 - `pnpm dev`  
-  Run the worker bundle watcher, `wrangler dev --local`, and a local preview UI.
+  Run the worker bundle watcher, `wrangler dev --local`, and the local preview UI together.
+  This flow should also try to open `http://127.0.0.1:8788/_ui/` automatically.
 - Local preview UI:
   - `http://127.0.0.1:8788/_ui/`
   - reads manifest and route payloads from the local Worker runtime
@@ -33,11 +34,12 @@ This project uses **@statikapi/adapter-cf** to:
 
 ## Local preview
 
-`pnpm dev` starts three processes:
+`pnpm dev` uses `statikapi-cf dev` to:
 
-- a watcher that rebuilds `dist/worker.mjs`
-- `wrangler dev --local` on `http://127.0.0.1:8787`
-- a preview proxy on `http://127.0.0.1:8788/_ui/`
+- build `dist/worker.mjs` once up front
+- keep rebuilding when `src-api/` or `statikapi.config.js` changes
+- run `wrangler dev --local` on `http://127.0.0.1:8787`
+- run a preview proxy on `http://127.0.0.1:8788/_ui/`
 
 The preview proxy serves the shared StatikAPI UI and forwards route reads to the local Worker.
 
@@ -89,6 +91,7 @@ For deploy automation, use a Cloudflare API token with only the permissions you 
 ## Static assets
 
 Public outputs under `/public/...` are intended to be served as Cloudflare Static Assets through the Worker configuration.
+Those asset-matching requests should be served directly by Cloudflare Static Assets rather than forcing the Worker to run first.
 
 By default the assets directory is `public`, but the scaffold can be configured to use a different Static Assets directory if you want.
 

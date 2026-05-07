@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 import fs from 'node:fs/promises';
+import fss from 'node:fs';
 import path from 'node:path';
+import { exec, spawn } from 'node:child_process';
+
 import { bundle } from '../src/node/bundle.js';
 import { startPreviewServer } from '../src/node/preview.js';
 
@@ -16,11 +19,16 @@ function parseArgs(argv) {
     host: '127.0.0.1',
     port: 8788,
     workerOrigin: 'http://127.0.0.1:8787',
+    workerPort: 8787,
+    noOpen: false,
+    pollMs: 750,
   };
-  if (argv[0] === 'preview') {
-    out.command = 'preview';
+
+  if (argv[0] === 'preview' || argv[0] === 'dev') {
+    out.command = argv[0];
     argv = argv.slice(1);
   }
+
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--src' && argv[i + 1]) out.srcDir = argv[++i];
@@ -30,13 +38,17 @@ function parseArgs(argv) {
     else if (a === '--host' && argv[i + 1]) out.host = argv[++i];
     else if (a === '--port' && argv[i + 1]) out.port = Number(argv[++i]);
     else if (a === '--worker' && argv[i + 1]) out.workerOrigin = argv[++i];
+    else if (a === '--worker-port' && argv[i + 1]) out.workerPort = Number(argv[++i]);
+    else if (a === '--poll-ms' && argv[i + 1]) out.pollMs = Number(argv[++i]);
     else if (a === '--pretty') out.prettyDefault = true;
     else if (a === '--watch') out.watch = true;
+    else if (a === '--no-open') out.noOpen = true;
     else if (a === '--help' || a === '-h') {
       console.log(
-          `Usage:\n` +
-          `  statikapi-cf [--src src-api] [--out dist/worker.mjs] [--public-out public] [--pretty] [--cwd DIR] [--watch]\n` +
-          `  statikapi-cf preview [--cwd DIR] [--host 127.0.0.1] [--port 8788] [--worker http://127.0.0.1:8787]\n` +
+        `Usage:\n` +
+          `  statikapi-cf [--src src-api] [--out dist/worker.mjs] [--public-out public] [--pretty] [--cwd DIR]\n` +
+          `  statikapi-cf preview [--cwd DIR] [--host 127.0.0.1] [--port 8788] [--worker http://127.0.0.1:8787] [--no-open]\n` +
+          `  statikapi-cf dev [--cwd DIR] [--src src-api] [--out dist/worker.mjs] [--public-out public] [--host 127.0.0.1] [--port 8788] [--worker-port 8787] [--poll-ms 750] [--no-open]\n` +
           `Auto-detects src from wrangler.toml [vars] STATIK_SRC and public assets directory from [assets].directory when present.`
       );
       process.exit(0);
@@ -52,7 +64,7 @@ async function findProjectRoot(start) {
       const f = await fs.readFile(path.join(dir, 'wrangler.toml'), 'utf8');
       return { root: dir, wranglerToml: f };
     } catch {
-      // ignore catch
+      // ignore
     }
     const parent = path.dirname(dir);
     if (parent === dir) return { root: path.resolve(start), wranglerToml: null };
@@ -61,8 +73,6 @@ async function findProjectRoot(start) {
 }
 
 function readTomlVar(toml, key) {
-  // tiny parser for [vars] STATIK_SRC = "..."
-  // keeps it simple and safe; not a full TOML parse
   const lines = String(toml || '').split(/\r?\n/);
   let inVars = false;
   for (const line of lines) {
@@ -96,36 +106,220 @@ function readTomlAssetsDirectory(toml) {
   return null;
 }
 
+async function runBuildOnce(options) {
+  await bundle(options);
+  console.log(`✔ worker emitted → ${path.relative(options.cwd, options.outFile)}`);
+}
+
+async function collectWatchState(root, srcDir) {
+  const watchRoot = path.resolve(root, srcDir);
+  const state = new Map();
+
+  async function walk(dir) {
+    const ents = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const entry of ents) {
+      if (entry.name.startsWith('_')) continue;
+      const abs = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(abs);
+        continue;
+      }
+      if (!entry.isFile() || !/\.(js|mjs|cjs)$/i.test(entry.name)) continue;
+      const st = await fs.stat(abs).catch(() => null);
+      if (!st) continue;
+      state.set(abs, `${st.size}:${Math.floor(st.mtimeMs)}`);
+    }
+  }
+
+  await walk(watchRoot);
+
+  const configFile = path.join(root, 'statikapi.config.js');
+  const configStat = await fs.stat(configFile).catch(() => null);
+  if (configStat) {
+    state.set(configFile, `${configStat.size}:${Math.floor(configStat.mtimeMs)}`);
+  }
+
+  return state;
+}
+
+async function startPollingBuildWatcher({
+  root,
+  srcDir,
+  outFile,
+  publicOutDir,
+  prettyDefault,
+  useIndexJson,
+  pollMs,
+}) {
+  let last = await collectWatchState(root, srcDir);
+  let timer = null;
+  let building = false;
+  let queued = false;
+
+  async function rebuild(reason) {
+    if (building) {
+      queued = true;
+      return;
+    }
+    building = true;
+    try {
+      console.log(`statikapi-cf dev → rebuilding (${reason})`);
+      await bundle({
+        cwd: root,
+        srcDir,
+        outFile,
+        publicOutDir,
+        prettyDefault,
+        useIndexJson,
+      });
+      console.log(`✔ worker emitted → ${path.relative(root, outFile)}`);
+    } catch (err) {
+      console.error(err?.stack || err?.message || String(err));
+    } finally {
+      building = false;
+      if (queued) {
+        queued = false;
+        await rebuild('queued change');
+      }
+    }
+  }
+
+  timer = setInterval(async () => {
+    try {
+      const next = await collectWatchState(root, srcDir);
+      if (!mapsEqual(last, next)) {
+        last = next;
+        await rebuild('source change');
+      }
+    } catch {
+      // keep polling
+    }
+  }, pollMs);
+
+  timer.unref?.();
+
+  return async () => {
+    if (timer) clearInterval(timer);
+  };
+}
+
+function mapsEqual(left, right) {
+  if (left.size !== right.size) return false;
+  for (const [key, value] of left) {
+    if (right.get(key) !== value) return false;
+  }
+  return true;
+}
+
+function openInBrowser(url) {
+  const cmd =
+    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+  exec(`${cmd} "${url}"`);
+}
+
+async function runDev({
+  root,
+  srcDir,
+  outFile,
+  publicOutDir,
+  prettyDefault,
+  useIndexJson,
+  host,
+  port,
+  workerPort,
+  noOpen,
+  pollMs,
+}) {
+  await runBuildOnce({
+    cwd: root,
+    srcDir,
+    outFile,
+    publicOutDir,
+    prettyDefault,
+    useIndexJson,
+  });
+
+  const workerOrigin = `http://${host}:${workerPort}`;
+  const preview = await startPreviewServer({
+    cwd: root,
+    host,
+    port,
+    workerOrigin,
+  });
+  const previewUrl = `http://${preview.host}:${preview.port}/_ui/`;
+  console.log(`statikapi-cf dev → preview on ${previewUrl}`);
+  if (!noOpen) {
+    openInBrowser(previewUrl);
+  }
+
+  const stopWatcher = await startPollingBuildWatcher({
+    root,
+    srcDir,
+    outFile,
+    publicOutDir,
+    prettyDefault,
+    useIndexJson,
+    pollMs,
+  });
+
+  const wrangler = spawn('wrangler', ['dev', '--local', '--port', String(workerPort)], {
+    cwd: root,
+    stdio: 'inherit',
+  });
+
+  const shutdown = async (code = 0) => {
+    try {
+      await stopWatcher();
+    } catch {
+      // ignore
+    }
+    try {
+      await preview.close();
+    } catch {
+      // ignore
+    }
+    if (!wrangler.killed) {
+      wrangler.kill('SIGTERM');
+    }
+    process.exit(code);
+  };
+
+  process.on('SIGINT', () => void shutdown(0));
+  process.on('SIGTERM', () => void shutdown(0));
+
+  await new Promise((resolve, reject) => {
+    wrangler.on('error', reject);
+    wrangler.on('exit', (code) => {
+      if (code && code !== 0) {
+        reject(new Error(`wrangler dev exited with code ${code}`));
+        return;
+      }
+      resolve();
+    });
+  });
+
+  await shutdown(0);
+}
+
 (async function main() {
   const args = parseArgs(process.argv.slice(2));
 
   const base = args.cwd || process.cwd();
   const { root, wranglerToml } = await findProjectRoot(base);
 
-  // Resolve srcDir preference: flag > [vars]STATIK_SRC > env > default
-  let srcDir =
+  const srcDir =
     args.srcDir || readTomlVar(wranglerToml, 'STATIK_SRC') || process.env.STATIK_SRC || 'src-api';
   const publicOutDir =
-    args.publicOutDir || readTomlAssetsDirectory(wranglerToml) || process.env.STATIK_PUBLIC_OUT || 'public';
+    args.publicOutDir ||
+    readTomlAssetsDirectory(wranglerToml) ||
+    process.env.STATIK_PUBLIC_OUT ||
+    'public';
   const useIndexJson = String(
-    readTomlVar(wranglerToml, 'STATIK_USE_INDEX_JSON') || process.env.STATIK_USE_INDEX_JSON || 'false'
+    readTomlVar(wranglerToml, 'STATIK_USE_INDEX_JSON') ||
+      process.env.STATIK_USE_INDEX_JSON ||
+      'false'
   ).toLowerCase() === 'true';
-
   const outFile = args.outFile || 'dist/worker.mjs';
-
-  const runBuild = async () => {
-    await bundle({
-      cwd: root,
-      srcDir,
-      outFile,
-      publicOutDir,
-      prettyDefault: args.prettyDefault,
-      useIndexJson,
-      watch: args.watch,
-    });
-    if (!args.watch) console.log(`✔ worker emitted → ${path.relative(root, outFile)}`);
-    else console.log(`⟲ watcher active — emitting → ${path.relative(root, outFile)}`);
-  };
 
   try {
     if (args.command === 'preview') {
@@ -135,12 +329,40 @@ function readTomlAssetsDirectory(toml) {
         port: Number.isFinite(args.port) ? args.port : 8788,
         workerOrigin: args.workerOrigin,
       });
-      console.log(`statikapi-cf preview → serving on http://${preview.host}:${preview.port}/_ui/`);
+      const previewUrl = `http://${preview.host}:${preview.port}/_ui/`;
+      console.log(`statikapi-cf preview → serving on ${previewUrl}`);
+      if (!args.noOpen) {
+        openInBrowser(previewUrl);
+      }
       await new Promise(() => {});
       return;
     }
 
-    await runBuild();
+    if (args.command === 'dev') {
+      await runDev({
+        root,
+        srcDir,
+        outFile,
+        publicOutDir,
+        prettyDefault: args.prettyDefault,
+        useIndexJson,
+        host: args.host,
+        port: Number.isFinite(args.port) ? args.port : 8788,
+        workerPort: Number.isFinite(args.workerPort) ? args.workerPort : 8787,
+        noOpen: args.noOpen,
+        pollMs: Number.isFinite(args.pollMs) ? args.pollMs : 750,
+      });
+      return;
+    }
+
+    await runBuildOnce({
+      cwd: root,
+      srcDir,
+      outFile,
+      publicOutDir,
+      prettyDefault: args.prettyDefault,
+      useIndexJson,
+    });
   } catch (e) {
     console.error(e?.stack || e?.message || String(e));
     process.exit(1);

@@ -47,17 +47,19 @@ test('scaffolds CLOUDFLARE template with static assets, private storage, config,
 
   const pkg = JSON.parse(await fs.readFile(path.join(appDir, 'package.json'), 'utf8'));
   assert.equal(pkg.scripts.deploy, 'wrangler deploy');
+  assert.equal(pkg.scripts.dev, 'statikapi-cf dev --worker-port 8787 --port 8788');
   assert.equal(
     pkg.scripts.preview,
     'statikapi-cf preview --worker http://127.0.0.1:8787 --port 8788'
   );
-  assert.match(pkg.scripts.dev, /PREVIEW/);
+  assert.ok(!pkg.devDependencies.concurrently);
+  assert.ok(!pkg.devDependencies['chokidar-cli']);
 
   const wrangler = await fs.readFile(path.join(appDir, 'wrangler.toml'), 'utf8');
   assert.match(wrangler, /\[assets\]/);
   assert.match(wrangler, /directory = "\.\/public"/);
   assert.match(wrangler, /binding = "ASSETS"/);
-  assert.match(wrangler, /run_worker_first = true/);
+  assert.doesNotMatch(wrangler, /run_worker_first/);
   assert.match(wrangler, /STATIK_PRIVATE_BUCKET/);
   assert.match(wrangler, /STATIK_PRIVATE_AUTH_HEADER_NAME/);
   assert.match(wrangler, /STATIK_WORKER_REQUEST_LIMIT/);

@@ -45,13 +45,14 @@ The template:
 - Writes a **`.dev.vars.example`** file for local secrets and deploy env templates.
 - Keeps everything **JavaScript-only**.
 - Includes scripts for local dev, build, and deploy.
+- Uses a package-manager-neutral `statikapi-cf dev` flow so `pnpm`, `npm`, and `yarn` can all start the same local preview experience.
 
 After scaffolding:
 
 ```bash
 cd my-worker
 pnpm install   # or yarn / npm
-pnpm dev       # runs the local Worker dev loop
+pnpm dev       # runs the local Worker dev loop + preview UI
 ```
 
 > Exact script names may vary slightly, but the template wires dev/build scripts for you.
@@ -61,7 +62,8 @@ pnpm dev       # runs the local Worker dev loop
 
 - Public routes are emitted under `/public/...`.
 - Public routes are generated into the project `public/` assets directory during `statikapi-cf build`.
-- The Worker serves public requests through its `ASSETS` binding and serves private requests from private storage.
+- Asset-matching `/public/...` requests are intended to be served directly by Cloudflare Static Assets.
+- The Worker serves private requests from private storage and continues to own `/build` and `/manifest`.
 - Private routes stay at their original route paths and require the configured auth header.
 
 ## 3) Route-level Cloudflare config
@@ -92,7 +94,7 @@ At a high level, the Cloudflare adapter Worker:
 3. **Writes the private manifest into KV and merges public routes from the embedded build manifest**
 4. **Tracks optional runtime limits in KV**
 5. **Exposes `/build` and `/manifest`**
-6. **Serves private reads from R2 and public reads from `env.ASSETS`**
+6. **Serves private reads from R2 while public `/public/...` requests are handled directly by Static Assets**
 
 ## 5) Required bindings and env vars
 
@@ -102,7 +104,6 @@ In **`wrangler.toml`**:
 [assets]
 directory = "./public"
 binding = "ASSETS"
-run_worker_first = true
 
 [[r2_buckets]]
 binding = "STATIK_PRIVATE_BUCKET"

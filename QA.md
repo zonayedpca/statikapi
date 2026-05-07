@@ -43,6 +43,7 @@ Required before publish:
 | QA-0015 | Cloudflare | Verify Worker bundle build with `pnpm -C example/cloudflare build`                                                    | 🟦 QA Ready       | `example/cloudflare/dist/worker.mjs` exists                                                  |
 | QA-0016 | Cloudflare | Verify local Worker runtime with `pnpm -C example/cloudflare wrangler:dev -- --port 8787`                            | 🟦 QA Ready       | local Worker serves manifest, `/build`, and private routes                                  |
 | QA-0017 | Cloudflare | Verify local preview proxy with `statikapi-cf preview --worker http://127.0.0.1:8787 --port 8788`                   | 🟦 QA Ready       | `http://127.0.0.1:8788/_ui/` loads                                                           |
+| QA-0017A | Cloudflare | Verify default Cloudflare `dev` opens the preview UI flow end to end                                                | 🟦 QA Ready       | `pnpm dev`/`npm run dev`/`yarn dev` start Worker + preview together and the UI is reachable  |
 | QA-0018 | Cloudflare | Verify public-by-default route behavior                                                       | 🟦 QA Ready       | routes without `config.cloudflare.public = false` are emitted under `/public/...` and preview correctly |
 | QA-0019 | Cloudflare | Verify private routes in preview using `.dev.vars` auth injection                                                     | 🟦 QA Ready       | private routes load in preview without manual browser headers                                |
 | QA-0020 | Cloudflare | Verify Cloudflare `listIndex` outputs                                                                                 | 🟦 QA Ready       | collection/index routes appear in manifest and load correctly                                |
@@ -315,6 +316,25 @@ Pass when:
 
 - `http://127.0.0.1:8788/_ui/` loads
 
+#### QA-0017A
+
+Status: `🟦 QA Ready`
+
+Commands:
+
+```bash
+pnpm dev
+npm run dev
+yarn dev
+```
+
+Pass when:
+
+- the default Cloudflare `dev` flow starts the worker build/watch process, local Worker runtime, and preview UI together
+- the preview UI becomes reachable without manually starting a separate preview command
+- the dev flow attempts to open the preview UI automatically unless disabled
+- editing a source route causes rebuilt output to appear in the preview UI
+
 #### QA-0018
 
 Status: `🟦 QA Ready`
@@ -365,7 +385,7 @@ Pass when:
 
 - public routes are reachable under `/public/...`
 - private routes stay on original paths and require auth
-- public routes are served from generated Static Assets
+- public routes are served directly from generated Static Assets without forcing the Worker to run first
 - the same local deployment still serves `/build` and `/manifest` from the Worker
 - the Cloudflare app does not rely on a separate `r2-public` mode
 

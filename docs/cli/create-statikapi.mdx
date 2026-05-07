@@ -110,6 +110,7 @@ export const config = {
 Current Cloudflare conventions:
 
 - public routes are emitted under `/public/...` and served through Cloudflare Static Assets
+- asset-matching public route requests are expected to bypass the Worker and be served directly by Static Assets
 - public route assets are written into the configured Static Assets directory, which defaults to `public`
 - private routes keep their original route paths
 - public is the default; mark a route private with `config.cloudflare.public = false`
@@ -121,7 +122,7 @@ Current Cloudflare conventions:
 
 From there you can:
 
-- Run the dev scripts (based on `wrangler dev` + bundling)
+- Run the default `dev` script, which uses `statikapi-cf dev` to build once, launch the local Worker, launch the preview UI, and try to open the UI automatically
 - Deploy the Worker to Cloudflare
 - Trigger builds via the `/build` webhook documented in  
   [Serverless Adapters → Cloudflare Worker + Static Assets](../serverless/cloudflare-adapter)

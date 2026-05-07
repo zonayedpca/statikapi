@@ -52,8 +52,20 @@ jobs:
           echo "Tag is: $TAG"
           jq -r '.version' packages/core/package.json | grep -x "$TAG"
           jq -r '.version' packages/cli/package.json | grep -x "$TAG"
+          jq -r '.version' packages/adapter-cloudflare/package.json | grep -x "$TAG"
           jq -r '.version' packages/create-statikapi/package.json | grep -x "$TAG"
           echo "✔ versions match"
+
+      - name: Resolve npm dist-tag
+        id: dist_tag
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          if echo "$TAG" | grep -Eq -- '-rc\.[0-9]+$'; then
+            echo "value=rc" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=latest" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Using npm dist-tag: $(cat "$GITHUB_OUTPUT" | sed 's/^value=//')"
 
       # Optional sanity checks before publish
       - name: Pack dry-run (core)
@@ -85,22 +97,22 @@ jobs:
         working-directory: packages/core
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public --provenance
+        run: npm publish --access public --provenance --tag ${{ steps.dist_tag.outputs.value }}
 
       - name: Publish statikapi (CLI)
         working-directory: packages/cli
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public --provenance
+        run: npm publish --access public --provenance --tag ${{ steps.dist_tag.outputs.value }}
 
       - name: Publish @statikapi/adapter-cf
         working-directory: packages/adapter-cloudflare
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public --provenance
+        run: npm publish --access public --provenance --tag ${{ steps.dist_tag.outputs.value }}
 
       - name: Publish create-statikapi
         working-directory: packages/create-statikapi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public --provenance
+        run: npm publish --access public --provenance --tag ${{ steps.dist_tag.outputs.value }}

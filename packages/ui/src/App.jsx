@@ -181,6 +181,7 @@ export default function App() {
       query={query}
       setQuery={setQuery}
       routes={filtered}
+      mode={uiMeta?.mode || 'default'}
       onPick={pick}
       activeRoute={active}
       highlightedIndex={hi}

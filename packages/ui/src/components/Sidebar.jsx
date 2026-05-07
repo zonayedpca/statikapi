@@ -21,9 +21,21 @@ const RouteItem = ({ route, active, highlighted, onClick, subtitle }) => (
 );
 
 const Sidebar = forwardRef(function Sidebar(
-  { count, query, setQuery, routes, onPick, activeRoute, highlightedIndex, headerExtras },
+  { count, query, setQuery, routes, mode, onPick, activeRoute, highlightedIndex, headerExtras },
   listRef
 ) {
+  const grouped =
+    mode === 'cloudflare'
+      ? [
+          { label: 'Public', hint: 'Static Assets', routes: routes.filter((entry) => entry.public) },
+          {
+            label: 'Private',
+            hint: 'Worker + auth',
+            routes: routes.filter((entry) => !entry.public),
+          },
+        ].filter((group) => group.routes.length)
+      : null;
+
   return (
     <aside className="min-h-0 border-r">
       <div className="sticky top-0 z-10 grid gap-2 border-b bg-background p-3">
@@ -41,22 +53,48 @@ const Sidebar = forwardRef(function Sidebar(
       </div>
 
       <ScrollArea className="h-[calc(100vh-12rem)] p-3" ref={listRef}>
-        <div className="space-y-1">
-          {routes.map((e, idx) => (
-            <RouteItem
-              key={e.route}
-              route={e.route}
-              active={activeRoute === e.route}
-              highlighted={highlightedIndex === idx}
-              onClick={() => onPick(e.route)}
-              subtitle={
-                <span className="flex gap-2">
-                  <span title={`${e.bytes} bytes`}>{formatBytes(e.bytes)}</span>
-                  <span title={`Modified: ${formatDate(e.mtime)}`}>{formatDate(e.mtime)}</span>
-                </span>
-              }
-            />
-          ))}
+        <div className="space-y-3">
+          {grouped
+            ? grouped.map((group) => (
+                <section key={group.label} className="space-y-1">
+                  <div className="px-2 pt-1 pb-1">
+                    <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <span>{group.label}</span>
+                      <span>{group.hint}</span>
+                    </div>
+                  </div>
+                  {group.routes.map((e) => (
+                    <RouteItem
+                      key={e.route}
+                      route={e.route}
+                      active={activeRoute === e.route}
+                      highlighted={highlightedIndex === routes.findIndex((item) => item.route === e.route)}
+                      onClick={() => onPick(e.route)}
+                      subtitle={
+                        <span className="flex gap-2">
+                          <span title={`${e.bytes} bytes`}>{formatBytes(e.bytes)}</span>
+                          <span title={`Modified: ${formatDate(e.mtime)}`}>{formatDate(e.mtime)}</span>
+                        </span>
+                      }
+                    />
+                  ))}
+                </section>
+              ))
+            : routes.map((e, idx) => (
+                <RouteItem
+                  key={e.route}
+                  route={e.route}
+                  active={activeRoute === e.route}
+                  highlighted={highlightedIndex === idx}
+                  onClick={() => onPick(e.route)}
+                  subtitle={
+                    <span className="flex gap-2">
+                      <span title={`${e.bytes} bytes`}>{formatBytes(e.bytes)}</span>
+                      <span title={`Modified: ${formatDate(e.mtime)}`}>{formatDate(e.mtime)}</span>
+                    </span>
+                  }
+                />
+              ))}
           {!routes.length && (
             <div className="px-2 py-3 text-xs text-muted-foreground">
               No routes match “{query}”.

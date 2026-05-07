@@ -15,6 +15,7 @@ export async function startPreviewServer({
 } = {}) {
   const uiRoot = resolveUiDist();
   const localEnv = await loadLocalEnv(cwd);
+  const uiMeta = await loadUiMeta(cwd, workerOrigin);
   const sseClients = new Set();
   let lastManifest = null;
   let pollTimer = null;
@@ -39,7 +40,7 @@ export async function startPreviewServer({
       }
 
       if (pathname === '/ui/index' && req.method === 'GET') {
-        const manifest = await fetchManifest(workerOrigin);
+        const manifest = await fetchManifest(workerOrigin, uiMeta);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify(manifest));
         return;
@@ -47,7 +48,7 @@ export async function startPreviewServer({
 
       if (pathname === '/ui/meta' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify(makeUiMeta(workerOrigin)));
+        res.end(JSON.stringify(uiMeta));
         return;
       }
 
@@ -59,7 +60,9 @@ export async function startPreviewServer({
           return;
         }
 
-        const upstream = await fetchRoute(workerOrigin, route, localEnv);
+        const filePath = url.searchParams.get('filePath') || '';
+        const isPublic = url.searchParams.get('public') === '1';
+        const upstream = await fetchRoute(workerOrigin, route, localEnv, { filePath, isPublic });
         res.writeHead(upstream.status, pickForwardHeaders(upstream.headers));
         res.end(upstream.body);
         return;
@@ -103,7 +106,7 @@ export async function startPreviewServer({
 
   pollTimer = setInterval(async () => {
     try {
-      const next = await fetchManifest(workerOrigin);
+      const next = await fetchManifest(workerOrigin, uiMeta);
       if (!lastManifest) {
         lastManifest = next;
         return;
@@ -144,26 +147,43 @@ export async function startPreviewServer({
   };
 }
 
-export async function fetchManifest(workerOrigin) {
-  const res = await fetch(new URL('/manifest', workerOrigin), {
+export async function fetchManifest(workerOrigin, uiMeta = makeUiMeta(workerOrigin)) {
+  const [publicList, privateList] = await Promise.all([
+    fetchManifestList(workerOrigin, uiMeta.publicManifestPath, 'public manifest'),
+    fetchManifestList(workerOrigin, '/_manifest', 'private manifest'),
+  ]);
+  const combined = [...publicList, ...privateList];
+  combined.sort((a, b) => String(a.route || '').localeCompare(String(b.route || '')));
+  return combined;
+}
+
+async function fetchManifestList(workerOrigin, pathname, label) {
+  const res = await fetch(new URL(pathname, workerOrigin), {
     headers: { accept: 'application/json' },
     cache: 'no-store',
   });
   if (!res.ok) {
-    throw new Error(`manifest failed: ${res.status}`);
+    throw new Error(`${label} failed: ${res.status}`);
   }
 
   const list = await res.json();
   return Array.isArray(list) ? list : [];
 }
 
-export function makeUiMeta(workerOrigin) {
-  return { origin: workerOrigin };
+export function makeUiMeta(workerOrigin, options = {}) {
+  return {
+    origin: workerOrigin,
+    mode: 'cloudflare',
+    useIndexJson: options.useIndexJson === true,
+    publicManifestPath:
+      options.publicManifestPath || publicManifestPathFor(options.useIndexJson === true),
+  };
 }
 
-export async function fetchRoute(workerOrigin, route, localEnv) {
+export async function fetchRoute(workerOrigin, route, localEnv, options = {}) {
   const headers = new Headers();
-  const isPublic = route === '/public' || route.startsWith('/public/');
+  const isPublic =
+    options.isPublic === true || route === '/public' || route.startsWith('/public/');
   const name =
     localEnv.STATIK_PRIVATE_AUTH_HEADER_NAME || process.env.STATIK_PRIVATE_AUTH_HEADER_NAME;
   const value =
@@ -173,7 +193,8 @@ export async function fetchRoute(workerOrigin, route, localEnv) {
     headers.set(name, value);
   }
 
-  const res = await fetch(new URL(route, workerOrigin), {
+  const target = isPublic && options.filePath ? '/' + options.filePath.replace(/^\/+/, '') : route;
+  const res = await fetch(new URL(target, workerOrigin), {
     headers,
     cache: 'no-store',
   });
@@ -183,6 +204,47 @@ export async function fetchRoute(workerOrigin, route, localEnv) {
     headers: res.headers,
     body: await res.text(),
   };
+}
+
+async function loadUiMeta(cwd, workerOrigin) {
+  const useIndexJson = await readUseIndexJson(cwd);
+  return makeUiMeta(workerOrigin, {
+    useIndexJson,
+    publicManifestPath: publicManifestPathFor(useIndexJson),
+  });
+}
+
+async function readUseIndexJson(cwd) {
+  const wranglerPath = path.join(cwd, 'wrangler.toml');
+  try {
+    const raw = await fs.readFile(wranglerPath, 'utf8');
+    const value = readTomlVar(raw, 'STATIK_USE_INDEX_JSON');
+    if (value != null) return String(value).toLowerCase() === 'true';
+  } catch {
+    // ignore
+  }
+  return String(process.env.STATIK_USE_INDEX_JSON || 'false').toLowerCase() === 'true';
+}
+
+function readTomlVar(toml, key) {
+  const lines = String(toml || '').split(/\r?\n/);
+  let inVars = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      inVars = trimmed.toLowerCase() === '[vars]';
+      continue;
+    }
+    if (!inVars) continue;
+    const match = trimmed.match(/^([A-Za-z0-9_]+)\s*=\s*["']([^"']+)["']/);
+    if (match && match[1] === key) return match[2];
+  }
+  return null;
+}
+
+function publicManifestPathFor(useIndexJson) {
+  return useIndexJson ? '/public/_manifest/index.json' : '/public/_manifest.json';
 }
 
 export function diffManifestRoutes(prev, next) {

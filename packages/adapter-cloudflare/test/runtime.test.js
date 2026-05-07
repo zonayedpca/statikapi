@@ -144,11 +144,22 @@ export async function data({ params }) { return { id: params.id, scope: 'private
     '1'
   );
 
-  const manifestRes = await worker.fetch(new Request('https://example.test/manifest'), env);
+  const publicManifestRes = await worker.fetch(
+    new Request('https://example.test/public/_manifest'),
+    env
+  );
+  assert.equal(publicManifestRes.status, 200);
+  const publicManifest = await publicManifestRes.json();
+  assert.deepEqual(
+    publicManifest.map((entry) => entry.route),
+    ['/public', '/public/posts', '/public/posts/1']
+  );
+
+  const manifestRes = await worker.fetch(new Request('https://example.test/_manifest'), env);
   const manifest = await manifestRes.json();
   assert.deepEqual(
     manifest.map((entry) => entry.route),
-    ['/account', '/public', '/public/posts', '/public/posts/1']
+    ['/account']
   );
 
   const publicRes = await worker.fetch(new Request('https://example.test/public/posts/1'), env);
@@ -208,7 +219,7 @@ test('public routes are public by default and worker request limit is enforced',
   });
 
   const worker = await loadWorker(cwd);
-  const env = makeEnv(cwd, { STATIK_WORKER_REQUEST_LIMIT: '3' });
+  const env = makeEnv(cwd, { STATIK_WORKER_REQUEST_LIMIT: '4' });
 
   const buildRes = await worker.fetch(
     new Request('https://example.test/build', {
@@ -228,10 +239,16 @@ test('public routes are public by default and worker request limit is enforced',
     'public-root'
   );
 
-  const manifestRes = await worker.fetch(new Request('https://example.test/manifest'), env);
+  const publicManifestRes = await worker.fetch(
+    new Request('https://example.test/public/_manifest'),
+    env
+  );
+  assert.equal(publicManifestRes.status, 200);
+
+  const manifestRes = await worker.fetch(new Request('https://example.test/_manifest'), env);
   assert.equal(manifestRes.status, 200);
 
-  const limitedRes = await worker.fetch(new Request('https://example.test/manifest'), env);
+  const limitedRes = await worker.fetch(new Request('https://example.test/_manifest'), env);
   assert.equal(limitedRes.status, 429);
 });
 
@@ -245,6 +262,17 @@ test('rebundling picks up edited route module contents', async () => {
     JSON.parse(await fs.readFile(path.join(cwd, 'public/public/index.json'), 'utf8')),
     { value: 'one' }
   );
+  const publicManifest = JSON.parse(
+    await fs.readFile(path.join(cwd, 'public/public/_manifest/index.json'), 'utf8')
+  );
+  assert.equal(publicManifest.length, 1);
+  assert.equal(publicManifest[0].route, '/public');
+  assert.equal(publicManifest[0].srcRoute, '/');
+  assert.equal(publicManifest[0].filePath, 'public/index.json');
+  assert.equal(publicManifest[0].public, true);
+  assert.equal(typeof publicManifest[0].hash, 'string');
+  assert.equal(typeof publicManifest[0].mtime, 'number');
+  assert.equal(typeof publicManifest[0].bytes, 'number');
 
   await fs.writeFile(path.join(cwd, 'src-api/index.js'), `export default { value: 'two' };`, 'utf8');
 

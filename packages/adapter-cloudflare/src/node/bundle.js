@@ -368,7 +368,16 @@ async function emitPublicAssets({ cwd, entries, outDir, projectConfig, useIndexJ
   }
 
   manifest.sort((a, b) => a.route.localeCompare(b.route));
+  await writePublicManifestAsset(outRoot, manifest, useIndexJson);
   return manifest;
+}
+
+async function writePublicManifestAsset(outRoot, manifest, useIndexJson) {
+  const body = JSON.stringify(manifest, null, 2) + '\n';
+  const key = outputKeyForRoute('/_manifest', useIndexJson, true);
+  const target = path.join(outRoot, key);
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.writeFile(target, body, 'utf8');
 }
 
 function getNodeRoutePolicy(entry, projectConfig) {
@@ -589,12 +598,6 @@ const WORKER_RUNTIME_JS = `
   async function writeManifest(env, list) {
     const ns = getManifestNS(env);
     await ns.put(MANIFEST_KEY, JSON.stringify(list));
-  }
-
-  function combineManifest(privateEntries) {
-    const combined = [...PUBLIC_MANIFEST, ...privateEntries];
-    combined.sort((a, b) => a.route.localeCompare(b.route));
-    return combined;
   }
 
   async function readCounter(env, key) {
@@ -903,6 +906,19 @@ const WORKER_RUNTIME_JS = `
     return useIndexJson(env) ? '/public' + normalized + '/index.json' : '/public' + normalized + '.json';
   }
 
+  function publicManifestAssetPath(env) {
+    return useIndexJson(env) ? '/public/_manifest/index.json' : '/public/_manifest.json';
+  }
+
+  function isPublicManifestPath(pathname) {
+    return (
+      pathname === '/public/_manifest' ||
+      pathname === '/public/_manifest/' ||
+      pathname === '/public/_manifest.json' ||
+      pathname === '/public/_manifest/index.json'
+    );
+  }
+
   async function writeRouteOutput(env, concreteRoute, value, policy, pretty) {
     const body = pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value);
     const key = keyForRoute(concreteRoute, env, false);
@@ -1192,6 +1208,14 @@ const WORKER_RUNTIME_JS = `
 
   async function serveRoute(req, env, pathname, isPublicRoute) {
     if (isPublicRoute) {
+      if (isPublicManifestPath(pathname)) {
+        const assets = getAssetsBinding(env);
+        if (!assets || typeof assets.fetch !== 'function') {
+          return new Response('assets binding missing', { status: 500 });
+        }
+        return assets.fetch(new Request(new URL(publicManifestAssetPath(env), req.url), req));
+      }
+
       const manifestEntry = await findManifestEntryForRequest(pathname, env, true);
       if (!manifestEntry) return new Response('Not found', { status: 404 });
 
@@ -1241,8 +1265,8 @@ const WORKER_RUNTIME_JS = `
         return handleBuild(req, env);
       }
 
-      if (req.method === 'GET' && url.pathname === '/manifest') {
-        const list = combineManifest(await readManifest(env));
+      if (req.method === 'GET' && url.pathname === '/_manifest') {
+        const list = await readManifest(env);
         return new Response(JSON.stringify(list), {
           headers: { 'content-type': 'application/json' },
         });

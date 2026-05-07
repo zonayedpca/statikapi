@@ -21,7 +21,7 @@ export default function App() {
   const [rawText, setRawText] = useState('Select a route…');
   const [jsonVal, setJsonVal] = useState(null);
   const [headers, setHeaders] = useState({});
-  const [originOverride, setOriginOverride] = useState('');
+  const [uiMeta, setUiMeta] = useState(null);
   const [loading, setLoading] = useState(false);
   const [hi, setHi] = useState(0); // highlight index in filtered list
   const listRef = useRef(null);
@@ -48,7 +48,7 @@ export default function App() {
     loadManifestWithRetry();
     getUiMeta()
       .then((meta) => {
-        if (meta && typeof meta.origin === 'string') setOriginOverride(meta.origin);
+        if (meta && typeof meta === 'object') setUiMeta(meta);
       })
       .catch(() => {});
 
@@ -68,10 +68,10 @@ export default function App() {
     return () => removeEventListener('hashchange', onHash);
   }, []);
 
-  function fetchAndShow(route) {
+  function fetchAndShow(route, entry) {
     if (!route) return;
     setLoading(true);
-    getRoute(route)
+    getRoute(route, entry)
       .then(({ text, headers }) => {
         setRawText(text);
         setHeaders(headers || {});
@@ -89,10 +89,15 @@ export default function App() {
       .finally(() => setLoading(false));
   }
 
+  const activeEntry = useMemo(
+    () => manifest.find((entry) => entry.route === active) || null,
+    [manifest, active]
+  );
+
   useEffect(() => {
     if (!active) return;
-    fetchAndShow(active);
-  }, [active]);
+    fetchAndShow(active, activeEntry);
+  }, [active, activeEntry]);
 
   // Live reload via SSE
   useEffect(() => {
@@ -106,7 +111,8 @@ export default function App() {
           setManifest(list);
         } catch {}
         if (route && route === active) {
-          fetchAndShow(active);
+          const nextActiveEntry = list.find((entry) => entry.route === active) || null;
+          fetchAndShow(active, nextActiveEntry);
         }
       }
     };
@@ -256,7 +262,7 @@ export default function App() {
                 </TabsContent>
               </Tabs>
               {/* Snippets */}
-              <Snippets route={active} origin={originOverride} />
+              <Snippets route={active} entry={activeEntry} meta={uiMeta} />
             </>
           )}
         </section>

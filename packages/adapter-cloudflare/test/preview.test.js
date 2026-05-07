@@ -32,8 +32,15 @@ test('preview helpers load local auth env, fetch manifest/routes, and resolve UI
     const url = String(input);
     calls.push({ url, headers: new Headers(init.headers || {}) });
 
-    if (url.endsWith('/manifest')) {
+    if (url.endsWith('/public/_manifest/index.json')) {
       return new Response(JSON.stringify([{ route: '/public', hash: 'a' }]), {
+        status: 200,
+        headers: { 'content-type': 'application/json; charset=utf-8' },
+      });
+    }
+
+    if (url.endsWith('/_manifest')) {
+      return new Response(JSON.stringify([{ route: '/account', hash: 'b' }]), {
         status: 200,
         headers: { 'content-type': 'application/json; charset=utf-8' },
       });
@@ -55,8 +62,14 @@ test('preview helpers load local auth env, fetch manifest/routes, and resolve UI
   };
 
   try {
-    const manifest = await fetchManifest('http://127.0.0.1:8787');
-    assert.deepEqual(manifest, [{ route: '/public', hash: 'a' }]);
+    const manifest = await fetchManifest(
+      'http://127.0.0.1:8787',
+      makeUiMeta('http://127.0.0.1:8787', { useIndexJson: true })
+    );
+    assert.deepEqual(manifest, [
+      { route: '/account', hash: 'b' },
+      { route: '/public', hash: 'a' },
+    ]);
 
     const route = await fetchRoute('http://127.0.0.1:8787', '/account', localEnv);
     assert.equal(route.status, 200);
@@ -90,5 +103,10 @@ test('preview helpers load local auth env, fetch manifest/routes, and resolve UI
 });
 
 test('preview metadata exposes worker origin for UI snippets', () => {
-  assert.deepEqual(makeUiMeta('http://127.0.0.1:8787'), { origin: 'http://127.0.0.1:8787' });
+  assert.deepEqual(makeUiMeta('http://127.0.0.1:8787', { useIndexJson: true }), {
+    origin: 'http://127.0.0.1:8787',
+    mode: 'cloudflare',
+    useIndexJson: true,
+    publicManifestPath: '/public/_manifest/index.json',
+  });
 });

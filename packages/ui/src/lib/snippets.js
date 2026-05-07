@@ -8,16 +8,27 @@ function getOrigin() {
   return '';
 }
 
+function normalizeOrigin(origin) {
+  return (origin || getOrigin()).replace(/\/+$/, '');
+}
+
 /** Build an absolute endpoint URL for a given route (e.g., "/users/1"). */
-export function endpointUrl(route, originOverride) {
-  const origin = originOverride || getOrigin();
+export function endpointUrl(route, { entry, meta } = {}) {
+  const origin = normalizeOrigin(meta?.origin);
+
+  if (meta?.mode === 'cloudflare') {
+    if (entry?.public && entry?.filePath) {
+      return origin + '/' + String(entry.filePath).replace(/^\/+/, '');
+    }
+    return origin + (route === '/' ? '/' : route);
+  }
 
   return origin + (route === '/' ? '/' : `${route}/`) + 'index.json';
 }
 
 /** Return snippet strings for curl, browser fetch, and Node (built-in) fetch. */
-export function makeSnippets(route, { origin } = {}) {
-  const url = endpointUrl(route, origin);
+export function makeSnippets(route, { entry, meta } = {}) {
+  const url = endpointUrl(route, { entry, meta });
   const q = JSON.stringify(url); // safe in JS strings
 
   const curl = `curl -sS -H "Accept: application/json" ${q}`;

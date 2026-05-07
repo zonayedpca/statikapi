@@ -4,10 +4,10 @@ import { makeSnippets } from '../lib/snippets.js';
 import Snippet from './Snippet.jsx';
 import { CommandIcon, GlobeIcon, HexagonIcon } from 'lucide-react';
 
-export default function Snippets({ route, origin }) {
+export default function Snippets({ route, entry, meta }) {
   const { curl, browser, node, url } = useMemo(
-    () => makeSnippets(route, { origin }),
-    [route, origin]
+    () => makeSnippets(route, { entry, meta }),
+    [route, entry, meta]
   );
 
   return (

@@ -11,8 +11,11 @@ export async function getUiMeta() {
   return res.json();
 }
 
-export async function getRoute(route) {
-  const res = await fetch('/_ui/file?route=' + encodeURIComponent(route), { cache: 'no-store' });
+export async function getRoute(route, entry = null) {
+  const params = new URLSearchParams({ route });
+  if (entry?.filePath) params.set('filePath', entry.filePath);
+  if (entry?.public) params.set('public', '1');
+  const res = await fetch('/_ui/file?' + params.toString(), { cache: 'no-store' });
   if (!res.ok) throw new Error(`route ${route} failed: ${res.status}`);
   const text = await res.text();
   // Extract a few standard headers (may be absent)

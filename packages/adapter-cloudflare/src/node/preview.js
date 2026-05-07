@@ -15,7 +15,7 @@ export async function startPreviewServer({
 } = {}) {
   const uiRoot = resolveUiDist();
   const localEnv = await loadLocalEnv(cwd);
-  const uiMeta = await loadUiMeta(cwd, workerOrigin);
+  const uiMeta = await loadUiMeta(cwd, workerOrigin, localEnv);
   const sseClients = new Set();
   let lastManifest = null;
   let pollTimer = null;
@@ -182,6 +182,7 @@ export function makeUiMeta(workerOrigin, options = {}) {
     origin: workerOrigin,
     mode: 'cloudflare',
     useIndexJson: options.useIndexJson === true,
+    privateAuthHeaderName: options.privateAuthHeaderName || '',
     publicManifestPath:
       options.publicManifestPath || publicManifestPathFor(options.useIndexJson === true),
   };
@@ -226,10 +227,11 @@ function privateAuthHeaders(localEnv) {
   return headers;
 }
 
-async function loadUiMeta(cwd, workerOrigin) {
+async function loadUiMeta(cwd, workerOrigin, localEnv = {}) {
   const useIndexJson = await readUseIndexJson(cwd);
   return makeUiMeta(workerOrigin, {
     useIndexJson,
+    privateAuthHeaderName: privateAuthHeaderName(localEnv),
     publicManifestPath: publicManifestPathFor(useIndexJson),
   });
 }

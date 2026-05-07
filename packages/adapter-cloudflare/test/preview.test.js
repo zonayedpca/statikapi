@@ -105,10 +105,17 @@ test('preview helpers load local auth env, fetch manifest/routes, and resolve UI
 });
 
 test('preview metadata exposes worker origin for UI snippets', () => {
-  assert.deepEqual(makeUiMeta('http://127.0.0.1:8787', { useIndexJson: true }), {
+  assert.deepEqual(
+    makeUiMeta('http://127.0.0.1:8787', {
+      useIndexJson: true,
+      privateAuthHeaderName: 'x-private-key',
+    }),
+    {
     origin: 'http://127.0.0.1:8787',
     mode: 'cloudflare',
     useIndexJson: true,
+    privateAuthHeaderName: 'x-private-key',
     publicManifestPath: '/public/_manifest/index.json',
-  });
+    }
+  );
 });

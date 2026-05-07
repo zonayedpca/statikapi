@@ -64,6 +64,12 @@ Webhook rebuilds follow the same route path as reads:
 - `POST /users/1` rebuilds the private route at `/users/1`
 - `POST /public/posts` is rejected because public outputs are Static Assets
 
+Important limitation in this version:
+
+- these webhook rebuilds refresh private Worker-managed outputs
+- they do not update already-deployed public Static Assets
+- public route changes still require a rebuild and redeploy/publish step
+
 Each route can override the project default with:
 
 ```js

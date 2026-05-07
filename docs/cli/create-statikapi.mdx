@@ -115,6 +115,7 @@ Current Cloudflare conventions:
 - private routes keep their original route paths
 - public is the default; mark a route private with `config.cloudflare.public = false`
 - route-level Cloudflare config overrides the project-level default
+- public routes are not webhook-refreshable in this version; they change only after a rebuild + redeploy/publish step
 - the generated project assumes a least-privilege Cloudflare API token with Workers Scripts: Edit, R2 Storage: Edit, and Workers KV Storage: Edit
 - Cloudflare account id can be copied from Dashboard -> Workers & Pages -> Overview
 - R2 bucket names come from Dashboard -> R2

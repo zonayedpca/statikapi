@@ -1,13 +1,12 @@
 export const config = {
   cloudflare: {
-    public: true,
+    public: false,
   },
 };
 
 export default function data() {
   return {
-    hello: 'world from worker!',
-    surface: 'public!',
+    surface: 'private',
     timestamp: new Date().toISOString(),
   };
 }

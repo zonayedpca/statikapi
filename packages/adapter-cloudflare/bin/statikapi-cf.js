@@ -9,6 +9,7 @@ function parseArgs(argv) {
     command: 'build',
     srcDir: null,
     outFile: null,
+    publicOutDir: null,
     prettyDefault: false,
     cwd: null,
     watch: false,
@@ -24,6 +25,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === '--src' && argv[i + 1]) out.srcDir = argv[++i];
     else if (a === '--out' && argv[i + 1]) out.outFile = argv[++i];
+    else if (a === '--public-out' && argv[i + 1]) out.publicOutDir = argv[++i];
     else if (a === '--cwd' && argv[i + 1]) out.cwd = argv[++i];
     else if (a === '--host' && argv[i + 1]) out.host = argv[++i];
     else if (a === '--port' && argv[i + 1]) out.port = Number(argv[++i]);
@@ -32,10 +34,10 @@ function parseArgs(argv) {
     else if (a === '--watch') out.watch = true;
     else if (a === '--help' || a === '-h') {
       console.log(
-        `Usage:\n` +
-          `  statikapi-cf [--src src-api] [--out dist/worker.mjs] [--pretty] [--cwd DIR] [--watch]\n` +
+          `Usage:\n` +
+          `  statikapi-cf [--src src-api] [--out dist/worker.mjs] [--public-out public] [--pretty] [--cwd DIR] [--watch]\n` +
           `  statikapi-cf preview [--cwd DIR] [--host 127.0.0.1] [--port 8788] [--worker http://127.0.0.1:8787]\n` +
-          `Auto-detects src from wrangler.toml [vars] STATIK_SRC if present.`
+          `Auto-detects src from wrangler.toml [vars] STATIK_SRC and public assets directory from [assets].directory when present.`
       );
       process.exit(0);
     }
@@ -77,6 +79,23 @@ function readTomlVar(toml, key) {
   return null;
 }
 
+function readTomlAssetsDirectory(toml) {
+  const lines = String(toml || '').split(/\r?\n/);
+  let inAssets = false;
+  for (const line of lines) {
+    const l = line.trim();
+    if (!l || l.startsWith('#')) continue;
+    if (l.startsWith('[') && l.endsWith(']')) {
+      inAssets = l.toLowerCase() === '[assets]';
+      continue;
+    }
+    if (!inAssets) continue;
+    const m = l.match(/^directory\s*=\s*["']([^"']+)["']/i);
+    if (m) return m[1];
+  }
+  return null;
+}
+
 (async function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -86,6 +105,8 @@ function readTomlVar(toml, key) {
   // Resolve srcDir preference: flag > [vars]STATIK_SRC > env > default
   let srcDir =
     args.srcDir || readTomlVar(wranglerToml, 'STATIK_SRC') || process.env.STATIK_SRC || 'src-api';
+  const publicOutDir =
+    args.publicOutDir || readTomlAssetsDirectory(wranglerToml) || process.env.STATIK_PUBLIC_OUT || 'public';
   const useIndexJson = String(
     readTomlVar(wranglerToml, 'STATIK_USE_INDEX_JSON') || process.env.STATIK_USE_INDEX_JSON || 'false'
   ).toLowerCase() === 'true';
@@ -97,6 +118,7 @@ function readTomlVar(toml, key) {
       cwd: root,
       srcDir,
       outFile,
+      publicOutDir,
       prettyDefault: args.prettyDefault,
       useIndexJson,
       watch: args.watch,

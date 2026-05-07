@@ -260,6 +260,8 @@ Pass when:
 - `.dev.vars.example` exists
 - `package.json` contains `preview`
 - `package.json` `dev` script includes preview process
+- default scaffold uses `public` as the Static Assets directory
+- `--assets-dir <dir>` rewrites the Static Assets directory consistently in scaffolded files
 - scaffold does not depend on a separate serving-mode selection prompt or `r2-public` contract
 
 ### 4. Cloudflare Adapter

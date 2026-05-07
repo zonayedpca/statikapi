@@ -10,6 +10,7 @@ const DEFAULT_TEMPLATE = 'basic';
 const DEFAULT_PM = 'pnpm';
 const DEFAULT_SRC = 'src-api';
 const DEFAULT_OUT = 'api-out';
+const DEFAULT_CF_ASSETS_DIR = 'public';
 const DEFAULT_CF_PRIVATE_BUCKET_BINDING = 'STATIK_PRIVATE_BUCKET';
 const DEFAULT_CF_PRIVATE_BUCKET_NAME = 'REPLACE_ME_PRIVATE_BUCKET';
 const DEFAULT_CF_KV_BINDING = 'STATIK_MANIFEST';
@@ -55,6 +56,7 @@ async function main(argv) {
   let deploy = normalizeDeployArg(args.deploy);
 
   // Cloudflare adapter specific config (with placeholder defaults)
+  let assetsDir = args['assets-dir'] || '';
   let privateBucketBinding = DEFAULT_CF_PRIVATE_BUCKET_BINDING;
   let privateBucketName = DEFAULT_CF_PRIVATE_BUCKET_NAME;
   let kvBinding = DEFAULT_CF_KV_BINDING;
@@ -159,6 +161,15 @@ async function main(argv) {
         },
 
         // Cloudflare adapter–specific prompts
+        {
+          type: (prev, values) => {
+            const tmpl = TEMPLATES.has(template) ? template : values.template;
+            return tmpl === 'cloudflare-adapter' ? 'text' : null;
+          },
+          name: 'assetsDir',
+          message: 'Static Assets directory for public routes',
+          initial: assetsDir || DEFAULT_CF_ASSETS_DIR,
+        },
         {
           type: (prev, values) => {
             const tmpl = TEMPLATES.has(template) ? template : values.template;
@@ -350,6 +361,7 @@ async function main(argv) {
     wantGitignore = template === 'cloudflare-adapter' ? wantGitignore : !!answers.gitignore;
 
     if (template === 'cloudflare-adapter') {
+      assetsDir = answers.assetsDir || assetsDir || DEFAULT_CF_ASSETS_DIR;
       privateBucketBinding = answers.privateBucketBinding || privateBucketBinding;
       privateBucketName = answers.privateBucketName || privateBucketName;
       kvBinding = answers.kvBinding || kvBinding;
@@ -390,6 +402,7 @@ async function main(argv) {
   if (!pkgMgr) pkgMgr = DEFAULT_PM;
   if (!srcDir) srcDir = DEFAULT_SRC;
   if (!outDir) outDir = DEFAULT_OUT;
+  if (!assetsDir) assetsDir = DEFAULT_CF_ASSETS_DIR;
 
   const cwd = process.cwd();
   const dest = path.resolve(cwd, appName);
@@ -425,6 +438,7 @@ async function main(argv) {
   // Cloudflare wrangler.toml patching for adapter template
   if (template === 'cloudflare-adapter') {
     await patchCloudflareWrangler(dest, {
+      assetsDir,
       privateBucketBinding,
       privateBucketName,
       kvBinding,
@@ -442,6 +456,7 @@ async function main(argv) {
       webhookEnabled,
     });
     await writeCloudflareEnvTemplate(dest, {
+      assetsDir,
       cloudflareAccountId,
       cloudflareApiToken,
       buildToken,
@@ -452,7 +467,7 @@ async function main(argv) {
 
   // .gitignore (optional, default yes)
   if (wantGitignore) {
-    await writeGitignore(dest, { outDir, template });
+    await writeGitignore(dest, { outDir, template, assetsDir });
   }
 
   // Deployment configs (non-cloudflare templates only)
@@ -465,6 +480,7 @@ async function main(argv) {
   console.log(`- .gitignore: ${wantGitignore ? 'yes' : 'no'}`);
 
   if (template === 'cloudflare-adapter') {
+    console.log(`- Static assets dir: ${assetsDir}`);
     console.log(`- Private R2 binding: ${privateBucketBinding}`);
     console.log(`- Private R2 bucket_name: ${privateBucketName}`);
     console.log(`- KV binding: ${kvBinding}`);
@@ -502,10 +518,15 @@ async function main(argv) {
     console.log('  - Inspect wrangler.toml and statikapi.config.js');
     console.log('  - Copy .dev.vars.example to .dev.vars for local secrets if needed');
     console.log('  - Create the private R2 bucket and one KV namespace');
+    console.log('  - Cloudflare account id: Dashboard -> Workers & Pages -> Overview');
+    console.log('  - KV namespace id: Dashboard -> Workers & Pages -> KV -> your namespace');
+    console.log('  - R2 bucket name: Dashboard -> R2 -> your bucket -> copy the exact bucket name');
     console.log(
-      '  - Ensure wrangler static assets serve the generated /public outputs on deploy'
+      `  - Ensure wrangler static assets serve the generated /${assetsDir} outputs on deploy`
     );
-    console.log('  - Use a Cloudflare API token with Workers Scripts:Edit, R2:Edit, and KV:Edit\n');
+    console.log(
+      '  - Use a Cloudflare API token with Workers Scripts:Edit, R2 Storage:Edit, and Workers KV Storage:Edit\n'
+    );
   } else {
     console.log('  ' + scriptHint(pkgMgr, 'dev') + '     # run dev server with UI');
     console.log(
@@ -526,12 +547,14 @@ function parseArgs(argv) {
     else if (t === '--package-manager') out['package-manager'] = argv[++i];
     else if (t === '--src-dir') out['src-dir'] = argv[++i];
     else if (t === '--out-dir') out['out-dir'] = argv[++i];
+    else if (t === '--assets-dir') out['assets-dir'] = argv[++i];
     else if (t === '--deploy')
       out.deploy = argv[++i]; // e.g. cloudflare,netlify
     else if (t.startsWith('--template=')) out.template = t.split('=', 2)[1];
     else if (t.startsWith('--package-manager=')) out['package-manager'] = t.split('=', 2)[1];
     else if (t.startsWith('--src-dir=')) out['src-dir'] = t.split('=', 2)[1];
     else if (t.startsWith('--out-dir=')) out['out-dir'] = t.split('=', 2)[1];
+    else if (t.startsWith('--assets-dir=')) out['assets-dir'] = t.split('=', 2)[1];
     else if (t.startsWith('--deploy=')) out.deploy = t.split('=', 2)[1];
     else if (!t.startsWith('-')) out._.push(t);
   }
@@ -556,7 +579,7 @@ Usage:
     [--template basic|dynamic|remote-data|cloudflare-adapter]
     [--yes] [--no-install] [--no-gitignore]
     [--package-manager pnpm|npm|yarn]
-    [--src-dir <dir>] [--out-dir <dir>]
+    [--src-dir <dir>] [--out-dir <dir>] [--assets-dir <dir>]
     [--deploy cloudflare,netlify,github]
 
 Options:
@@ -567,6 +590,7 @@ Options:
   --package-manager    pnpm | npm | yarn (default: ${DEFAULT_PM})
   --src-dir            Source directory for endpoints (default: ${DEFAULT_SRC})
   --out-dir            Output directory for built JSON (default: ${DEFAULT_OUT})
+  --assets-dir         Static Assets directory for Cloudflare public routes (default: ${DEFAULT_CF_ASSETS_DIR})
   --deploy             Comma-separated deployment targets: cloudflare, netlify, github
   --help, -h           Show this help
 
@@ -878,6 +902,7 @@ async function writeCloudflareProjectConfig(dest, { webhookEnabled }) {
 async function writeCloudflareEnvTemplate(
   dest,
   {
+    assetsDir,
     cloudflareAccountId,
     cloudflareApiToken,
     buildToken,
@@ -886,18 +911,23 @@ async function writeCloudflareEnvTemplate(
   }
 ) {
   const body = `# Cloudflare account-scoped deploy variables
+# Account ID: Dashboard -> Workers & Pages -> Overview
 CLOUDFLARE_ACCOUNT_ID=${cloudflareAccountId}
+# API token: create a least-privilege token with Workers Scripts:Edit, R2 Storage:Edit, and Workers KV Storage:Edit
 CLOUDFLARE_API_TOKEN=${cloudflareApiToken}
 
 # Worker runtime secrets
 STATIK_BUILD_TOKEN=${buildToken}
 STATIK_PRIVATE_AUTH_HEADER_NAME=${privateAuthHeaderName}
 STATIK_PRIVATE_AUTH_HEADER_VALUE=${privateAuthHeaderValue}
+
+# Public route assets are generated into ./${assetsDir}
+# Private route data is stored in the configured R2 bucket, and the manifest lives in KV.
 `;
   await fs.writeFile(path.join(dest, '.dev.vars.example'), body, 'utf8');
 }
 
-async function writeGitignore(dest, { outDir, template }) {
+async function writeGitignore(dest, { outDir, template, assetsDir = DEFAULT_CF_ASSETS_DIR }) {
   const p = path.join(dest, '.gitignore');
   if (fss.existsSync(p)) return;
 
@@ -924,7 +954,7 @@ async function writeGitignore(dest, { outDir, template }) {
     # Wrangler + Cloudflare
     .wrangler
     wrangler.log
-    public
+    ${assetsDir}
 
     # Local env / secrets
     .env
@@ -1067,6 +1097,7 @@ ${pmSetup.replace(/^/gm, '      ')}
 async function patchCloudflareWrangler(
   dest,
   {
+    assetsDir,
     privateBucketBinding,
     privateBucketName,
     kvBinding,
@@ -1091,6 +1122,7 @@ async function patchCloudflareWrangler(
   let body = await fs.readFile(finalPath, 'utf8');
 
   body = body
+    .replace(/directory\s*=\s*".*"/, `directory = "./${assetsDir}"`)
     .replace(/binding\s*=\s*"STATIK_PRIVATE_BUCKET"/, `binding = "${privateBucketBinding}"`)
     .replace(
       /bucket_name\s*=\s*"REPLACE_ME_PRIVATE_BUCKET"/,

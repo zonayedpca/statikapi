@@ -52,6 +52,7 @@ You will be prompted for:
 - `--package-manager pnpm|npm|yarn`
 - `--src-dir <dir>` (default `src-api`, configurable)
 - `--out-dir <dir>` (default `api-out`, configurable; **ignored by the Cloudflare adapter template**)
+- `--assets-dir <dir>` (default `public`; **Cloudflare adapter template only**)
 - `--deploy cloudflare,netlify,github`  
   _(non-Cloudflare templates only; the Cloudflare adapter template always targets Workers)_
 - `--help, -h`
@@ -80,6 +81,7 @@ When you choose `cloudflare-adapter`, the scaffolder:
 - Copies a **Worker + Static Assets + private R2 + KV** boilerplate
 - Writes a `statikapi.config.js` with the project-level Cloudflare defaults
 - Prompts you for:
+  - **Static Assets directory** for public routes (defaults to `public`)
   - **private R2 bucket binding** and **bucket_name**
   - **KV namespace binding** and **id**
   - **`STATIK_BUILD_TOKEN`** (used to authorize `/build`)
@@ -108,10 +110,14 @@ export const config = {
 Current Cloudflare conventions:
 
 - public routes are emitted under `/public/...` and served through Cloudflare Static Assets
+- public route assets are written into the configured Static Assets directory, which defaults to `public`
 - private routes keep their original route paths
 - public is the default; mark a route private with `config.cloudflare.public = false`
 - route-level Cloudflare config overrides the project-level default
 - the generated project assumes a least-privilege Cloudflare API token with Workers Scripts: Edit, R2 Storage: Edit, and Workers KV Storage: Edit
+- Cloudflare account id can be copied from Dashboard -> Workers & Pages -> Overview
+- R2 bucket names come from Dashboard -> R2
+- KV namespace ids come from Dashboard -> Workers & Pages -> KV
 
 From there you can:
 

@@ -55,6 +55,7 @@ test('scaffolds CLOUDFLARE template with static assets, private storage, config,
 
   const wrangler = await fs.readFile(path.join(appDir, 'wrangler.toml'), 'utf8');
   assert.match(wrangler, /\[assets\]/);
+  assert.match(wrangler, /directory = "\.\/public"/);
   assert.match(wrangler, /binding = "ASSETS"/);
   assert.match(wrangler, /run_worker_first = true/);
   assert.match(wrangler, /STATIK_PRIVATE_BUCKET/);
@@ -73,6 +74,35 @@ test('scaffolds CLOUDFLARE template with static assets, private storage, config,
   assert.match(envTemplate, /CLOUDFLARE_ACCOUNT_ID=/);
   assert.match(envTemplate, /CLOUDFLARE_API_TOKEN=/);
   assert.match(envTemplate, /STATIK_PRIVATE_AUTH_HEADER_VALUE=/);
+
+  t.after(async () => {
+    await tmp.cleanup();
+  });
+});
+
+test('cloudflare scaffold accepts a custom static assets directory', async (t) => {
+  const tmp = await makeTmp();
+  const appName = 'my-cloudflare-assets-dir';
+
+  await runScaffold(tmp.cwd, [
+    appName,
+    '--yes',
+    '--template',
+    'cloudflare-adapter',
+    '--no-install',
+    '--assets-dir',
+    'static-output',
+  ]);
+
+  const appDir = tmp.join(appName);
+  const wrangler = await fs.readFile(path.join(appDir, 'wrangler.toml'), 'utf8');
+  assert.match(wrangler, /directory = "\.\/static-output"/);
+
+  const envTemplate = await fs.readFile(path.join(appDir, '.dev.vars.example'), 'utf8');
+  assert.match(envTemplate, /\.\/static-output/);
+
+  const gitignore = await fs.readFile(path.join(appDir, '.gitignore'), 'utf8');
+  assert.match(gitignore, /static-output/);
 
   t.after(async () => {
     await tmp.cleanup();

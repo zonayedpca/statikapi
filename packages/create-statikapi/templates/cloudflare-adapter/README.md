@@ -28,7 +28,7 @@ This project uses **@statikapi/adapter-cf** to:
 - `src-api/` — all your StatikAPI endpoints (JS modules)
 - `dist/worker.mjs` — generated worker bundle
 - `statikapi.config.js` — project-level Cloudflare defaults
-- `wrangler.toml` — public/private bucket bindings, KV binding, and runtime env vars
+- `wrangler.toml` — Static Assets config, private bucket binding, KV binding, and runtime env vars
 - `.dev.vars.example` — copy to `.dev.vars` for local secrets and account-scoped deploy envs
 
 ## Local preview
@@ -74,6 +74,12 @@ Create:
 - one private R2 bucket
 - one KV namespace for the manifest and runtime limit counters
 
+Where to find the values:
+
+- Cloudflare account id: Dashboard -> Workers & Pages -> Overview
+- R2 bucket name: Dashboard -> R2 -> your bucket -> copy the exact bucket name
+- KV namespace id: Dashboard -> Workers & Pages -> KV -> your namespace
+
 For deploy automation, use a Cloudflare API token with only the permissions you need. The generated template assumes at least:
 
 - Workers Scripts: Edit
@@ -83,5 +89,7 @@ For deploy automation, use a Cloudflare API token with only the permissions you 
 ## Static assets
 
 Public outputs under `/public/...` are intended to be served as Cloudflare Static Assets through the Worker configuration.
+
+By default the assets directory is `public`, but the scaffold can be configured to use a different Static Assets directory if you want.
 
 Private outputs stay behind the Worker and require the configured auth header.

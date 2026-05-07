@@ -1,143 +1,212 @@
 # Configuration
 
-StatikAPI works with **zero config**. When you need to customize paths, create a **`statikapi.config.js`** in your project root.
+StatikAPI works without a config file, but you can customize behavior with `statikapi.config.js`.
+
+Basic example:
 
 ```js
-// statikapi.config.js
 export default {
   srcDir: 'src-api',
   outDir: 'api-out',
 };
 ```
 
-> Both directories are **relative to the project root**, must be **non-empty strings**, and **cannot be the same path**. Absolute paths and parent traversal (e.g. `../outside`) are not allowed.
-
 ---
 
-## Fields
+## Supported top-level config fields
 
-### `srcDir` (string, default: `"src-api"`)
+### `srcDir`
 
-- Folder that contains your **route modules**.
-- Supported extensions: **.js, .mjs, .cjs, .ts, .tsx**.
-- Files/folders that **start with `_`** are ignored (e.g. `_private/`).
-- `index.js` collapses to the folder route (e.g. `blog/index.js` → `/blog`).
+- type: `string`
+- default: `"src-api"`
 
-### `outDir` (string, default: `"api-out"`)
+This is the directory that contains route modules.
 
-- Folder where **generated JSON** is written.
-- Each URL path becomes a folder with **`index.json`** inside.
-- A build **manifest** is also written to `api-out/.statikapi/manifest.json` containing route → file mappings and sizes (handy for tooling/preview UIs).
+Supported route file extensions in the regular CLI path:
 
----
+- `.js`
+- `.mjs`
+- `.cjs`
+- `.ts`
+- `.tsx`
 
-## Path resolution & validation
+### `outDir`
 
-The CLI normalizes and validates configuration:
+- type: `string`
+- default: `"api-out"`
 
-- Paths are **normalized** with POSIX separators.
-- Must be **relative** (no absolute paths).
-- Must **not traverse** outside the project (no leading `../`).
-- `srcDir` and `outDir` must be **different**.
+This is where the regular CLI writes generated JSON.
 
-If validation fails, the CLI throws a helpful **ConfigError** before building.
+It also writes:
 
----
+- `.statikapi/manifest.json`
 
-## Override via CLI flags
+inside the output directory.
 
-You can override config values per-invocation. The current CLI reads **`--srcDir`** and **`--outDir`**:
+### `listIndex`
 
-<Tabs group="flags">
-  <Tab label="pnpm">
+- type: `boolean | { enabled?: boolean, pick?: string[] }`
+- default: disabled
 
-```bash
-pnpm statikapi build --srcDir api --outDir public/api
-```
+`listIndex` controls whether dynamic and catch-all routes also emit a parent collection route.
 
-  </Tab>
-  <Tab label="yarn">
-
-```bash
-yarn statikapi build --srcDir api --outDir public/api
-```
-
-  </Tab>
-  <Tab label="npm">
-
-```bash
-npx statikapi build --srcDir api --outDir public/api
-```
-
-  </Tab>
-</Tabs>
-
-> Heads‑up: older notes might mention `--src` / `--out`. In the current CLI, use **`--srcDir`** and **`--outDir`** to affect configuration.
-
----
-
-## Dev server notes
-
-When running **`statikapi dev`**:
-
-- Serves your built files and an interactive UI at `/_ui`.
-- Writes/updates `api-out/.statikapi/manifest.json` on changes.
-- Environment overrides (advanced):
-  - **`STATIKAPI_UI_DIR`** — serve a custom, prebuilt UI directory (must contain `index.html`).
-  - **`STATIKAPI_FORCE_DEV=1`** — keep dev running in non‑TTY environments (e.g., CI runners, `concurrently`).
-
-<Tabs group="dev-flags">
-  <Tab label="pnpm">
-
-```bash
-pnpm statikapi dev --port 8788 --srcDir src-api --outDir api-out
-```
-
-  </Tab>
-  <Tab label="yarn">
-
-```bash
-yarn statikapi dev --port 8788 --srcDir src-api --outDir api-out
-```
-
-  </Tab>
-  <Tab label="npm">
-
-```bash
-npx statikapi dev --port 8788 --srcDir src-api --outDir api-out
-```
-
-  </Tab>
-</Tabs>
-
----
-
-## Recipes
-
-### 1) Customizing directories
+Examples:
 
 ```js
-// statikapi.config.js
 export default {
-  srcDir: 'api', // move sources into /api
-  outDir: 'public/api', // emit static JSON inside your public/ folder
+  listIndex: true,
 };
 ```
 
-### 2) Monorepo (package-local config)
+```js
+export default {
+  listIndex: {
+    enabled: true,
+    pick: ['id', 'title'],
+  },
+};
+```
 
-Place `statikapi.config.js` in the **package root** that owns the `srcDir`. The CLI resolves paths **relative to the CWD** (where you run it).
+Effects:
 
-### 3) TypeScript routes
+- dynamic route `/posts/[id]`
+  - item routes: `/posts/1`, `/posts/2`
+  - collection route: `/posts`
+- catch-all route `/docs/[...slug]`
+  - item routes: `/docs/guide`, `/docs/api/intro`
+  - collection route: `/docs`
 
-You can freely use **.ts / .tsx** route files. The CLI transpiles on the fly and imports them, then enforces **JSON‑serializable** outputs.
+When `pick` is present:
+
+- each collection item must be a plain object
+- only the listed keys are included in the parent collection route
 
 ---
 
-## Troubleshooting
+## Route-level config
 
-- **Config error “must be a relative path”** — remove any leading `/` or drive letter; use relative paths like `src-api`, `api-out`.
-- **“cannot traverse outside the project”** — avoid `../` path segments.
-- **`srcDir` and `outDir` must differ** — point them at different folders.
-- **Dynamic routes not emitting** — ensure the module exports `paths()` that returns **strings** (or arrays of strings for catch‑all). See **Routes** docs.
-- **Non‑serializable value** — only plain objects/arrays, finite numbers, strings, booleans, or `null`. No functions, symbols, BigInt, Dates, classes, or cycles.
+Routes can also export:
+
+```js
+export const config = {
+  listIndex: true,
+};
+```
+
+or:
+
+```js
+export const config = {
+  listIndex: {
+    enabled: true,
+    pick: ['slug'],
+  },
+};
+```
+
+Route-level `config.listIndex` overrides the project default for that route.
+
+In Cloudflare projects, route modules may also export:
+
+```js
+export const config = {
+  cloudflare: {
+    public: false,
+    webhook: true,
+  },
+};
+```
+
+See [Cloudflare Worker + Static Assets Adapter](./serverless/cloudflare-adapter).
+
+---
+
+## Validation rules
+
+`srcDir` and `outDir`:
+
+- must be non-empty strings
+- must be relative paths
+- must not traverse outside the project
+- must not be the same directory
+
+`listIndex`:
+
+- `true` means enabled with defaults
+- `false` means disabled
+- `pick` must be an array of non-empty strings
+
+If config validation fails, the CLI exits with a config error before building.
+
+---
+
+## CLI overrides
+
+The regular CLI can override config per invocation.
+
+### Build
+
+```bash
+pnpm statikapi build --srcDir api --outDir public/api --listIndex=true
+```
+
+### Dev
+
+```bash
+pnpm statikapi dev --srcDir api --outDir public/api --port 8788
+```
+
+Supported override flags include:
+
+- `--srcDir`
+- `--outDir`
+- `--listIndex`
+- `--listIndexPick`
+
+---
+
+## Dev-server notes
+
+`statikapi dev`:
+
+- serves the preview UI at `/_ui/`
+- updates `.statikapi/manifest.json`
+- watches route files for changes
+- deletes stale outputs when routes disappear
+
+Advanced environment overrides:
+
+- `STATIKAPI_UI_DIR`
+  - custom prebuilt UI directory
+- `STATIKAPI_FORCE_DEV=1`
+  - force long-running dev behavior in non-TTY environments
+
+---
+
+## Common patterns
+
+### Custom directories
+
+```js
+export default {
+  srcDir: 'api',
+  outDir: 'public/api',
+};
+```
+
+### Global collection indexes
+
+```js
+export default {
+  listIndex: {
+    enabled: true,
+    pick: ['id', 'title'],
+  },
+};
+```
+
+### Monorepo package-local config
+
+Put `statikapi.config.js` in the package root where you run the CLI.
+
+The CLI resolves config relative to the current working directory.

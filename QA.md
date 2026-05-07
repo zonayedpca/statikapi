@@ -52,8 +52,8 @@ Required before publish:
 | QA-0026  | Cloudflare | Verify preview JSON rendering for Cloudflare routes                                                                   | ✅ Done     | preview loads valid JSON for both public and private routes and the JSON panel parses both correctly                               |
 | QA-0027  | Cloudflare | Verify Cloudflare `dev` reflects route-content edits in both Worker responses and preview UI without requiring a cold restart | ✅ Done     | editing an existing route file updates the Worker payload and preview UI during `dev`, or at worst after a normal rebuild cycle    |
 | QA-0028  | Cloudflare | Verify preview groups Cloudflare routes by public vs private visibility                                               | ✅ Done     | public and private routes are clearly separated in the UI so users can immediately tell which surface they are inspecting          |
-| QA-0029  | Cloudflare | Verify Cloudflare Absolute URL and code snippets respect route-shape preferences and private-route auth needs         | 🟦 QA Ready | snippets use the Worker origin, match actual emitted path shapes, and mention the required auth header for private routes          |
-| QA-0023  | Cloudflare | Verify route-level opt-out from public-by-default behavior                                                            | 🟦 QA Ready | routes marked private are not treated as public Static Assets and require Worker auth                                              |
+| QA-0029  | Cloudflare | Verify Cloudflare Absolute URL and code snippets respect route-shape preferences and private-route auth needs         | ✅ Done     | snippets use the Worker origin, match actual emitted path shapes, and mention the required auth header for private routes          |
+| QA-0023  | Cloudflare | Verify route-level opt-out from public-by-default behavior                                                            | ✅ Done     | routes marked private are not treated as public Static Assets and require Worker auth                                              |
 | QA-0024  | Docs       | Check root README, scaffold README, and Cloudflare instructions against actual commands                               | 🟦 QA Ready | no obvious command drift remains                                                                                                   |
 | QA-0025  | Publish    | Confirm package contents before release                                                                               | 🟦 QA Ready | `statikapi`, `create-statikapi`, and `@statikapi/adapter-cf` include expected runtime assets                                       |
 
@@ -435,7 +435,7 @@ Pass when:
 
 #### QA-0029
 
-Status: `🟦 QA Ready`
+Status: `✅ Done`
 
 Pass when:
 
@@ -447,7 +447,7 @@ Pass when:
 
 #### QA-0023
 
-Status: `🟦 QA Ready`
+Status: `✅ Done`
 
 Pass when:
 

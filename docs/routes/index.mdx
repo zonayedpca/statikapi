@@ -14,3 +14,8 @@ Every route module must provide data via:
 Dynamic/catch-all routes also provide:
 
 - `export async function paths()` to enumerate all concrete pages
+
+Dynamic and catch-all routes can optionally emit a parent collection route with:
+
+- `export const config = { listIndex: true }`
+- or `export const config = { listIndex: { enabled: true, pick: [...] } }`

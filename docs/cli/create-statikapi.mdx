@@ -1,6 +1,13 @@
 # Project Scaffolding — `create-statikapi`
 
-Quickly scaffold a new StatikAPI project with templates and deployment presets.
+`create-statikapi` scaffolds a new project with one of the templates currently supported in this repo.
+
+Use it when you want:
+
+- a regular local `statikapi` project
+- a dynamic-route example project
+- a build-time remote-data example
+- a Cloudflare Worker + Static Assets project
 
 <Tabs group="scaffold">
   <Tab label="pnpm">
@@ -26,38 +33,37 @@ npx create-statikapi
   </Tab>
 </Tabs>
 
-You will be prompted for:
+---
 
-- **Template**:
-  - `basic` — single endpoint starter
-  - `dynamic` — dynamic + catch-all routes examples
-  - `remote-data` — build-time fetch examples
-  - `cloudflare-adapter` — Cloudflare Worker + Static Assets for public routes + private R2 + KV with build webhook
-- **Package manager** and whether to install now
-- Optional ESLint, TS, directories, and deploy presets  
-  _(For the Cloudflare adapter template, ESLint/TS are effectively skipped; you get a JS Worker-focused boilerplate.)_
+## Supported templates
 
-> **Note:** The **source** (`src-api/`) and **output** (`api-out/`) directories are defaults for the core templates.  
-> You can **customize** these during scaffolding or later in your [Configuration](../config).  
-> For the Cloudflare adapter template, `src-api/` is still the default. Public JSON is generated into the Worker's `public/` static-assets directory, while private JSON stays behind the Worker.
+- `basic`
+  - small starter with a root route
+- `dynamic`
+  - dynamic and catch-all route examples
+- `remote-data`
+  - build-time fetch examples
+- `cloudflare-adapter`
+  - Cloudflare Worker + Static Assets for public routes + private R2 + KV + preview UI + private rebuild webhooks
 
 ---
 
-## Flags
+## Global flags
 
 - `--template basic|dynamic|remote-data|cloudflare-adapter`
-- `--yes, -y` — accept defaults (non-interactive)
+- `--yes, -y`
 - `--no-install`
 - `--no-gitignore`
 - `--package-manager pnpm|npm|yarn`
-- `--src-dir <dir>` (default `src-api`, configurable)
-- `--out-dir <dir>` (default `api-out`, configurable; **ignored by the Cloudflare adapter template**)
-- `--assets-dir <dir>` (default `public`; **Cloudflare adapter template only**)
-- `--deploy cloudflare,netlify,github`  
-  _(non-Cloudflare templates only; the Cloudflare adapter template always targets Workers)_
+- `--src-dir <dir>`
+- `--out-dir <dir>`
+- `--assets-dir <dir>`
+  - Cloudflare template only
+- `--deploy cloudflare,netlify,github`
+  - non-Cloudflare templates only
 - `--help, -h`
 
-**Examples**
+### Examples
 
 ```bash
 create-statikapi my-api --template dynamic --no-install
@@ -68,69 +74,239 @@ create-statikapi my-api --src-dir api --out-dir public/api --deploy cloudflare,g
 ```
 
 ```bash
-# Cloudflare Worker adapter (serverless mode)
-create-statikapi my-worker --template cloudflare-adapter
+create-statikapi my-worker --template cloudflare-adapter --assets-dir public
 ```
 
 ---
 
-## Cloudflare adapter template (high-level)
+## Normal templates
 
-When you choose `cloudflare-adapter`, the scaffolder:
+For `basic`, `dynamic`, and `remote-data`, the scaffold can ask about:
 
-- Copies a **Worker + Static Assets + private R2 + KV** boilerplate
-- Writes a `statikapi.config.js` with the project-level Cloudflare defaults
-- Prompts you for:
-  - **Static Assets directory** for public routes (defaults to `public`)
-  - **private R2 bucket binding** and **bucket_name**
-  - **KV namespace binding** and **id**
-  - **`STATIK_BUILD_TOKEN`** (used to authorize route-path `POST` webhook rebuilds)
-  - **`STATIK_SRC`** (defaults to `src-api`)
-  - **`STATIK_USE_INDEX_JSON`**
-  - **private auth header name/value** for private route reads
-  - **Cloudflare account id** and **API token placeholders** for deploy wiring
-  - **runtime request / Class A / Class B limits**
-- Writes:
-  - `wrangler.toml`
-  - `.dev.vars.example`
-  - `statikapi.config.js`
-  - `pnpm deploy` / `npm run deploy` / `yarn deploy` wiring via `wrangler deploy`
+- source directory
+- output directory
+- JavaScript or TypeScript example routes
+- ESLint
+- deploy presets
 
-Generated route modules can override project defaults with:
+Defaults:
+
+- source directory: `src-api`
+- output directory: `api-out`
+
+If you customize the directories, the scaffold writes `statikapi.config.js` for you.
+
+---
+
+## Cloudflare template
+
+The Cloudflare template is intentionally different from the normal templates.
+
+It scaffolds a project for:
+
+- one Worker
+- one Static Assets directory for public output
+- one private R2 bucket
+- one KV namespace
+- one preview UI flow
+
+### What it writes
+
+- `wrangler.toml`
+- `statikapi.config.js`
+- `.dev.vars.example`
+- `src-api/`
+- package scripts for `dev`, `build`, and `deploy`
+
+### What it asks for
+
+- Static Assets directory
+  - defaults to `public`
+- private R2 bucket binding name
+- private R2 bucket name
+- KV binding name
+- KV namespace id
+- `STATIK_BUILD_TOKEN`
+- `STATIK_SRC`
+  - usually matches `src-api`
+- `STATIK_USE_INDEX_JSON`
+- private auth header name
+- private auth header value
+- Cloudflare account id
+- Cloudflare API token placeholder
+- optional Worker / R2 limit values
+
+### Cloudflare output model
+
+Public routes:
+
+- are public by default
+- are emitted under `/public/...`
+- are generated into the configured Static Assets directory
+- are served by Cloudflare Static Assets
+
+Private routes:
+
+- use `config.cloudflare.public = false`
+- keep their original route paths
+- are stored in a private R2 bucket
+- are served through the Worker
+
+### Cloudflare route config
+
+Generated routes can override project defaults with:
 
 ```js
 export const config = {
   cloudflare: {
-    public: true,
+    public: false,
     webhook: true,
   },
 };
 ```
 
-Current Cloudflare conventions:
+### Important limitation
 
-- public routes are emitted under `/public/...` and served through Cloudflare Static Assets
-- asset-matching public route requests are expected to bypass the Worker and be served directly by Static Assets
-- public route assets are written into the configured Static Assets directory, which defaults to `public`
-- private routes keep their original route paths
-- public is the default; mark a route private with `config.cloudflare.public = false`
-- route-level Cloudflare config overrides the project-level default
-- public routes are not webhook-refreshable in this version; they change only after a rebuild + redeploy/publish step
-- the generated project assumes a least-privilege Cloudflare API token with Workers Scripts: Edit, R2 Storage: Edit, and Workers KV Storage: Edit
-- Cloudflare account id can be copied from Dashboard -> Workers & Pages -> Overview
-- R2 bucket names come from Dashboard -> R2
-- KV namespace ids come from Dashboard -> Workers & Pages -> KV
+Public routes are **not** webhook-refreshable in this version.
 
-From there you can:
+That means:
 
-- Run the default `dev` script, which uses `statikapi-cf dev` to build once, launch the local Worker, launch the preview UI, and try to open the UI automatically
-- Deploy the Worker to Cloudflare
-- Trigger builds via authenticated route-path `POST` webhooks documented in  
-  [Serverless Adapters → Cloudflare Worker + Static Assets](../serverless/cloudflare-adapter)
+- `POST /` refreshes private outputs only
+- `POST <private-route>` refreshes that private route only
+- public output changes require a new `build` + `deploy`
+
+For full Cloudflare behavior, see [Cloudflare Worker + Static Assets Adapter](../serverless/cloudflare-adapter).
 
 ---
 
-## Exit codes
+## Cloudflare template commands after scaffolding
 
-- `0` success
-- non-zero indicates an error (parsing, user module errors, etc.)
+Typical flow:
+
+```bash
+cd my-worker
+pnpm install
+cp .dev.vars.example .dev.vars
+pnpm dev
+```
+
+What `pnpm dev` does in the scaffolded Cloudflare app:
+
+- builds the Worker bundle
+- builds public Static Assets
+- starts local `wrangler dev`
+- starts the preview UI
+- opens the preview UI when possible
+- rebuilds on `src-api/` changes
+
+The preview UI shows:
+
+- public routes
+- private routes
+- grouped visibility
+- preview JSON
+- copy-ready snippets
+
+---
+
+## Cloudflare setup guidance
+
+The scaffold asks for values that come from your Cloudflare account.
+
+### Account ID
+
+Official Cloudflare doc:
+
+- [Find account and zone IDs](https://developers.cloudflare.com/fundamentals/setup/find-account-and-zone-ids/)
+
+Practical place to copy it:
+
+- **Workers & Pages -> Overview -> Account details**
+
+### KV namespace id
+
+Official doc:
+
+- [KV namespaces](https://developers.cloudflare.com/kv/concepts/kv-namespaces/)
+
+Practical place to get it:
+
+- **Workers & Pages -> KV**
+
+### Private R2 bucket name
+
+Official doc:
+
+- [Create new buckets](https://developers.cloudflare.com/r2/buckets/create-buckets/)
+
+Practical place to get it:
+
+- **R2 -> Buckets**
+
+### Cloudflare deploy token
+
+Official docs:
+
+- [Create API token](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
+- [API token permissions reference](https://developers.cloudflare.com/fundamentals/api/reference/permissions/)
+
+Recommended permissions for this template:
+
+- `Workers Scripts Edit`
+- `Workers KV Storage Edit`
+- `Workers R2 Storage Edit`
+
+Optional:
+
+- `Workers Tail Read`
+
+### `STATIK_BUILD_TOKEN`
+
+This is **not** the Cloudflare API token.
+
+It is the application-level secret used to authorize:
+
+- `POST /`
+- `POST <private-route-path>`
+
+Use a long random string.
+
+---
+
+## Node and install behavior
+
+The scaffold currently writes:
+
+- `.nvmrc`
+- `.node-version`
+- `package.json` engines
+
+to keep the generated project aligned with the repo’s current Node expectations.
+
+By default the scaffold installs dependencies immediately, unless you pass:
+
+```bash
+create-statikapi my-api --no-install
+```
+
+---
+
+## When to choose which template
+
+Choose `basic` when:
+
+- you want the smallest possible starter
+
+Choose `dynamic` when:
+
+- you want to learn dynamic and catch-all routes quickly
+
+Choose `remote-data` when:
+
+- your routes fetch remote APIs at build time
+
+Choose `cloudflare-adapter` when:
+
+- you want public Static Assets plus authenticated private routes
+- you want local preview UI for a Cloudflare project
+- you want private route rebuilds via authenticated HTTP POSTs

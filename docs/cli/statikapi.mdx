@@ -1,92 +1,177 @@
 # Core CLI — `statikapi`
 
-The core CLI provides two commands: **`dev`** and **`build`**.
+The core CLI currently provides:
+
+- `statikapi build`
+- `statikapi dev`
+- global `--help`
+- global `--version`
+
+It is the CLI used by the normal local workflow, not the Cloudflare adapter workflow.
 
 ---
 
-## `statikapi dev`
-
-Watches your source and serves an interactive UI at `/_ui`.
-
-> **Note:** The default **source dir** is `src-api/` and **output dir** is `api-out/`, both configurable via your [Configuration](../config). You can also override them via CLI flags `--src` and `--out`.
-
-<Tabs group="dev">
-  <Tab label="pnpm">
+## Global usage
 
 ```bash
-pnpm dev
+statikapi --help
+statikapi --version
+statikapi build
+statikapi dev
 ```
-
-  </Tab>
-  <Tab label="yarn">
-
-```bash
-yarn dev
-```
-
-  </Tab>
-  <Tab label="npm">
-
-```bash
-npm run dev
-```
-
-  </Tab>
-</Tabs>
-
-**Common flags**
-
-- `--no-ui` — run server without the preview UI
-- `--port <number>` — override dev port
-- `--src <dir>` — override source dir (defaults to config or `src-api/`)
-- `--out <dir>` — override output dir (defaults to config or `api-out/`)
 
 ---
 
 ## `statikapi build`
 
-Builds static JSON into your output directory (default `api-out/`, configurable via [Configuration](../config)).
+Builds JSON endpoints into the configured output directory.
 
-By default, all JSON files are **minified** — optimized for hosting and CI/CD pipelines.  
-If you prefer readable output, pass the `--pretty` flag.
+Default directories:
 
-<Tabs group="build">
-  <Tab label="pnpm">
+- source: `src-api`
+- output: `api-out`
 
-```bash
-pnpm build
-```
+### Common flags
 
-  </Tab>
-  <Tab label="yarn">
+- `--srcDir <dir>`
+- `--outDir <dir>`
+- `--pretty`
+- `--minify=false`
+- `--listIndex=true|false`
+- `--listIndexPick id,title`
 
-```bash
-yarn build
-```
-
-  </Tab>
-  <Tab label="npm">
+### Examples
 
 ```bash
-npm run build
+pnpm statikapi build
 ```
 
-  </Tab>
-</Tabs>
+```bash
+pnpm statikapi build --srcDir api --outDir public/api --pretty
+```
 
-**Useful flags**
+```bash
+pnpm statikapi build --listIndex=true --listIndexPick id,title
+```
 
-- `--pretty` — output human-readable JSON
-- `--src <dir>` — override source dir (default `src-api/`)
-- `--out <dir>` — override output dir (default `api-out/`)
-- `--clean` — remove old output before writing
+### What it writes
 
-> 💡 **Ideal for CI/CD:**  
-> Use `statikapi build` (without `--pretty`) for faster builds and smaller artifacts.
+- route JSON files
+- `api-out/.statikapi/manifest.json`
+
+### Notes
+
+- output is minified by default
+- `--pretty` writes readable JSON
+- dynamic and catch-all routes without `paths()` are skipped instead of failing the whole build
 
 ---
 
-## Exit codes
+## `statikapi dev`
 
-- `0` — success
-- non-zero — indicates an error (parsing, user module errors, etc.))
+Starts the local watch/build/preview flow.
+
+### Common flags
+
+- `--srcDir <dir>`
+- `--outDir <dir>`
+- `--host <host>`
+- `--port <port>`
+- `--no-ui`
+- `--no-open`
+- `--keep-alive`
+- `--serve`
+- `--listIndex=true|false`
+- `--listIndexPick id,title`
+
+### Examples
+
+```bash
+pnpm statikapi dev
+```
+
+```bash
+pnpm statikapi dev --port 8788 --srcDir src-api --outDir api-out
+```
+
+```bash
+pnpm statikapi dev --no-open
+```
+
+### What it does
+
+- builds an initial output set
+- watches your source tree
+- rebuilds on change
+- removes stale output when routes disappear
+- updates the local manifest
+- serves the preview UI at `/_ui/`
+
+### Non-TTY behavior
+
+In non-interactive environments, `dev` behaves like a stub unless you force it with:
+
+- `--keep-alive`
+- `--serve`
+- `STATIKAPI_FORCE_DEV=1`
+
+That is useful when running under tools like `concurrently`.
+
+---
+
+## Route output model
+
+The regular CLI emits filesystem JSON:
+
+- `/` -> `api-out/index.json`
+- `/users/1` -> `api-out/users/1/index.json`
+
+If `config.listIndex` is enabled on a dynamic or catch-all route, it can also emit a parent collection route:
+
+- `/posts/1`
+- `/posts/2`
+- `/posts`
+
+See [Configuration](../config) and [Dynamic Routes](../routes/dynamic-routes).
+
+---
+
+## Manifest shape
+
+The local manifest written to `.statikapi/manifest.json` currently includes:
+
+- `route`
+- `outFile`
+- `srcFile`
+- `filePath`
+- `bytes`
+- `mtime`
+- `hash`
+
+The preview UI uses that manifest to show route lists and load payloads.
+
+---
+
+## JSON restrictions
+
+Route output must be JSON-serializable.
+
+Allowed:
+
+- objects
+- arrays
+- strings
+- booleans
+- `null`
+- finite numbers
+
+Rejected:
+
+- functions
+- symbols
+- `BigInt`
+- `Date`
+- class instances
+- circular structures
+- `NaN`
+- `Infinity`

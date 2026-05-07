@@ -1,110 +1,109 @@
-# Cloudflare Pages, Workers, and R2
+# Cloudflare Deployment Options
 
-Cloudflare is an excellent choice for hosting small or medium static JSON APIs —
-especially if you are already hosting your frontend or documentation there.
+There are currently two realistic Cloudflare stories in this repo:
+
+1. **Simple static hosting**
+   - build with the regular CLI
+   - publish the output yourself
+2. **Cloudflare adapter**
+   - scaffold with `cloudflare-adapter`
+   - use the Worker + Static Assets + private R2 model
+
+This page explains when to use each.
 
 ---
 
-## Using Cloudflare Pages
+## 1) Use Cloudflare Pages for simple public JSON hosting
 
-You can deploy your `api-out/` folder directly to **Cloudflare Pages**:
+If your API is fully public and you just want to host generated JSON, the simplest path is:
+
+1. run the regular CLI
+2. publish the generated output
+
+Example build:
 
 ```bash
-npx wrangler pages publish api-out --project-name my-statikapi
+pnpm build
 ```
 
-Cloudflare Pages supports two deployment approaches:
+If your output is `api-out/`, you can publish that through your preferred static-hosting flow.
 
-1. **Git Integration** — connect your repository (GitHub, GitLab, or Bitbucket) directly to Cloudflare Pages.  
-   Every time you push changes to your configured branch, Cloudflare will automatically trigger a new build and redeploy your project.
+Cloudflare Pages is a reasonable fit when:
 
-2. **Manual Deployment** — use the `wrangler pages publish` command to upload a local build (as shown above).  
-   This is ideal for projects built by CI/CD pipelines or for static API exports like StatikAPI.
+- the API is public
+- the output is relatively small
+- you do not need authenticated private routes
+- you do not need runtime rebuild webhooks
 
-Cloudflare also supports **build hooks and webhooks**, which can trigger rebuilds automatically when your external systems (for example, StatikAPI SaaS or your backend) finish a build.
+Cloudflare Pages docs:
 
-> Example: You can configure a webhook in Cloudflare Pages and have your StatikAPI build process call it whenever `api-out/` is regenerated.
-
-This approach works great for:
-
-- Small APIs
-- Public demo endpoints
-- Combined projects (for example, your documentation and JSON API in one Pages site)
-
-Your JSON files will be served from the same global CDN edge network that powers Cloudflare Pages.
-
-**Example URL**
-
-```
-https://my-statikapi.pages.dev/api/users/1/index.json
-```
+- [Pages limits](https://developers.cloudflare.com/pages/platform/limits/)
 
 ---
 
-## Fair Usage Policy
+## 2) Use the Cloudflare adapter for mixed public/private APIs
 
-Cloudflare Pages is primarily designed for **websites**, not large API systems.  
-If you plan to serve thousands of JSON files or expect high traffic, review their **fair use policy** and bandwidth limits.
+Use the `cloudflare-adapter` template when you need:
 
-**Summary:**
+- public routes served as Static Assets
+- private routes behind a Worker
+- private runtime rebuilds by HTTP POST
+- a Cloudflare-aware local preview/dev flow
 
-- Occasional JSON requests are fine.
-- Heavy API-like workloads may be rate-limited or blocked.
-- Limits and caching behavior vary per plan — always review the [Cloudflare Pages Limits](https://developers.cloudflare.com/pages/platform/limits/) and Terms of Service.
+That flow is documented in:
 
----
+- [Cloudflare Worker + Static Assets Adapter](../serverless/cloudflare-adapter)
 
-## For Larger Projects — Use R2 or the Cloudflare adapter
+### Current adapter model
 
-If your StatikAPI project produces many JSON files or large objects, consider either:
+- public routes
+  - emitted under `/public/...`
+  - served from Cloudflare Static Assets
+- private routes
+  - remain on original route paths
+  - stored in a private R2 bucket
+  - served through the Worker
+- manifests
+  - public manifest under `/public/_manifest...`
+  - private manifest at `/_manifest`
 
-- hosting a local `api-out/` build in **Cloudflare R2**, or
-- using the dedicated `cloudflare-adapter` template for a Worker + Static Assets + private R2 deployment
+### Important limitation
 
-R2 is Cloudflare’s object storage service, similar to AWS S3, designed for large data sets and high availability.
+Public routes are not runtime-refreshable by webhook in this version.
 
-### Upload a local build to R2
+So:
 
-You can upload your entire `api-out/` directory:
-
-```bash
-npx wrangler r2 object put my-bucket --file api-out
-```
-
-### Serve from R2 or via Workers
-
-You can make your R2 bucket public or serve it behind a Worker:
-
-```js
-export default {
-  async fetch(request) {
-    // Example: Proxy JSON files from R2
-  },
-};
-```
-
-If you need:
-
-- authenticated private routes
-- `/public/...` partitioning
-- webhook-triggered rebuilds
-- Cloudflare-specific runtime limits
-
-use the dedicated [Cloudflare Worker + R2 adapter](../serverless/cloudflare-adapter) instead of a plain `api-out/` upload flow.
-
-**Advantages of R2**
-
-- Handles large-scale APIs efficiently
-- No egress bandwidth fees within Cloudflare
-- Can integrate seamlessly with Workers and KV
-- Supports advanced routing and caching
+- private routes can be rebuilt by webhook
+- public routes require a new build + deploy
 
 ---
 
-## Considerations
+## 3) Which option should you choose?
 
-- For **small projects** or when combining with an existing site → use **Cloudflare Pages**
-- For **large datasets** or when serving JSON like an API → use **Cloudflare R2**
-- Always follow Cloudflare’s current **usage policies and terms** to stay within fair-use limits
-- You can also host your APIs directly with **StatikAPI Cloud** _(coming soon)_ — a managed hosting solution built for static JSON APIs, automatic builds, and versioned deployments.  
-  [Join the waitlist](#subscription) to get early access.
+Choose simple static hosting when:
+
+- everything is public
+- you only need deployment-time updates
+- you do not need Worker auth or runtime rebuilds
+
+Choose the adapter when:
+
+- you need both public and private routes
+- you need authenticated private reads
+- you need webhook-triggered private rebuilds
+- you want the Cloudflare preview/dev workflow
+
+---
+
+## 4) Relevant Cloudflare docs
+
+For the adapter path, these official docs are the ones you will use most:
+
+- [Create API token](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
+- [API token permissions reference](https://developers.cloudflare.com/fundamentals/api/reference/permissions/)
+- [Find account and zone IDs](https://developers.cloudflare.com/fundamentals/setup/find-account-and-zone-ids/)
+- [Workers Static Assets overview](https://developers.cloudflare.com/workers/static-assets/)
+- [Static Assets configuration and bindings](https://developers.cloudflare.com/workers/static-assets/binding/)
+- [Wrangler configuration reference](https://developers.cloudflare.com/workers/wrangler/configuration/)
+- [Create new R2 buckets](https://developers.cloudflare.com/r2/buckets/create-buckets/)
+- [KV namespaces](https://developers.cloudflare.com/kv/concepts/kv-namespaces/)

@@ -1070,7 +1070,7 @@ const WORKER_RUNTIME_JS = `
     return null;
   }
 
-  async function handleBuildRoute(req, env) {
+  async function handleBuildRoute(req, env, requested) {
     if (!requireBuildAuth(req, env)) {
       return new Response('unauthorized', { status: 401 });
     }
@@ -1083,17 +1083,8 @@ const WORKER_RUNTIME_JS = `
       });
     }
 
-    const url = new URL(req.url);
     const body = await req.json().catch(() => ({}));
     const pretty = body.pretty ?? DEFAULT_PRETTY;
-    const requested = url.searchParams.get('route') || body.route;
-
-    if (!requested || typeof requested !== 'string') {
-      return new Response(JSON.stringify({ ok: false, error: 'Missing "route" (use ?route=/path)' }), {
-        status: 400,
-        headers: { 'content-type': 'application/json' },
-      });
-    }
 
     const found = await findSourceEntryForRequestedRoute(requested, env);
     if (!found) {
@@ -1136,6 +1127,7 @@ const WORKER_RUNTIME_JS = `
     existing.sort((a, b) => a.route.localeCompare(b.route));
     await writeManifest(env, existing);
 
+    const url = new URL(req.url);
     for (const target of built.purgeTargets) {
       await purgeCacheForPath(url.origin, target);
     }
@@ -1260,9 +1252,9 @@ const WORKER_RUNTIME_JS = `
       const url = new URL(req.url);
       if (req.method === 'OPTIONS') return new Response(null, { status: 204 });
 
-      if (req.method === 'POST' && url.pathname === '/build') {
-        if (url.searchParams.has('route')) return handleBuildRoute(req, env);
-        return handleBuild(req, env);
+      if (req.method === 'POST') {
+        if (url.pathname === '/') return handleBuild(req, env);
+        return handleBuildRoute(req, env, url.pathname);
       }
 
       if (req.method === 'GET' && url.pathname === '/_manifest') {

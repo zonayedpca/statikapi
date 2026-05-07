@@ -129,7 +129,7 @@ export async function data({ params }) { return { id: params.id, scope: 'private
   const env = makeEnv(cwd);
 
   const buildRes = await worker.fetch(
-    new Request('https://example.test/build', {
+    new Request('https://example.test/', {
       method: 'POST',
       headers: { authorization: 'Bearer build-secret' },
       body: JSON.stringify({}),
@@ -183,7 +183,7 @@ export async function data({ params }) { return { id: params.id, scope: 'private
   assert.equal((await privateOk.json()).scope, 'private-account');
 
   const targetedBlocked = await worker.fetch(
-    new Request('https://example.test/build?route=/users/1', {
+    new Request('https://example.test/users/1', {
       method: 'POST',
       headers: { authorization: 'Bearer build-secret' },
       body: JSON.stringify({}),
@@ -193,7 +193,7 @@ export async function data({ params }) { return { id: params.id, scope: 'private
   assert.equal(targetedBlocked.status, 403);
 
   const targetedCollection = await worker.fetch(
-    new Request('https://example.test/build?route=/public/posts', {
+    new Request('https://example.test/public/posts', {
       method: 'POST',
       headers: { authorization: 'Bearer build-secret' },
       body: JSON.stringify({}),
@@ -222,7 +222,7 @@ test('public routes are public by default and worker request limit is enforced',
   const env = makeEnv(cwd, { STATIK_WORKER_REQUEST_LIMIT: '4' });
 
   const buildRes = await worker.fetch(
-    new Request('https://example.test/build', {
+    new Request('https://example.test/', {
       method: 'POST',
       headers: { authorization: 'Bearer build-secret' },
       body: JSON.stringify({}),

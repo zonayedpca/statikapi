@@ -212,7 +212,7 @@ async function main(argv) {
             return tmpl === 'cloudflare-adapter' ? 'text' : null;
           },
           name: 'buildToken',
-          message: 'STATIK_BUILD_TOKEN (used to auth /build)',
+          message: 'STATIK_BUILD_TOKEN (used to auth POST webhook rebuilds)',
           initial: buildToken,
         },
         {

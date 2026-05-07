@@ -7,7 +7,7 @@ This project uses **@statikapi/adapter-cf** to:
 - Treat **public** route output as public-by-default and expose it from the `/public` partition
 - Write **private** route output into a private R2 bucket
 - Store a manifest and runtime limit counters in KV
-- Trigger rebuilds via authenticated `/build` endpoints
+- Trigger rebuilds via authenticated `POST` webhooks on route paths
 
 ## Commands
 
@@ -57,6 +57,12 @@ Public routes are exposed under `/public/...`.
 Routes are public by default unless route config marks them private.
 
 Private routes stay at their original route paths and require the configured auth header when the Worker serves them.
+
+Webhook rebuilds follow the same route path as reads:
+
+- `POST /` rebuilds all webhook-enabled routes
+- `POST /users/1` rebuilds the private route at `/users/1`
+- `POST /public/posts` is rejected because public outputs are Static Assets
 
 Each route can override the project default with:
 

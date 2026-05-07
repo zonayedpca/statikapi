@@ -84,7 +84,7 @@ When you choose `cloudflare-adapter`, the scaffolder:
   - **Static Assets directory** for public routes (defaults to `public`)
   - **private R2 bucket binding** and **bucket_name**
   - **KV namespace binding** and **id**
-  - **`STATIK_BUILD_TOKEN`** (used to authorize `/build`)
+  - **`STATIK_BUILD_TOKEN`** (used to authorize route-path `POST` webhook rebuilds)
   - **`STATIK_SRC`** (defaults to `src-api`)
   - **`STATIK_USE_INDEX_JSON`**
   - **private auth header name/value** for private route reads
@@ -124,7 +124,7 @@ From there you can:
 
 - Run the default `dev` script, which uses `statikapi-cf dev` to build once, launch the local Worker, launch the preview UI, and try to open the UI automatically
 - Deploy the Worker to Cloudflare
-- Trigger builds via the `/build` webhook documented in  
+- Trigger builds via authenticated route-path `POST` webhooks documented in  
   [Serverless Adapters → Cloudflare Worker + Static Assets](../serverless/cloudflare-adapter)
 
 ---

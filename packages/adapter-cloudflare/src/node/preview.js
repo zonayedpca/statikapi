@@ -190,8 +190,7 @@ export function makeUiMeta(workerOrigin, options = {}) {
 
 export async function fetchRoute(workerOrigin, route, localEnv, options = {}) {
   const headers = privateAuthHeaders(localEnv);
-  const isPublic =
-    options.isPublic === true || route === '/public' || route.startsWith('/public/');
+  const isPublic = options.isPublic === true || route === '/public' || route.startsWith('/public/');
   if (isPublic) headers.delete(privateAuthHeaderName(localEnv) || '');
 
   const target = isPublic && options.filePath ? '/' + options.filePath.replace(/^\/+/, '') : route;
@@ -212,9 +211,7 @@ function privateAuthHeaderName(localEnv) {
 }
 
 function privateAuthHeaderValue(localEnv) {
-  return (
-    localEnv.STATIK_PRIVATE_AUTH_HEADER_VALUE || process.env.STATIK_PRIVATE_AUTH_HEADER_VALUE
-  );
+  return localEnv.STATIK_PRIVATE_AUTH_HEADER_VALUE || process.env.STATIK_PRIVATE_AUTH_HEADER_VALUE;
 }
 
 function privateAuthHeaders(localEnv) {

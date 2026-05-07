@@ -350,7 +350,11 @@ test('rebundling picks up edited route module contents', async () => {
   assert.equal(typeof publicManifest[0].mtime, 'number');
   assert.equal(typeof publicManifest[0].bytes, 'number');
 
-  await fs.writeFile(path.join(cwd, 'src-api/index.js'), `export default { value: 'two' };`, 'utf8');
+  await fs.writeFile(
+    path.join(cwd, 'src-api/index.js'),
+    `export default { value: 'two' };`,
+    'utf8'
+  );
 
   await bundle({ cwd, srcDir: 'src-api', outFile: 'dist/worker.mjs', useIndexJson: true });
   assert.deepEqual(

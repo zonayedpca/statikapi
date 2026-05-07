@@ -44,14 +44,14 @@ Required before publish:
 | QA-0016  | Cloudflare | Verify local Worker runtime with `pnpm -C example/cloudflare wrangler:dev -- --port 8787`                             | 🟦 QA Ready | local Worker serves split manifests, `POST /` full rebuilds, and private routes while public manifest lives at `/public/_manifest` |
 | QA-0017  | Cloudflare | Verify local preview proxy with `statikapi-cf preview --worker http://127.0.0.1:8787 --port 8788`                     | ✅ Done     | `http://127.0.0.1:8788/_ui/` loads and reads public/private manifest data correctly                                                |
 | QA-0017A | Cloudflare | Verify default Cloudflare `dev` opens the preview UI flow end to end                                                  | ✅ Done     | `pnpm dev`/`npm run dev`/`yarn dev` start Worker + preview together and the UI is reachable                                        |
-| QA-0018  | Cloudflare | Verify public-by-default route behavior                                                                               | 🟦 QA Ready | routes without `config.cloudflare.public = false` are emitted under `/public/...` and preview correctly                            |
-| QA-0019  | Cloudflare | Verify private routes in preview using `.dev.vars` auth injection                                                     | 🟦 QA Ready | private routes load in preview without manual browser headers                                                                      |
-| QA-0020  | Cloudflare | Verify Cloudflare `listIndex` outputs                                                                                 | 🟦 QA Ready | collection/index routes appear in manifest and load correctly                                                                      |
-| QA-0021  | Cloudflare | Verify targeted private rebuilds and public-route rejection                                                           | 🟦 QA Ready | private `POST <route-path>` updates Worker-managed output, while public-route `POST` requests are rejected                         |
-| QA-0022  | Cloudflare | Verify Worker + Static Assets contract locally                                                                        | 🟦 QA Ready | public routes and `/public/_manifest` are exposed from Static Assets while private routes and `/_manifest` stay behind the Worker  |
-| QA-0026  | Cloudflare | Verify preview Absolute URL and JSON rendering for Cloudflare routes                                                  | 🟦 QA Ready | public route URLs use emitted asset paths, private route URLs use Worker paths, and the JSON panel parses both correctly           |
-| QA-0027  | Cloudflare | Verify Cloudflare `dev` reflects route-content edits in both Worker responses and preview UI without requiring a cold restart | 🟦 QA Ready | editing an existing route file updates the Worker payload and preview UI during `dev`, or at worst after a normal rebuild cycle    |
-| QA-0028  | Cloudflare | Verify preview groups Cloudflare routes by public vs private visibility                                               | 🟦 QA Ready | public and private routes are clearly separated in the UI so users can immediately tell which surface they are inspecting          |
+| QA-0018  | Cloudflare | Verify public-by-default route behavior                                                                               | ✅ Done     | routes without `config.cloudflare.public = false` are emitted under `/public/...` and preview correctly                            |
+| QA-0019  | Cloudflare | Verify private routes in preview using `.dev.vars` auth injection                                                     | ✅ Done     | private routes load in preview without manual browser headers                                                                      |
+| QA-0020  | Cloudflare | Verify Cloudflare `listIndex` outputs                                                                                 | ✅ Done     | collection/index routes appear in manifest and load correctly                                                                      |
+| QA-0021  | Cloudflare | Verify targeted private rebuilds and public-route rejection                                                           | ✅ Done     | private `POST <route-path>` updates Worker-managed output, while public-route `POST` requests are rejected                         |
+| QA-0022  | Cloudflare | Verify Worker + Static Assets contract locally                                                                        | ✅ Done     | public routes and `/public/_manifest` are exposed from Static Assets while private routes and `/_manifest` stay behind the Worker  |
+| QA-0026  | Cloudflare | Verify preview JSON rendering for Cloudflare routes                                                                   | ✅ Done     | preview loads valid JSON for both public and private routes and the JSON panel parses both correctly                               |
+| QA-0027  | Cloudflare | Verify Cloudflare `dev` reflects route-content edits in both Worker responses and preview UI without requiring a cold restart | ✅ Done     | editing an existing route file updates the Worker payload and preview UI during `dev`, or at worst after a normal rebuild cycle    |
+| QA-0028  | Cloudflare | Verify preview groups Cloudflare routes by public vs private visibility                                               | ✅ Done     | public and private routes are clearly separated in the UI so users can immediately tell which surface they are inspecting          |
 | QA-0029  | Cloudflare | Verify Cloudflare Absolute URL and code snippets respect route-shape preferences and private-route auth needs         | 🟦 QA Ready | snippets use the Worker origin, match actual emitted path shapes, and mention the required auth header for private routes          |
 | QA-0023  | Cloudflare | Verify route-level opt-out from public-by-default behavior                                                            | 🟦 QA Ready | routes marked private are not treated as public Static Assets and require Worker auth                                              |
 | QA-0024  | Docs       | Check root README, scaffold README, and Cloudflare instructions against actual commands                               | 🟦 QA Ready | no obvious command drift remains                                                                                                   |
@@ -351,7 +351,7 @@ Note:
 
 #### QA-0018
 
-Status: `🟦 QA Ready`
+Status: `✅ Done`
 
 Pass when:
 
@@ -360,7 +360,7 @@ Pass when:
 
 #### QA-0019
 
-Status: `🟦 QA Ready`
+Status: `✅ Done`
 
 Setup:
 
@@ -372,7 +372,7 @@ Pass when:
 
 #### QA-0020
 
-Status: `🟦 QA Ready`
+Status: `✅ Done`
 
 Pass when:
 
@@ -383,7 +383,7 @@ Pass when:
 
 #### QA-0021
 
-Status: `🟦 QA Ready`
+Status: `✅ Done`
 
 Pass when:
 
@@ -394,7 +394,7 @@ Pass when:
 
 #### QA-0022
 
-Status: `🟦 QA Ready`
+Status: `✅ Done`
 
 Pass when:
 
@@ -406,17 +406,17 @@ Pass when:
 
 #### QA-0026
 
-Status: `🟦 QA Ready`
+Status: `✅ Done`
 
 Pass when:
 
 - selecting a public route in preview loads valid JSON in `Tree`, `Pretty`, and `Raw`
 - selecting a private route in preview loads valid JSON in `Tree`, `Pretty`, and `Raw`
-- the preview route fetch path matches the actual emitted route path instead of a guessed `index.json` path
+- preview data loads from the correct upstream route content for both public and private Cloudflare entries
 
 #### QA-0027
 
-Status: `🟦 QA Ready`
+Status: `✅ Done`
 
 Pass when:
 
@@ -426,7 +426,7 @@ Pass when:
 
 #### QA-0028
 
-Status: `🟦 QA Ready`
+Status: `✅ Done`
 
 Pass when:
 
@@ -442,6 +442,7 @@ Pass when:
 - the Absolute URL uses the Worker origin, not the preview UI origin
 - the Absolute URL matches the actual emitted route shape for the current project settings
 - snippet examples respect path-shape preferences such as no `.json` suffixes or no `/index` paths when that is the configured runtime surface
+- the route details page shows correct Absolute URL, `curl`, browser `fetch`, and Node `fetch` examples for both public and private routes
 - private-route snippets make the required auth header obvious in curl/browser/node examples
 
 #### QA-0023

@@ -27,7 +27,11 @@ const Sidebar = forwardRef(function Sidebar(
   const grouped =
     mode === 'cloudflare'
       ? [
-          { label: 'Public', hint: 'Static Assets', routes: routes.filter((entry) => entry.public) },
+          {
+            label: 'Public',
+            hint: 'Static Assets',
+            routes: routes.filter((entry) => entry.public),
+          },
           {
             label: 'Private',
             hint: 'Worker + auth',
@@ -68,12 +72,16 @@ const Sidebar = forwardRef(function Sidebar(
                       key={e.route}
                       route={e.route}
                       active={activeRoute === e.route}
-                      highlighted={highlightedIndex === routes.findIndex((item) => item.route === e.route)}
+                      highlighted={
+                        highlightedIndex === routes.findIndex((item) => item.route === e.route)
+                      }
                       onClick={() => onPick(e.route)}
                       subtitle={
                         <span className="flex gap-2">
                           <span title={`${e.bytes} bytes`}>{formatBytes(e.bytes)}</span>
-                          <span title={`Modified: ${formatDate(e.mtime)}`}>{formatDate(e.mtime)}</span>
+                          <span title={`Modified: ${formatDate(e.mtime)}`}>
+                            {formatDate(e.mtime)}
+                          </span>
                         </span>
                       }
                     />

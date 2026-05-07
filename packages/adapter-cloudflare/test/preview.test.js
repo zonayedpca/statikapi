@@ -111,11 +111,11 @@ test('preview metadata exposes worker origin for UI snippets', () => {
       privateAuthHeaderName: 'x-private-key',
     }),
     {
-    origin: 'http://127.0.0.1:8787',
-    mode: 'cloudflare',
-    useIndexJson: true,
-    privateAuthHeaderName: 'x-private-key',
-    publicManifestPath: '/public/_manifest/index.json',
+      origin: 'http://127.0.0.1:8787',
+      mode: 'cloudflare',
+      useIndexJson: true,
+      privateAuthHeaderName: 'x-private-key',
+      publicManifestPath: '/public/_manifest/index.json',
     }
   );
 });

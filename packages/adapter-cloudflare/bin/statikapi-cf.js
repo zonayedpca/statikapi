@@ -5,7 +5,7 @@ import path from 'node:path';
 import { exec, spawn } from 'node:child_process';
 
 import { bundle } from '../src/node/bundle.js';
-import { startPreviewServer } from '../src/node/preview.js';
+import { loadLocalEnv, startPreviewServer } from '../src/node/preview.js';
 
 function parseArgs(argv) {
   const out = {
@@ -233,6 +233,7 @@ async function runDev({
   workerPort,
   noOpen,
   pollMs,
+  buildToken,
 }) {
   await runBuildOnce({
     cwd: root,
@@ -295,6 +296,9 @@ async function runDev({
         await stopWrangler(wrangler);
       }
       wrangler = spawnWrangler();
+      if (buildToken) {
+        await triggerPrivateRebuild(workerOrigin, buildToken, reason);
+      }
     });
     return restartChain;
   }
@@ -342,6 +346,32 @@ async function runDev({
   await new Promise(() => {});
 }
 
+async function triggerPrivateRebuild(workerOrigin, buildToken, reason) {
+  for (let attempt = 1; attempt <= 20; attempt++) {
+    try {
+      const res = await fetch(new URL('/', workerOrigin), {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${buildToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+      if (res.ok) {
+        console.log(`statikapi-cf dev → refreshed private outputs (${reason})`);
+        return;
+      }
+    } catch {
+      // worker may still be starting up
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  console.warn(
+    `statikapi-cf dev → private outputs were not refreshed automatically after ${reason}`
+  );
+}
+
 (async function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -361,6 +391,12 @@ async function runDev({
       'false'
   ).toLowerCase() === 'true';
   const outFile = args.outFile || 'dist/worker.mjs';
+  const localEnv = await loadLocalEnv(root);
+  const buildToken =
+    localEnv.STATIK_BUILD_TOKEN ||
+    readTomlVar(wranglerToml, 'STATIK_BUILD_TOKEN') ||
+    process.env.STATIK_BUILD_TOKEN ||
+    '';
 
   try {
     if (args.command === 'preview') {
@@ -392,6 +428,7 @@ async function runDev({
         workerPort: Number.isFinite(args.workerPort) ? args.workerPort : 8787,
         noOpen: args.noOpen,
         pollMs: Number.isFinite(args.pollMs) ? args.pollMs : 750,
+        buildToken,
       });
       return;
     }

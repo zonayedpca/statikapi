@@ -150,6 +150,7 @@ async function startPollingBuildWatcher({
   prettyDefault,
   useIndexJson,
   pollMs,
+  onRebuild,
 }) {
   let last = await collectWatchState(root, srcDir);
   let timer = null;
@@ -173,6 +174,9 @@ async function startPollingBuildWatcher({
         useIndexJson,
       });
       console.log(`✔ worker emitted → ${path.relative(root, outFile)}`);
+      if (typeof onRebuild === 'function') {
+        await onRebuild(reason);
+      }
     } catch (err) {
       console.error(err?.stack || err?.message || String(err));
     } finally {
@@ -252,6 +256,49 @@ async function runDev({
     openInBrowser(previewUrl);
   }
 
+  let wrangler = null;
+  let shuttingDown = false;
+  let restartChain = Promise.resolve();
+
+  function spawnWrangler() {
+    const child = spawn('wrangler', ['dev', '--local', '--port', String(workerPort)], {
+      cwd: root,
+      stdio: 'inherit',
+    });
+    child.on('error', (err) => {
+      if (shuttingDown) return;
+      console.error(err?.stack || err?.message || String(err));
+    });
+    child.on('exit', (code, signal) => {
+      if (shuttingDown) return;
+      if (signal === 'SIGTERM') return;
+      if (code && code !== 0) {
+        console.error(`wrangler dev exited with code ${code}`);
+      }
+    });
+    return child;
+  }
+
+  async function stopWrangler(child) {
+    if (!child || child.exitCode != null || child.signalCode != null) return;
+    await new Promise((resolve) => {
+      child.once('exit', () => resolve());
+      child.kill('SIGTERM');
+    });
+  }
+
+  function queueWranglerRestart(reason) {
+    restartChain = restartChain.then(async () => {
+      if (shuttingDown) return;
+      if (wrangler) {
+        console.log(`statikapi-cf dev → restarting worker (${reason})`);
+        await stopWrangler(wrangler);
+      }
+      wrangler = spawnWrangler();
+    });
+    return restartChain;
+  }
+
   const stopWatcher = await startPollingBuildWatcher({
     root,
     srcDir,
@@ -260,14 +307,14 @@ async function runDev({
     prettyDefault,
     useIndexJson,
     pollMs,
+    onRebuild: async () => {
+      await queueWranglerRestart('source change');
+    },
   });
-
-  const wrangler = spawn('wrangler', ['dev', '--local', '--port', String(workerPort)], {
-    cwd: root,
-    stdio: 'inherit',
-  });
+  await queueWranglerRestart('initial start');
 
   const shutdown = async (code = 0) => {
+    shuttingDown = true;
     try {
       await stopWatcher();
     } catch {
@@ -278,8 +325,13 @@ async function runDev({
     } catch {
       // ignore
     }
-    if (!wrangler.killed) {
-      wrangler.kill('SIGTERM');
+    try {
+      await restartChain;
+    } catch {
+      // ignore
+    }
+    if (wrangler) {
+      await stopWrangler(wrangler);
     }
     process.exit(code);
   };
@@ -287,18 +339,7 @@ async function runDev({
   process.on('SIGINT', () => void shutdown(0));
   process.on('SIGTERM', () => void shutdown(0));
 
-  await new Promise((resolve, reject) => {
-    wrangler.on('error', reject);
-    wrangler.on('exit', (code) => {
-      if (code && code !== 0) {
-        reject(new Error(`wrangler dev exited with code ${code}`));
-        return;
-      }
-      resolve();
-    });
-  });
-
-  await shutdown(0);
+  await new Promise(() => {});
 }
 
 (async function main() {

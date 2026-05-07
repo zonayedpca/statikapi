@@ -5,43 +5,14 @@ import crypto from 'node:crypto';
 import { loadConfig } from '../config/loadConfig.js';
 import { ConfigError } from '../config/validate.js';
 import { loadPaths } from '../loader/loadPaths.js';
+import { loadRouteConfig } from '../loader/loadRouteConfig.js';
 import { loadModuleValue } from '../loader/loadModuleValue.js';
 import { mapRoutes } from '../router/mapRoutes.js';
+import { collectionRouteForSegments, toConcreteRoute, toParams } from '../router/routeHelpers.js';
 import { readFlags } from '../util/readFlags.js';
 import { emptyDir, writeFileEnsured } from '../util/fsx.js';
 import { formatBytes } from '../util/bytes.js';
 import { routeToOutPath } from '../build/routeOutPath.js';
-
-function toConcrete(routePattern, segTokens, segs) {
-  // segTokens: ['users', ':id'] or ['docs','*slug']
-  // segs: ['1'] or ['a','b']
-  let idx = 0;
-
-  const parts = routePattern.split('/').map((p) => {
-    if (p.startsWith(':')) return segs[idx++] ?? '';
-    if (p.startsWith('*')) return segs.slice(idx).join('/');
-    return p;
-  });
-  const concrete = parts.join('/').replace(/\/+/g, '/');
-
-  return concrete;
-}
-
-function toParams(segTokens, concreteRoute) {
-  const concreteSegs = concreteRoute.split('/').filter(Boolean);
-  const params = {};
-
-  for (let i = 0; i < segTokens.length; i++) {
-    const tok = segTokens[i];
-    if (tok.startsWith(':')) {
-      params[tok.slice(1)] = concreteSegs[i] ?? '';
-    } else if (tok.startsWith('*')) {
-      params[tok.slice(1)] = concreteSegs.slice(i);
-      break;
-    }
-  }
-  return params;
-}
 
 export default async function buildCmd(argv) {
   const t0 = Date.now();
@@ -69,6 +40,7 @@ export default async function buildCmd(argv) {
     let byteCount = 0;
     let skippedDynamic = 0;
     const manifest = []; // array of unified entries
+    const emittedByRoute = new Map(); // route -> srcFile
 
     const digest = (s) => crypto.createHash('sha1').update(s).digest('hex');
     const relSrc = (abs) => {
@@ -88,6 +60,14 @@ export default async function buildCmd(argv) {
     };
 
     async function pushManifest({ route, srcFile, outFile, json }) {
+      const owner = emittedByRoute.get(route);
+      if (owner && owner !== srcFile) {
+        throw new Error(
+          `Route collision for ${route}: ${relSrc(srcFile)} conflicts with ${relSrc(owner)}`
+        );
+      }
+      emittedByRoute.set(route, srcFile);
+
       const st = await fs.stat(outFile).catch(() => null);
       const entry = {
         // stable field order
@@ -116,7 +96,7 @@ export default async function buildCmd(argv) {
 
     // helper: materialize a concrete route from tokens + param segments
     async function emitConcreteRoute(r, segs) {
-      const concreteRoute = toConcrete(r.route, r.segments, segs);
+      const concreteRoute = toConcreteRoute(r.route, segs);
       const params = toParams(r.segments, concreteRoute);
       const val = await loadModuleValue(r.file, { params });
       const json = JSON.stringify(val, null, space) + (pretty ? '\n' : '');
@@ -126,6 +106,26 @@ export default async function buildCmd(argv) {
       byteCount += Buffer.byteLength(json);
 
       await pushManifest({ route: concreteRoute, srcFile: r.file, outFile, json });
+
+      return val;
+    }
+
+    async function emitListIndexRoute(r, listIndexCfg, items) {
+      if (!listIndexCfg.enabled) return;
+
+      const collectionRoute = collectionRouteForSegments(r.segments);
+      if (!collectionRoute) {
+        throw new Error(`config.listIndex requires a static parent route for ${r.route}`);
+      }
+
+      const payload = items.map((item) => pickItemFields(item, listIndexCfg.pick, r.route));
+      const json = JSON.stringify(payload, null, space) + (pretty ? '\n' : '');
+      const outFile = routeToOutPath({ outAbs: config.paths.outAbs, route: collectionRoute });
+      await writeFileEnsured(outFile, json);
+      fileCount++;
+      byteCount += Buffer.byteLength(json);
+
+      await pushManifest({ route: collectionRoute, srcFile: r.file, outFile, json });
     }
 
     // dynamic: expect [['val'], ...] from loadPaths()
@@ -135,13 +135,17 @@ export default async function buildCmd(argv) {
         skippedDynamic++;
         continue;
       }
+      const routeConfig = await loadRouteConfig(r.file, { fallback: config });
       const seen = new Set();
+      const listItems = [];
       for (const segs of list) {
-        const concrete = toConcrete(r.route, r.segments, segs);
+        const concrete = toConcreteRoute(r.route, segs);
         if (seen.has(concrete)) continue;
         seen.add(concrete);
-        await emitConcreteRoute(r, segs);
+        const item = await emitConcreteRoute(r, segs);
+        listItems.push(item);
       }
+      await emitListIndexRoute(r, routeConfig.listIndex, listItems);
     }
 
     // catch-all: expect [['a','b'], ['guide'], ...]
@@ -151,13 +155,17 @@ export default async function buildCmd(argv) {
         skippedDynamic++;
         continue;
       }
+      const routeConfig = await loadRouteConfig(r.file, { fallback: config });
       const seen = new Set();
+      const listItems = [];
       for (const segs of list) {
-        const concrete = toConcrete(r.route, r.segments, segs);
+        const concrete = toConcreteRoute(r.route, segs);
         if (seen.has(concrete)) continue;
         seen.add(concrete);
-        await emitConcreteRoute(r, segs);
+        const item = await emitConcreteRoute(r, segs);
+        listItems.push(item);
       }
+      await emitListIndexRoute(r, routeConfig.listIndex, listItems);
     }
 
     // Write manifest once (sorted for determinism)
@@ -188,4 +196,17 @@ export default async function buildCmd(argv) {
     console.error('[statikapi] Build failed:', err?.stack || err?.message || err);
     return 1;
   }
+}
+
+function pickItemFields(item, pick, route) {
+  if (!pick) return item;
+  if (item == null || typeof item !== 'object' || Array.isArray(item)) {
+    throw new Error(`config.listIndex.pick requires plain-object items for ${route}`);
+  }
+
+  const out = {};
+  for (const key of pick) {
+    if (Object.hasOwn(item, key)) out[key] = item[key];
+  }
+  return out;
 }

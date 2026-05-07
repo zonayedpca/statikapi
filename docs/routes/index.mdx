@@ -8,7 +8,14 @@ Routes are defined by **files in `src-api/`** and map directly to URLs.
 - **Remote** — any route that fetches external data within `data()` at build time
 
 Every route module must provide data via:
+
 - `export default <object>` **or** `export async function data(ctx)`
 
 Dynamic/catch-all routes also provide:
+
 - `export async function paths()` to enumerate all concrete pages
+
+Dynamic and catch-all routes can optionally emit a parent collection route with:
+
+- `export const config = { listIndex: true }`
+- or `export const config = { listIndex: { enabled: true, pick: [...] } }`

@@ -1,1 +1,4 @@
-export default { hello: 'world from worker!' };
+export default {
+  hello: 'world from worker!',
+  surface: 'public',
+};

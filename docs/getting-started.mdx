@@ -1,16 +1,19 @@
 # Getting Started
 
-Welcome to **StatikAPI** — generate **static JSON endpoints** from small JS/TS modules.
+StatikAPI turns small route modules into static JSON endpoints.
 
-This guide shows three flows:
+This repo currently supports two main workflows:
 
-- **From scratch** using `create-statikapi`
-- **Inside an existing repo** by adding the CLI and a `src-api/` folder _(this directory is configurable via your [configuration](./config))_
-- **Serverless mode** using the **Cloudflare Worker adapter** (StatikAPI behind a Worker + R2 + KV, with a build webhook)
+- **Local CLI workflow**
+  - build JSON into `api-out/`
+  - preview it locally at `/_ui/`
+- **Cloudflare workflow**
+  - public routes as Static Assets
+  - private routes behind a Worker
 
 ---
 
-## 1) Scaffold a new project (recommended)
+## 1) Scaffold a project
 
 <Tabs group="create">
   <Tab label="pnpm">
@@ -42,49 +45,153 @@ npm run dev
   </Tab>
 </Tabs>
 
-You will be prompted for:
+You will be prompted for a template:
 
-- **Template**: `basic`, `dynamic`, `remote-data`, or  
-  `cloudflare-adapter` (Cloudflare Worker + R2 + KV + build webhook)
-- **Package manager** and whether to install now
-- Optional ESLint, TS, directories, and deploy presets  
-  _(ESLint/TS are disabled for the Cloudflare adapter template; it ships ready-to-run JS Worker boilerplate.)_
-
-The dev server for normal templates watches your **source directory** (default `src-api/`, configurable via [Configuration](./config)) and serves a local **UI** at `/_ui` with a live manifest, JSON previews, and copy-ready code snippets.
+- `basic`
+- `dynamic`
+- `remote-data`
+- `cloudflare-adapter`
 
 ---
 
-## 1b) Using the Cloudflare Worker adapter (serverless mode)
+## 2) Local CLI mode
 
-If you pick the **`cloudflare-adapter`** template, `create-statikapi` scaffolds:
+For `basic`, `dynamic`, and `remote-data`, the default layout is:
 
-- A **Cloudflare Worker** wired to:
-  - **R2** (stores built JSON)
-  - **KV** (stores the manifest)
-- A **build webhook endpoint** on the Worker (`/build`)
-- A default **JS-only** boilerplate (no TypeScript / ESLint)
+```text
+src-api/
+api-out/
+```
 
-From there you can:
+Run:
 
-- Run the bundled dev commands to iterate locally
-- Deploy the Worker to Cloudflare
-- **Trigger rebuilds via HTTP**:
-  - `POST /build` — rebuild **all routes**
-  - `POST /build?route=/users/1` — rebuild just that route
+```bash
+pnpm dev
+```
 
-Authentication is handled via a **`STATIK_BUILD_TOKEN`** env var on the Worker.  
-Clients include this token in requests (see [Cloudflare Worker + R2 Adapter](./serverless/cloudflare-adapter) for full details and `curl` examples).
+or:
 
-This mode is ideal when:
+```bash
+pnpm build
+```
 
-- You want StatikAPI’s DX, but need a **serverless endpoint** instead of raw static hosting
-- Your data changes frequently and you want to **trigger updates via webhooks** from other systems
+### What `dev` gives you
+
+- watches your route files
+- writes JSON into `api-out/`
+- serves a preview UI at `/_ui/`
+- shows routes, JSON payloads, and snippets
+
+### What `build` gives you
+
+- a clean `api-out/`
+- generated JSON payloads
+- `.statikapi/manifest.json`
 
 ---
 
-## 2) Integrate into an existing project
+## 3) Cloudflare mode
 
-1. Add the dependency (dev):
+Choose the `cloudflare-adapter` template if you want Cloudflare deployment from day one.
+
+This creates a project with:
+
+- a Worker bundle
+- a Static Assets directory for public routes
+- a private R2 bucket for private routes
+- a KV namespace for manifest data
+- a Cloudflare-aware preview/dev flow
+
+### Public vs private
+
+Public routes:
+
+- are public by default
+- are emitted under `/public/...`
+- are served as Static Assets
+
+Private routes:
+
+- use `config.cloudflare.public = false`
+- stay on their original route paths
+- are served through the Worker
+
+### Rebuild model
+
+Private routes can be refreshed at runtime with authenticated `POST` requests.
+
+Public routes cannot.
+
+Public route changes require:
+
+1. a new build
+2. a new deploy
+
+For the full Cloudflare contract, read [Cloudflare Worker + Static Assets Adapter](./serverless/cloudflare-adapter).
+
+---
+
+## 4) Route basics
+
+StatikAPI routes are filesystem-based.
+
+Examples:
+
+```text
+src-api/index.js          -> /
+src-api/about.js          -> /about
+src-api/users/[id].js     -> /users/:id
+src-api/docs/[...slug].js -> /docs/*slug
+```
+
+Dynamic and catch-all routes need `paths()` so StatikAPI knows which concrete routes to emit.
+
+---
+
+## 5) Route module shapes
+
+You can export:
+
+- `export default <plain value>`
+- `export default async function () {}`
+- `export async function data() {}`
+
+Dynamic and catch-all routes can also export:
+
+- `export async function paths() {}`
+
+Route modules must ultimately return JSON-serializable data.
+
+---
+
+## 6) Collection index routes
+
+Dynamic and catch-all routes can also emit a parent collection route with `config.listIndex`.
+
+Example:
+
+```js
+export const config = {
+  listIndex: {
+    enabled: true,
+    pick: ['id', 'title'],
+  },
+};
+```
+
+That can produce:
+
+- `/posts/1`
+- `/posts/2`
+- `/posts`
+
+The regular CLI path and the Cloudflare adapter both support this now.
+
+---
+
+## 7) If you already have a repo
+
+Install the CLI and add `src-api/` yourself:
 
 <Tabs group="install">
   <Tab label="pnpm">
@@ -110,13 +217,7 @@ npm i -D statikapi
   </Tab>
 </Tabs>
 
-2. Create your **source directory** (default `src-api/`, configurable via [Configuration](./config)):
-
-```bash
-mkdir -p src-api && printf "export default { hello: 'world' }\n" > src-api/index.js
-```
-
-3. Add scripts to `package.json`:
+Add scripts:
 
 ```json
 {
@@ -127,49 +228,19 @@ mkdir -p src-api && printf "export default { hello: 'world' }\n" > src-api/index
 }
 ```
 
-4. Run it:
-
-<Tabs group="dev">
-  <Tab label="pnpm">
+Then create a route:
 
 ```bash
-pnpm dev
-```
-
-  </Tab>
-  <Tab label="yarn">
-
-```bash
-yarn dev
-```
-
-  </Tab>
-  <Tab label="npm">
-
-```bash
-npm run dev
-```
-
-  </Tab>
-</Tabs>
-
----
-
-## Directory layout
-
-```
-src-api/            # your route modules (configurable via Configuration)
-  index.js          # → /index.json
-  users/[id].js     # → /users/1/index.json, etc (via paths())
-  docs/[...slug].js # → /docs/a/b/index.json, etc (via paths())
-api-out/            # generated JSON (also configurable via Configuration)
+mkdir -p src-api
+printf "export default { hello: 'world' }\n" > src-api/index.js
 ```
 
 ---
 
-## Next steps
+## 8) Next steps
 
-- Read the **CLI Commands** to learn each flag
-- Learn the **Routing** model (static, dynamic, catch-all, remote)
-- Use **data()** and **paths()** to shape your endpoints
-- Explore the **[Cloudflare Worker + R2 adapter](./serverless/cloudflare-adapter)** if you want StatikAPI behind a serverless Worker with a build webhook
+- Read [Configuration](./config)
+- Read [Core CLI — `statikapi`](./cli/statikapi)
+- Read [Project Scaffolding — `create-statikapi`](./cli/create-statikapi)
+- Read [Routes Overview](./routes)
+- Read [Cloudflare Worker + Static Assets Adapter](./serverless/cloudflare-adapter) if you want the Cloudflare flow

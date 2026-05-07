@@ -1,27 +1,121 @@
 # Dynamic Routes
 
-Use square brackets to mark a **single param**. Provide a `paths()` function to enumerate values.
+Use square brackets to declare a single-segment parameter:
 
+```text
+src-api/users/[id].js
 ```
-src-api/users/[id].js  → /users/1/index.json, /users/2/index.json, ...
+
+That route becomes:
+
+- `/users/1`
+- `/users/2`
+- `/users/3`
+
+depending on what `paths()` returns.
+
+---
+
+## Required `paths()`
+
+Dynamic routes must export `paths()`:
+
+```js
+export async function paths() {
+  return ['1', '2', '3'];
+}
 ```
+
+For dynamic routes:
+
+- `paths()` must return an array of strings
+- each string is one concrete value for the parameter
+
+If a dynamic route does not export `paths()`:
+
+- the route is skipped
+- the build does not fail just because of that omission
+
+---
 
 ## Example
 
 ```js
 // src-api/users/[id].js
 export async function paths() {
-  return ["1", "2", "3"];
+  return ['1', '2', '3'];
 }
 
 export async function data({ params }) {
   return {
     id: params.id,
-    role: Number(params.id) % 2 === 0 ? "editor" : "viewer",
-    generatedAt: new Date().toISOString()
+    role: Number(params.id) % 2 === 0 ? 'editor' : 'viewer',
   };
 }
-
 ```
 
-`paths()` returns an array of **strings** for the bracketed param.
+`params` for `/users/2` will be:
+
+```js
+{
+  id: '2';
+}
+```
+
+---
+
+## Parent collection route with `listIndex`
+
+Dynamic routes can also emit a parent collection route:
+
+```js
+export const config = {
+  listIndex: true,
+};
+
+export async function paths() {
+  return ['1', '2'];
+}
+
+export async function data({ params }) {
+  return {
+    id: params.id,
+    name: `User ${params.id}`,
+    role: 'member',
+  };
+}
+```
+
+This produces:
+
+- `/users/1`
+- `/users/2`
+- `/users`
+
+If you want only selected fields in the parent route:
+
+```js
+export const config = {
+  listIndex: {
+    enabled: true,
+    pick: ['id', 'name'],
+  },
+};
+```
+
+Then `/users` contains only:
+
+- `id`
+- `name`
+
+from each item payload.
+
+---
+
+## Route collisions
+
+Be careful with parent collection routes.
+
+If you already have a static route at `/users`, enabling `listIndex` for `users/[id].js` creates a collision.
+
+That build should fail instead of silently overwriting one route with another.

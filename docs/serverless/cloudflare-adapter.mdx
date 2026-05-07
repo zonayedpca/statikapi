@@ -1,424 +1,600 @@
-# Cloudflare Worker + R2 Adapter
+# Cloudflare Worker + Static Assets Adapter
 
-The **Cloudflare Worker adapter** lets you run StatikAPI in a **serverless** way:
+The Cloudflare adapter turns a StatikAPI project into a Cloudflare deployment with two clearly separated surfaces:
 
-- A Cloudflare **Worker** exposes control-plane endpoints (build + manifest).
-- Built JSON lives in **R2** and is served **directly** from R2 (optionally via a custom domain).
-- A small **manifest** lives in **KV**.
-- A secure **`/build` webhook** lets you rebuild everything (or a single route) via HTTP.
+- **Public routes** are emitted as **Cloudflare Static Assets** under `/public/...`
+- **Private routes** are stored in a **private R2 bucket** and served through the **Worker**
 
-Think of it as: _“StatikAPI + static JSON, with a Worker that rebuilds and manages your R2-backed API.”_
+It also provides:
+
+- a **public manifest** served as a static asset
+- a **private manifest** served by the Worker
+- authenticated **route-path POST webhooks** for private rebuilds
+- a local **preview UI** and Cloudflare-specific `dev` flow
+
+This page documents the **current shipped behavior** in this repo.
 
 ---
 
-## 1) Scaffolding with `create-statikapi`
+## 1) What the adapter supports today
 
-The easiest way to get started is via the dedicated template:
+### Public routes
+
+- Public is the default.
+- A route without `config.cloudflare.public = false` is treated as public.
+- Public routes are emitted under `/public/...`.
+- Public routes are generated during `statikapi-cf build` into your configured Static Assets directory.
+- Cloudflare should serve those assets **directly**, without forcing the Worker to run first.
+
+### Private routes
+
+- Set `config.cloudflare.public = false` to make a route private.
+- Private routes keep their original route paths.
+- Private output is stored in a private R2 bucket.
+- Private reads require the configured auth header.
+
+### Manifests
+
+- Public manifest:
+  - `/public/_manifest.json` when `STATIK_USE_INDEX_JSON = "false"`
+  - `/public/_manifest/index.json` when `STATIK_USE_INDEX_JSON = "true"`
+- Private manifest:
+  - `GET /_manifest`
+  - requires the private auth header
+
+### Webhook rebuilds
+
+- `POST /`
+  - rebuild all webhook-enabled **private** outputs
+- `POST /users/1`
+  - rebuild the matching **private** route
+- `POST` to a public route path
+  - rejected on purpose
+
+### Important limitation in this version
+
+**Public routes are not webhook-refreshable in this version.**
+
+That means:
+
+- `POST /` and route-path `POST` requests refresh **private** Worker-managed outputs only
+- public Static Assets change only after a new **build + deploy**
+
+If a route must be updated immediately by webhook in production, it should stay **private** instead of public.
+
+---
+
+## 2) Scaffold a project
+
+Use the dedicated template:
 
 ```bash
 pnpm dlx create-statikapi my-worker --template cloudflare-adapter
 # or
 npx create-statikapi my-worker --template cloudflare-adapter
+# or
+yarn create statikapi my-worker --template cloudflare-adapter
 ```
 
-You’ll be prompted for:
+The template creates:
 
-- **Project name**
-- **Package manager**
-- **R2 bucket binding** (e.g. `STATIK_BUCKET`)
-- **R2 bucket_name** (e.g. `my-statikapi-bucket`)
-- **KV binding** (e.g. `STATIK_MANIFEST`)
-- **KV namespace id**
-- **`STATIK_BUILD_TOKEN`** — a long, random secret used to authorize `/build`
-- **`STATIK_SRC`** — the source directory for StatikAPI (defaults to `src-api`)
-- **`STATIK_USE_INDEX_JSON`** — whether to favor `/foo/index.json`-style keys
+- `wrangler.toml`
+- `statikapi.config.js`
+- `.dev.vars.example`
+- `src-api/`
+- package-manager-specific `dev`, `build`, and `deploy` scripts
 
-The template:
+The scaffold asks for:
 
-- Writes a ready-to-use **`wrangler.toml`** with your bindings and env vars.
-- Keeps everything **JavaScript-only** (no TypeScript / eslint setup).
-- Includes scripts for local dev + build (using `statikapi-cf` + `wrangler`).
-- Uses a **Worker** purely for:
-  - A `/build` endpoint to (re)generate JSON into R2
-  - Optional manifest/debug endpoints to inspect what’s deployed
+- project name
+- package manager
+- Static Assets directory for public output
+- private R2 bucket binding and bucket name
+- KV binding and namespace id
+- `STATIK_BUILD_TOKEN`
+- `STATIK_SRC`
+- `STATIK_USE_INDEX_JSON`
+- private auth header name and value
+- Cloudflare account id
+- Cloudflare API token placeholder
+- optional runtime limit values
 
 After scaffolding:
 
 ```bash
 cd my-worker
-pnpm install   # or yarn / npm
-pnpm dev       # runs the local Worker dev loop
+pnpm install
+cp .dev.vars.example .dev.vars
+pnpm dev
 ```
 
-> Exact script names may vary slightly, but the template wires dev/build scripts for you.
+The default dev flow:
+
+- builds the Worker bundle
+- builds public Static Assets
+- starts local `wrangler dev`
+- starts the preview UI
+- tries to open `/_ui/` automatically
 
 ---
 
-## 2) What the adapter does
+## 3) Route behavior and route config
 
-At a high level, the Cloudflare adapter Worker:
+Route modules can export route-level Cloudflare config:
 
-1. **Writes JSON to R2**  
-   When a build is triggered (locally or via `/build`), StatikAPI generates JSON and the adapter uploads objects into your **R2 bucket**.
+```js
+export const config = {
+  cloudflare: {
+    public: false,
+    webhook: true,
+  },
+};
+```
 
-2. **Uses KV as a manifest**  
-   The manifest is written by the build step and describes route → object key in R2. You can expose a manifest endpoint from the Worker to inspect which routes exist.
+### `config.cloudflare.public`
 
-3. **Exposes a `/build` webhook**  
-   When you `POST` to `/build`, the Worker:
-   - Runs a StatikAPI build (via the adapter)
-   - Writes new JSON objects to **R2**
-   - Writes a fresh manifest to **KV**
+- omitted or `true`
+  - route is public
+  - output is emitted under `/public/...`
+- `false`
+  - route is private
+  - output stays on the original route path
+  - route is served by the Worker
 
-4. **Leaves reads to R2**  
-   Clients fetch data **directly from R2** (for example via a public or custom R2 domain). The Worker is **not** in the hot path for JSON reads — it is only the control plane.
+### `config.cloudflare.webhook`
 
-You get the speed of R2-hosted static JSON, with the convenience of **webhook-triggered updates** and a small Worker for orchestration.
+- omitted
+  - follows the project default
+- `true`
+  - allow webhook rebuilds for that route
+- `false`
+  - reject targeted webhook rebuilds for that route and skip it during full rebuilds
+
+### `config.listIndex`
+
+The Cloudflare adapter also supports `config.listIndex` for dynamic and catch-all routes, just like the regular CLI path.
+
+Example:
+
+```js
+export const config = {
+  listIndex: {
+    enabled: true,
+    pick: ['id', 'title'],
+  },
+};
+```
+
+That will generate a parent collection route in addition to the per-item outputs:
+
+- item routes:
+  - `/public/posts/1.json`
+  - `/public/posts/2.json`
+- collection route:
+  - `/public/posts.json`
+
+The exact file shape depends on `STATIK_USE_INDEX_JSON`.
 
 ---
 
-## 3) Manual wiring (conceptual)
+## 4) File and URL shape
 
-If you want to wire things manually (or understand the template), the pieces are:
+The adapter supports two public-output shapes via `STATIK_USE_INDEX_JSON`.
 
-### a) R2 + KV bindings
+### `STATIK_USE_INDEX_JSON = "false"`
 
-In **`wrangler.toml`**:
+Public assets look like:
+
+- `/public/index.json`
+- `/public/posts/1.json`
+- `/public/docs/guide.json`
+- `/public/_manifest.json`
+
+### `STATIK_USE_INDEX_JSON = "true"`
+
+Public assets look like:
+
+- `/public/index.json`
+- `/public/posts/1/index.json`
+- `/public/docs/guide/index.json`
+- `/public/_manifest/index.json`
+
+Private routes always keep the route path itself:
+
+- `/account`
+- `/posts/1`
+- `/_manifest`
+
+The preview UI and snippet generator should follow the actual project shape.
+
+---
+
+## 5) `wrangler.toml` shape
+
+The scaffolded `wrangler.toml` is built around **one Worker + one Static Assets directory + one private R2 bucket + one KV namespace**.
+
+Typical structure:
 
 ```toml
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
 [[r2_buckets]]
-binding = "STATIK_BUCKET"
-bucket_name = "my-statikapi-bucket"
+binding = "STATIK_PRIVATE_BUCKET"
+bucket_name = "my-statikapi-private"
 
 [[kv_namespaces]]
 binding = "STATIK_MANIFEST"
 id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-```
 
-These names should match the ones you passed to `create-statikapi` (or update them consistently).
-
-### b) Env vars
-
-Also in `wrangler.toml`:
-
-```toml
 [vars]
-STATIK_BUILD_TOKEN = "REPLACE_ME_WITH_LONG_RANDOM_STRING"
+STATIK_BUILD_TOKEN = "replace-me"
 STATIK_SRC = "src-api"
 STATIK_USE_INDEX_JSON = "false"
+STATIK_PRIVATE_BUCKET_BINDING = "STATIK_PRIVATE_BUCKET"
+STATIK_PRIVATE_AUTH_HEADER_NAME = "x-statik-private-auth"
+STATIK_PRIVATE_AUTH_HEADER_VALUE = "replace-me-private"
+STATIK_WORKER_REQUEST_LIMIT = "0"
+STATIK_R2_CLASS_A_LIMIT = "0"
+STATIK_R2_CLASS_B_LIMIT = "0"
 ```
 
-- **`STATIK_BUILD_TOKEN`** — required to hit `/build`.
-- **`STATIK_SRC`** — where your route modules live (same idea as `srcDir`).
-- **`STATIK_USE_INDEX_JSON`** — if `true`, the adapter prefers `index.json` per folder; if `false`, it may write flat file names depending on your setup.
+Important notes:
 
-### c) Worker entry
+- `[assets].directory` is the **public output target**
+- **do not** configure `run_worker_first = true` for this adapter contract
+- public asset requests should be served by Static Assets directly
+- the Worker still handles private routes, manifests, and rebuild webhooks
 
-The template ships with a Worker entry file that:
+Cloudflare references:
 
-- Parses incoming requests.
-- Routes `/build` requests to the adapter’s build logic.
-- Optionally exposes the manifest (for example via `/manifest`) using the KV contents.
-
-You normally don’t need to touch this unless you want custom logic (e.g., auth, logging, or extra debug endpoints).
+- [Workers Static Assets overview](https://developers.cloudflare.com/workers/static-assets/)
+- [Static Assets configuration and bindings](https://developers.cloudflare.com/workers/static-assets/binding/)
+- [Wrangler configuration reference](https://developers.cloudflare.com/workers/wrangler/configuration/)
 
 ---
 
-## 4) Deploying and using custom domains
+## 6) Local development
 
-### a) Deploy the Worker
-
-From your project:
+### Recommended command
 
 ```bash
-pnpm build   # bundles worker + StatikAPI adapter logic
-pnpm deploy  # or `wrangler deploy`, depending on the template scripts
+pnpm dev
 ```
 
-(Use the exact scripts from your generated `package.json`.)
+This runs `statikapi-cf dev`.
 
-You can also deploy via:
+The local flow is:
+
+1. Build `dist/worker.mjs`
+2. Generate public assets into the configured assets directory
+3. Start local `wrangler dev`
+4. Start the preview UI, usually on `http://127.0.0.1:8788/_ui/`
+5. Watch `src-api/` and `statikapi.config.js`
+6. Rebuild on change
+7. Refresh private outputs locally after rebuild so private route content also changes during `dev`
+
+### Preview UI behavior
+
+The preview UI for Cloudflare projects:
+
+- shows both public and private routes
+- groups them separately
+- injects the private auth header from `.dev.vars` when previewing private routes
+- uses the Worker origin in the route details snippets
+
+### `.dev.vars`
+
+Local preview of private routes depends on:
+
+```env
+STATIK_PRIVATE_AUTH_HEADER_NAME=x-statik-private-auth
+STATIK_PRIVATE_AUTH_HEADER_VALUE=dev-private-token
+STATIK_BUILD_TOKEN=dev-token-123
+```
+
+If those values are missing, private preview and local private rebuilds will fail.
+
+---
+
+## 7) Build, preview, and deploy commands
+
+### Build
+
+```bash
+pnpm build
+```
+
+Build should produce both:
+
+- Worker bundle:
+  - `dist/worker.mjs`
+- public assets:
+  - inside your configured Static Assets directory
+
+### Preview only
+
+If you are already running the Worker separately:
+
+```bash
+pnpm exec statikapi-cf preview --worker http://127.0.0.1:8787 --port 8788
+```
+
+### Deploy
+
+```bash
+pnpm deploy
+```
+
+or:
 
 ```bash
 wrangler deploy
 ```
 
-as long as your `wrangler.toml` and entrypoint match the template.
+Deploying publishes:
 
-> **Important:** Deploying the Worker **updates the code and config**, but it does **not** automatically regenerate JSON in R2. You still need to trigger a build (see [Using the build webhook](#5-using-the-build-webhook)).
+- Worker code
+- Worker bindings/config
+- public Static Assets
 
-### b) Attach a custom domain to the Worker (control plane)
-
-In the Cloudflare Dashboard:
-
-1. Go to **Workers & Pages → your Worker**.
-2. Add a **Route** like:
-
-   ```text
-   api.example.com/*
-   ```
-
-3. Ensure `api.example.com` has a DNS record in the same zone.
-
-This gives you URLs such as:
-
-```text
-https://api.example.com/build
-https://api.example.com/manifest   (if you expose one)
-```
-
-### c) Public domain for R2 (data plane)
-
-For clients to fetch JSON **directly from R2**:
-
-1. In R2, either:
-   - Make your bucket public, or
-   - Add a **Custom Domain**.
-2. Example URLs:
-
-   ```text
-   https://my-statikapi-bucket.r2.cloudflarestorage.com/users/1/index.json
-   # or a custom domain mapping:
-   https://cdn.example.com/users/1/index.json
-   ```
-
-In most setups:
-
-- **R2 + custom domain** = where clients read JSON from.
-- **Worker + route** = where builds and manifest/debug live.
-
-### d) CORS for browser clients
-
-If your API is accessed from a frontend (browser) on another domain, configure **CORS**:
-
-- For R2, set **CORS rules** from the Cloudflare Dashboard for the R2 bucket/custom domain.
-- Allow only the specific origins that should be able to read your JSON (e.g. `https://app.example.com`).
-
-This keeps your API consumable from your frontend while avoiding wide-open `*` CORS when you don’t need it.
+It does **not** magically refresh public assets later from runtime webhooks.
 
 ---
 
-## 5) Using the build webhook
+## 8) Webhook rebuild contract
 
-The Worker exposes a **`POST /build`** endpoint.
-
-### a) Rebuild everything
+### Full rebuild
 
 ```bash
-curl -X POST "https://api.example.com/build" \
+curl -X POST "https://api.example.com/" \
   -H "Authorization: Bearer YOUR_STATIK_BUILD_TOKEN"
 ```
 
-Behavior:
+Effect:
 
-- Runs a **full StatikAPI build** using `STATIK_SRC`.
-- Writes all JSON objects to **R2**.
-- Updates the manifest in **KV**.
+- rebuild webhook-enabled **private** outputs
+- update the private manifest
+- leave already-deployed public Static Assets unchanged
 
-### b) Rebuild a single route
-
-You can target a specific route with `?route=`:
+### Targeted private rebuild
 
 ```bash
-curl -X POST "https://api.example.com/build?route=/users/1" \
+curl -X POST "https://api.example.com/account" \
   -H "Authorization: Bearer YOUR_STATIK_BUILD_TOKEN"
 ```
 
-The adapter will:
+Effect:
 
-- Rebuild only that route.
-- Update the corresponding entries in R2 + KV.
+- rebuild only that private route, if webhook is enabled for it
 
-> The exact `route` value should match the normalized URL path you serve (e.g. `/users/1`, `/docs/a/b`, etc.).
-
-### c) HTTP clients and webhooks
-
-Any HTTP client can call this endpoint:
-
-- Your own backend
-- A headless CMS webhook
-- CRON job / scheduled Worker
-- CI/CD pipelines
-
-Just remember to:
-
-- Use `POST`
-- Include the **Authorization** header:
-
-```http
-Authorization: Bearer YOUR_STATIK_BUILD_TOKEN
-```
-
----
-
-## 6) Build token & rotation strategy
-
-### a) Choosing a token
-
-- Generate a **long, random** string (64+ characters).
-- Store it only in:
-  - `wrangler.toml` (or Wrangler secrets)
-  - The systems that need to call `/build`.
+### Public-route POSTs are rejected
 
 Example:
 
 ```bash
-# using openssl
-openssl rand -hex 32
+curl -X POST "https://api.example.com/public/posts/1.json" \
+  -H "Authorization: Bearer YOUR_STATIK_BUILD_TOKEN"
 ```
 
-### b) Rotating the token
+That should be rejected because public routes are Static Assets in this model.
 
-To keep things safe:
+### `STATIK_BUILD_TOKEN` is not a Cloudflare API token
 
-1. **Generate a new token**.
-2. Update it in:
-   - Cloudflare (Wrangler secret / `wrangler.toml`)
-   - Any external systems (CMS, CI, backends) that call `/build`.
-3. **Deploy** the Worker.
+`STATIK_BUILD_TOKEN` is your app’s own shared secret for authorizing rebuild webhooks.
 
-During rotation, you can:
+It protects:
 
-- Temporarily accept both old + new tokens (if you extend the Worker logic), or
-- Do a short maintenance window where `/build` calls may briefly fail while everything is updated.
+- `POST /`
+- `POST <private-route-path>`
 
-Treat `STATIK_BUILD_TOKEN` like an API key:
-
-- Never log it.
-- Never expose it in frontend code.
-- Keep it in secrets managers and CI vaults.
+It should be a long random secret and should be treated like any other deploy-time secret.
 
 ---
 
-## 7) Request flow overview
+## 9) Private auth header contract
 
-**Read path (data plane)**:
+Private reads require the configured auth header.
 
-1. Client requests `GET https://cdn.example.com/users/1/index.json` (or the default R2 public URL).
-2. Cloudflare’s R2 + CDN returns the JSON object.
-3. Optional: CORS rules on R2 allow browser apps on `https://app.example.com` to consume this.
-
-The Worker is **not** involved here.
-
-**Update path (control plane)**:
-
-1. Some system calls `POST https://api.example.com/build?route=/users/1` with the right token.
-2. Adapter runs the StatikAPI build just for `/users/1`.
-3. New JSON is written to R2; manifest in KV is updated.
-4. Next read from the R2 URL sees the updated data (subject to any caching you configure).
-
----
-
-## 8) Git integration and automatic deploys
-
-The smoothest way to operate the Cloudflare adapter is with **Git + Cloudflare Worker Git integration**:
-
-### a) Put the project in Git
-
-Initialize a repository:
+Example:
 
 ```bash
-git init
-git add .
-git commit -m "init: statikapi cloudflare adapter"
+curl "https://api.example.com/account" \
+  -H "x-statik-private-auth: YOUR_PRIVATE_VALUE"
 ```
 
-Push it to GitHub/GitLab/Bitbucket.
+The same applies to:
 
-### b) Connect the repo to Cloudflare as a Worker
+- `GET /_manifest`
+- all private route reads
 
-In the Cloudflare Dashboard:
-
-1. Go to **Workers & Pages → Create application → Worker → Connect to Git**.
-2. Choose your repository.
-3. Set the **build command** to:
-
-   ```text
-   npm run build
-   # or
-   pnpm build
-   # or
-   yarn build
-   ```
-
-   (Use the command that your template’s `package.json` defines. The important part is that it runs the bundling step for the Worker.)
-
-4. Set the **output directory / entry** as recommended by the template (usually just the Worker script; Cloudflare Workers don’t use a static output dir like Pages).
-
-Now, whenever you push changes to the configured branch, Cloudflare will:
-
-- Pull the latest code.
-- Run `npm run build` (or equivalent).
-- Deploy a new Worker version automatically.
-
-> **Note:** This only updates the Worker code and its environment. It does **not** regenerate your JSON in R2 — that still happens via `/build`.
-
-### c) Local dev & manual deploys with Wrangler
-
-You can also work locally:
-
-```bash
-# watch and test locally
-wrangler dev
-
-# on every change to src-api (or whatever STATIK_SRC is),
-# rebuild and redeploy:
-npm run build
-wrangler deploy
-```
-
-(Replace `npm` with `pnpm`/`yarn` as needed.)
-
-Again, after `wrangler deploy` succeeds:
-
-- Your **Worker** is updated (control plane).
-- Your **R2 JSON** stays as-is until you call `POST /build`.
-
-This separation is intentional: you can adjust Worker logic or configuration without touching the stored JSON until you actually want to rebuild it.
-
-### d) Always trigger `/build` after changes to route source
-
-Whenever you change:
-
-- Files under `STATIK_SRC` (e.g., `src-api/users/[id].js`), or
-- Any logic that affects JSON output,
-
-you should:
-
-1. Commit and push (so Cloudflare redeploys the Worker via Git or `wrangler deploy`).
-2. Then **trigger the build**:
-
-   ```bash
-   curl -X POST "https://api.example.com/build" \
-     -H "Authorization: Bearer YOUR_STATIK_BUILD_TOKEN"
-   ```
-
-   or for a specific route:
-
-   ```bash
-   curl -X POST "https://api.example.com/build?route=/users/1" \
-     -H "Authorization: Bearer YOUR_STATIK_BUILD_TOKEN"
-   ```
-
-Only after this POST completes will your R2-backed JSON be updated.
+Public routes do **not** need that header.
 
 ---
 
-## 9) When to use the Cloudflare adapter
+## 10) Cloudflare setup checklist
 
-Use the **Cloudflare Worker + R2 adapter** when:
+### A) Account ID
 
-- You want **StatikAPI’s file-based DX**, but:
-  - You don’t want to manage separate static hosting, or
-  - You need a first-class **webhook endpoint** to trigger rebuilds.
-- You’re already on Cloudflare and want:
-  - **R2** for storage
-  - **Workers** for routing, manifests, and build webhooks
-  - KV for a tiny manifest
+You need your **Cloudflare Account ID** for Worker deploy wiring and token scoping.
 
-For pure static hosting of `api-out/` only (no Worker control plane), see:
+Official doc:
 
-- [Deployments → Cloudflare Pages & R2](../deployments/cloudflare)
-- [Deployments → S3](../deployments/amazon-s3)
-- [Deployments → Netlify](../deployments/netlify)
-- [Deployments → GitHub Pages](../deployments/github-pages)
+- [Find account and zone IDs](https://developers.cloudflare.com/fundamentals/setup/find-account-and-zone-ids/)
+
+Practical dashboard path:
+
+1. Open **Workers & Pages**
+2. Look for **Account details**
+3. Copy the **Account ID**
+
+### B) Private R2 bucket
+
+You need the **bucket name**, not a random label.
+
+Official docs:
+
+- [Create new buckets](https://developers.cloudflare.com/r2/buckets/create-buckets/)
+- [Wrangler R2 bucket commands](https://developers.cloudflare.com/r2/reference/wrangler-commands/)
+
+You can create it in the dashboard or with Wrangler:
+
+```bash
+wrangler r2 bucket create my-statikapi-private
+```
+
+### C) KV namespace
+
+You need the **namespace id** for `wrangler.toml`.
+
+Official docs:
+
+- [KV namespaces](https://developers.cloudflare.com/kv/concepts/kv-namespaces/)
+
+In Cloudflare:
+
+1. Go to **Workers & Pages**
+2. Open **KV**
+3. Create or select a namespace
+4. Copy the namespace **id**
+
+### D) Static Assets directory
+
+This is the folder Wrangler uploads as public Static Assets.
+
+Official docs:
+
+- [Static Assets configuration and bindings](https://developers.cloudflare.com/workers/static-assets/binding/)
+
+Common choices:
+
+- `public`
+- `dist`
+- another generated folder
+
+For this adapter, the scaffold defaults to `public`.
+
+---
+
+## 11) Create the Cloudflare API token correctly
+
+Use a **custom API token** for deployment. Do **not** use the global API key.
+
+Official docs:
+
+- [Create API token](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
+- [API token permissions reference](https://developers.cloudflare.com/fundamentals/api/reference/permissions/)
+
+### Recommended minimum permissions
+
+For this adapter, the practical account-scoped token is:
+
+- `Workers Scripts Edit`
+- `Workers KV Storage Edit`
+- `Workers R2 Storage Edit`
+
+Optional:
+
+- `Workers Tail Read`
+  - only if you want `wrangler tail`
+
+Cloudflare’s docs may show the same capability as **Edit** in some places and **Write** in others. For deployment purposes, use the write-capable version of those permissions.
+
+### Recommended token creation flow
+
+1. Open **Cloudflare Dashboard**
+2. Go to **My Profile -> API Tokens**
+   - or **Manage Account -> API Tokens** if you use account-owned tokens
+3. Select **Create Token**
+4. Choose **Create Custom Token**
+5. Give it a name like:
+   - `statikapi-cloudflare-deploy`
+6. Add these **Account** permissions:
+   - `Workers Scripts: Edit`
+   - `Workers KV Storage: Edit`
+   - `Workers R2 Storage: Edit`
+7. Scope the token to the specific Cloudflare account you will deploy into
+8. Create the token and copy it immediately
+
+### Where this token goes
+
+The scaffold typically places it in `wrangler.toml` or expects it in your environment for CI/deploy use.
+
+Keep it separate from:
+
+- `STATIK_BUILD_TOKEN`
+- `STATIK_PRIVATE_AUTH_HEADER_VALUE`
+
+Those are application/runtime secrets, not Cloudflare deploy credentials.
+
+---
+
+## 12) Deployment model and tradeoffs
+
+This Cloudflare integration is designed around a deliberate tradeoff:
+
+- **public**
+  - cheaper to serve
+  - cache-friendly
+  - deployed as Static Assets
+  - **not** runtime-refreshable by webhook in this version
+- **private**
+  - Worker-managed
+  - authenticated
+  - runtime-refreshable by webhook
+
+That means you should decide route visibility partly based on freshness needs:
+
+- if the route must update immediately from a webhook, keep it **private**
+- if it can wait for a build + deploy, keep it **public**
+
+---
+
+## 13) Troubleshooting
+
+### `assets binding missing`
+
+Usually means your `wrangler.toml` is missing:
+
+```toml
+[assets]
+directory = "./public"
+binding = "ASSETS"
+```
+
+### `GET /_manifest` returns `403`
+
+Expected unless you send the private auth header.
+
+### Public route did not change after `POST /`
+
+Expected in this version.
+
+You must:
+
+1. run a new build
+2. deploy again
+
+### Private route did not change during local `dev`
+
+Make sure:
+
+- `.dev.vars` exists
+- `STATIK_BUILD_TOKEN` is present
+- `STATIK_PRIVATE_AUTH_HEADER_NAME` and `STATIK_PRIVATE_AUTH_HEADER_VALUE` are present
+
+### Preview UI looks stale after UI-source changes
+
+Run:
+
+```bash
+pnpm ui:build
+```
+
+That now refreshes both:
+
+- `packages/cli/ui`
+- `packages/adapter-cloudflare/ui`
+
+so the regular CLI preview and Cloudflare preview stay in sync.

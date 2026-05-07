@@ -1,5 +1,7 @@
 import path from 'node:path';
 
+import { cloneListIndexConfig, normalizeListIndexValue } from './listIndex.js';
+
 export class ConfigError extends Error {
   constructor(message) {
     super(message);
@@ -29,8 +31,15 @@ export function validateAndNormalize(userCfg, { cwd = process.cwd() } = {}) {
     throw new ConfigError(`"srcDir" and "outDir" must differ (both "${cfg.srcDir}")`);
   }
 
+  try {
+    cfg.listIndex = normalizeListIndexValue(cfg.listIndex, { label: 'listIndex' });
+  } catch (err) {
+    throw new ConfigError(err.message);
+  }
+
   return {
     ...cfg,
+    listIndex: cloneListIndexConfig(cfg.listIndex),
     paths: {
       srcAbs: path.join(cwd, cfg.srcDir),
       outAbs: path.join(cwd, cfg.outDir),

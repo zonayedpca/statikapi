@@ -8,31 +8,50 @@ function getOrigin() {
   return '';
 }
 
+function normalizeOrigin(origin) {
+  return (origin || getOrigin()).replace(/\/+$/, '');
+}
+
 /** Build an absolute endpoint URL for a given route (e.g., "/users/1"). */
-export function endpointUrl(route, originOverride) {
-  const origin = originOverride || getOrigin();
+export function endpointUrl(route, { meta } = {}) {
+  const origin = normalizeOrigin(meta?.origin);
+
+  if (meta?.mode === 'cloudflare') {
+    return origin + (route === '/' ? '/' : route);
+  }
 
   return origin + (route === '/' ? '/' : `${route}/`) + 'index.json';
 }
 
 /** Return snippet strings for curl, browser fetch, and Node (built-in) fetch. */
-export function makeSnippets(route, { origin } = {}) {
-  const url = endpointUrl(route, origin);
+export function makeSnippets(route, { entry, meta } = {}) {
+  const url = endpointUrl(route, { entry, meta });
   const q = JSON.stringify(url); // safe in JS strings
+  const isPrivateCloudflare = meta?.mode === 'cloudflare' && entry?.public === false;
+  const privateHeaderName = meta?.privateAuthHeaderName || 'x-private-auth';
+  const privateHeaderValue = '<YOUR_PRIVATE_AUTH_VALUE>';
+  const curlAuth = isPrivateCloudflare ? ` -H "${privateHeaderName}: ${privateHeaderValue}"` : '';
+  const jsHeaderBlock = isPrivateCloudflare
+    ? `,
+  ${JSON.stringify(privateHeaderName)}: ${JSON.stringify(privateHeaderValue)}`
+    : '';
+  const privateNote = isPrivateCloudflare
+    ? `\n// Private route: replace ${privateHeaderValue} with your configured private auth value\n`
+    : '\n';
 
-  const curl = `curl -sS -H "Accept: application/json" ${q}`;
+  const curl = `curl -sS -H "Accept: application/json"${curlAuth} ${q}`;
 
   const browser = `fetch(${q}, {
-  headers: { Accept: 'application/json' },
+  headers: { Accept: 'application/json'${jsHeaderBlock} },
   cache: 'no-store'
 })
   .then(r => r.json())
   .then(console.log)
-  .catch(console.error);`;
+  .catch(console.error);${privateNote}`;
 
-  const node = `// Node 18+ has global fetch
+  const node = `// Node 18+ has global fetch${privateNote}
 const res = await fetch(${q}, {
-  headers: { Accept: 'application/json' }
+  headers: { Accept: 'application/json'${jsHeaderBlock} }
 });
 if (!res.ok) throw new Error('HTTP ' + res.status);
 const json = await res.json();

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-     "dev": "node ../../packages/cli/bin/statikapi.js dev",
-     "build": "node ../../packages/cli/bin/statikapi.js build --pretty"
+    "dev": "node ../../packages/cli/bin/statikapi.js dev",
+    "build": "node ../../packages/cli/bin/statikapi.js build --pretty"
   }
 }

@@ -4,8 +4,11 @@ import { makeSnippets } from '../lib/snippets.js';
 import Snippet from './Snippet.jsx';
 import { CommandIcon, GlobeIcon, HexagonIcon } from 'lucide-react';
 
-export default function Snippets({ route }) {
-  const { curl, browser, node, url } = useMemo(() => makeSnippets(route), [route]);
+export default function Snippets({ route, entry, meta }) {
+  const { curl, browser, node, url } = useMemo(
+    () => makeSnippets(route, { entry, meta }),
+    [route, entry, meta]
+  );
 
   return (
     <div className="mt-4">

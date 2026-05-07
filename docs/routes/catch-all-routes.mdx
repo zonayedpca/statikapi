@@ -1,29 +1,118 @@
-# Catch‑all Routes
+# Catch-all Routes
 
-Use `[...name].js` to capture **multiple segments**. `paths()` must return an array of string arrays.
+Use `[...name].js` to capture multiple path segments.
 
+Example:
+
+```text
+src-api/docs/[...slug].js
 ```
-src-api/docs/[...slug].js  → /docs/a/b/index.json, /docs/guide/index.json
+
+This can become routes like:
+
+- `/docs/guide`
+- `/docs/api/intro`
+- `/docs/reference/auth/login`
+
+---
+
+## Required `paths()`
+
+Catch-all routes must export `paths()`.
+
+For catch-all routes:
+
+- `paths()` returns an array
+- each item is an array of strings
+
+Example:
+
+```js
+export async function paths() {
+  return [['guide'], ['api', 'intro']];
+}
 ```
+
+That produces:
+
+- `/docs/guide`
+- `/docs/api/intro`
+
+If a catch-all route does not export `paths()`:
+
+- the route is skipped
+
+---
 
 ## Example
 
 ```js
 // src-api/docs/[...slug].js
 export async function paths() {
-  return [
-    ["a", "b"],
-    ["guide"]
-  ];
+  return [['guide'], ['api', 'intro']];
 }
 
 export async function data({ params }) {
   return {
-    slug: params.slug,       // array of segments
-    path: params.slug.join("/"),
-    kind: params.slug.length > 1 ? "section" : "page",
-    generatedAt: new Date().toISOString()
+    slug: params.slug,
+    path: params.slug.join('/'),
+    kind: params.slug.length > 1 ? 'section' : 'page',
   };
 }
-
 ```
+
+`params` for `/docs/api/intro` will be:
+
+```js
+{
+  slug: ['api', 'intro'];
+}
+```
+
+---
+
+## Parent collection route with `listIndex`
+
+Catch-all routes can also emit a parent collection route:
+
+```js
+export const config = {
+  listIndex: {
+    enabled: true,
+    pick: ['path'],
+  },
+};
+
+export async function paths() {
+  return [['guide'], ['api', 'intro']];
+}
+
+export async function data({ params }) {
+  return {
+    path: params.slug.join('/'),
+    title: params.slug.join(' / '),
+  };
+}
+```
+
+This produces:
+
+- `/docs/guide`
+- `/docs/api/intro`
+- `/docs`
+
+And `/docs` contains only the picked `path` field for each item.
+
+---
+
+## Path validation
+
+Each segment returned by `paths()` must be a usable path segment.
+
+Invalid segment shapes include:
+
+- empty strings
+- segments containing `/`
+- non-string values
+
+If `paths()` returns invalid segments, the build should fail with a route/path validation error.

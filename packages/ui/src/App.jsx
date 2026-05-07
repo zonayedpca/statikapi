@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 
-import { getManifest, getRoute } from './api.js';
+import { getManifest, getRoute, getUiMeta } from './api.js';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
@@ -21,6 +21,7 @@ export default function App() {
   const [rawText, setRawText] = useState('Select a route…');
   const [jsonVal, setJsonVal] = useState(null);
   const [headers, setHeaders] = useState({});
+  const [uiMeta, setUiMeta] = useState(null);
   const [loading, setLoading] = useState(false);
   const [hi, setHi] = useState(0); // highlight index in filtered list
   const listRef = useRef(null);
@@ -28,7 +29,32 @@ export default function App() {
   const [tab, setTab] = useState('tree'); // 'tree' | 'pretty' | 'raw'
 
   useEffect(() => {
-    getManifest().then(setManifest).catch(console.error);
+    let cancelled = false;
+
+    async function loadManifestWithRetry() {
+      while (!cancelled) {
+        try {
+          const next = await getManifest();
+          if (!cancelled) setManifest(next);
+          return;
+        } catch (error) {
+          if (cancelled) return;
+          console.error(error);
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      }
+    }
+
+    loadManifestWithRetry();
+    getUiMeta()
+      .then((meta) => {
+        if (meta && typeof meta === 'object') setUiMeta(meta);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -42,10 +68,10 @@ export default function App() {
     return () => removeEventListener('hashchange', onHash);
   }, []);
 
-  function fetchAndShow(route) {
+  function fetchAndShow(route, entry) {
     if (!route) return;
     setLoading(true);
-    getRoute(route)
+    getRoute(route, entry)
       .then(({ text, headers }) => {
         setRawText(text);
         setHeaders(headers || {});
@@ -63,10 +89,15 @@ export default function App() {
       .finally(() => setLoading(false));
   }
 
+  const activeEntry = useMemo(
+    () => manifest.find((entry) => entry.route === active) || null,
+    [manifest, active]
+  );
+
   useEffect(() => {
     if (!active) return;
-    fetchAndShow(active);
-  }, [active]);
+    fetchAndShow(active, activeEntry);
+  }, [active, activeEntry]);
 
   // Live reload via SSE
   useEffect(() => {
@@ -80,7 +111,8 @@ export default function App() {
           setManifest(list);
         } catch {}
         if (route && route === active) {
-          fetchAndShow(active);
+          const nextActiveEntry = list.find((entry) => entry.route === active) || null;
+          fetchAndShow(active, nextActiveEntry);
         }
       }
     };
@@ -149,6 +181,7 @@ export default function App() {
       query={query}
       setQuery={setQuery}
       routes={filtered}
+      mode={uiMeta?.mode || 'default'}
       onPick={pick}
       activeRoute={active}
       highlightedIndex={hi}
@@ -230,7 +263,7 @@ export default function App() {
                 </TabsContent>
               </Tabs>
               {/* Snippets */}
-              <Snippets route={active} />
+              <Snippets route={active} entry={activeEntry} meta={uiMeta} />
             </>
           )}
         </section>

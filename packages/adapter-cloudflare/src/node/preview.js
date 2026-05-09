@@ -15,6 +15,7 @@ export async function startPreviewServer({
 } = {}) {
   const uiRoot = resolveUiDist();
   const localEnv = await loadLocalEnv(cwd);
+  const buildToken = await readBuildToken(cwd, localEnv);
   const uiMeta = await loadUiMeta(cwd, workerOrigin, localEnv);
   const sseClients = new Set();
   let lastManifest = null;
@@ -40,6 +41,7 @@ export async function startPreviewServer({
       }
 
       if (pathname === '/ui/index' && req.method === 'GET') {
+        await refreshPreviewPrivateOutputs(workerOrigin, localEnv, { buildToken }).catch(() => {});
         const manifest = await fetchManifest(workerOrigin, uiMeta, localEnv);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify(manifest));
@@ -206,6 +208,27 @@ export async function fetchRoute(workerOrigin, route, localEnv, options = {}) {
   };
 }
 
+export async function refreshPreviewPrivateOutputs(workerOrigin, localEnv = {}, options = {}) {
+  const buildToken = options.buildToken || localEnv.STATIK_BUILD_TOKEN || process.env.STATIK_BUILD_TOKEN;
+  if (!buildToken) return false;
+
+  const res = await fetch(new URL('/_preview/build', workerOrigin), {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${buildToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({}),
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    throw new Error(`preview private build failed: ${res.status}`);
+  }
+
+  return true;
+}
+
 function privateAuthHeaderName(localEnv) {
   return localEnv.STATIK_PRIVATE_AUTH_HEADER_NAME || process.env.STATIK_PRIVATE_AUTH_HEADER_NAME;
 }
@@ -231,6 +254,19 @@ async function loadUiMeta(cwd, workerOrigin, localEnv = {}) {
     privateAuthHeaderName: privateAuthHeaderName(localEnv),
     publicManifestPath: publicManifestPathFor(useIndexJson),
   });
+}
+
+async function readBuildToken(cwd, localEnv = {}) {
+  if (localEnv.STATIK_BUILD_TOKEN) return localEnv.STATIK_BUILD_TOKEN;
+  const wranglerPath = path.join(cwd, 'wrangler.toml');
+  try {
+    const raw = await fs.readFile(wranglerPath, 'utf8');
+    return (
+      readTomlVar(raw, 'STATIK_BUILD_TOKEN') || process.env.STATIK_BUILD_TOKEN || ''
+    );
+  } catch {
+    return process.env.STATIK_BUILD_TOKEN || '';
+  }
 }
 
 async function readUseIndexJson(cwd) {

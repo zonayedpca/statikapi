@@ -191,6 +191,37 @@ export async function data({ params }) { return { id: params.id, scope: 'private
   assert.equal(privateOk.status, 200);
   assert.equal((await privateOk.json()).scope, 'private-account');
 
+  const previewBuild = await worker.fetch(
+    new Request('http://127.0.0.1:8787/_preview/build', {
+      method: 'POST',
+      headers: { authorization: 'Bearer build-secret' },
+      body: JSON.stringify({}),
+    }),
+    env
+  );
+  assert.equal(previewBuild.status, 200);
+
+  const previewManifestRes = await worker.fetch(
+    new Request('https://example.test/_manifest', {
+      headers: { 'x-private-key': 'let-me-in' },
+    }),
+    env
+  );
+  const previewManifest = await previewManifestRes.json();
+  assert.deepEqual(
+    previewManifest.map((entry) => entry.route),
+    ['/account', '/users', '/users/1']
+  );
+
+  const webhookFalseReadable = await worker.fetch(
+    new Request('https://example.test/users/1', {
+      headers: { 'x-private-key': 'let-me-in' },
+    }),
+    env
+  );
+  assert.equal(webhookFalseReadable.status, 200);
+  assert.equal((await webhookFalseReadable.json()).scope, 'private-user');
+
   const targetedBlocked = await worker.fetch(
     new Request('https://example.test/users/1', {
       method: 'POST',

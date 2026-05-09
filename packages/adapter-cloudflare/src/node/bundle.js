@@ -1190,6 +1190,64 @@ const WORKER_RUNTIME_JS = `
     );
   }
 
+  function isLoopbackRequest(req) {
+    try {
+      const { hostname } = new URL(req.url);
+      return (
+        hostname === '127.0.0.1' ||
+        hostname === 'localhost' ||
+        hostname === '::1' ||
+        hostname === '[::1]'
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  async function handlePreviewBuild(req, env) {
+    if (!isLoopbackRequest(req)) {
+      return new Response('Not found', { status: 404 });
+    }
+
+    if (!requireBuildAuth(req, env)) {
+      return new Response('unauthorized', { status: 401 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const pretty = body.pretty ?? DEFAULT_PRETTY;
+    const manifest = [];
+    const expanded = await expandAllRoutes(REGISTRY);
+    const owners = new Map();
+    let writtenBytes = 0;
+
+    for (const sourceEntry of expanded) {
+      const built = await buildSourceOutputs(sourceEntry, env, pretty);
+      if (built.error) return built.error;
+
+      writtenBytes += built.writtenBytes;
+      for (const entry of built.manifestEntries) {
+        addManifestEntry(manifest, entry, owners);
+      }
+      for (const target of built.purgeTargets) {
+        await purgeCacheForPath(new URL(req.url).origin, target);
+      }
+    }
+
+    manifest.sort((a, b) => a.route.localeCompare(b.route));
+    await writeManifest(env, manifest);
+
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        files: manifest.length,
+        bytes: writtenBytes,
+        preview: true,
+        updated: true,
+      }),
+      { headers: { 'content-type': 'application/json' } }
+    );
+  }
+
   async function findManifestEntryForRequest(pathname, env, isPublicRoute) {
     const manifest = isPublicRoute ? PUBLIC_MANIFEST : await readManifest(env);
     const normalized = normalizeRoutePath(pathname, env, isPublicRoute);
@@ -1252,6 +1310,7 @@ const WORKER_RUNTIME_JS = `
       if (req.method === 'OPTIONS') return new Response(null, { status: 204 });
 
       if (req.method === 'POST') {
+        if (url.pathname === '/_preview/build') return handlePreviewBuild(req, env);
         if (url.pathname === '/') return handleBuild(req, env);
         return handleBuildRoute(req, env, url.pathname);
       }

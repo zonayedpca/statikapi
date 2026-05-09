@@ -4,7 +4,7 @@ import path from 'node:path';
 import { exec, spawn } from 'node:child_process';
 
 import { bundle } from '../src/node/bundle.js';
-import { loadLocalEnv, startPreviewServer } from '../src/node/preview.js';
+import { loadLocalEnv, refreshPreviewPrivateOutputs, startPreviewServer } from '../src/node/preview.js';
 
 function parseArgs(argv) {
   const out = {
@@ -348,15 +348,8 @@ async function runDev({
 async function triggerPrivateRebuild(workerOrigin, buildToken, reason) {
   for (let attempt = 1; attempt <= 20; attempt++) {
     try {
-      const res = await fetch(new URL('/', workerOrigin), {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${buildToken}`,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({}),
-      });
-      if (res.ok) {
+      const refreshed = await refreshPreviewPrivateOutputs(workerOrigin, {}, { buildToken });
+      if (refreshed) {
         console.log(`statikapi-cf dev → refreshed private outputs (${reason})`);
         return;
       }

@@ -306,23 +306,34 @@ export const PUBLIC_MANIFEST = ${JSON.stringify(publicManifest)};
 function outputKeyForRoute(concreteRoute, useIndexJson, isPublicRoute) {
   const prefix = isPublicRoute ? 'public/' : '';
   if (concreteRoute === '/') {
-    return prefix + (useIndexJson ? 'index.json' : 'index.json');
+    return prefix + (useIndexJson ? 'index.json' : 'index');
   }
 
   const clean = concreteRoute.replace(/^\/+/, '');
   if (useIndexJson) return prefix + clean + '/index.json';
-  return prefix + clean + '.json';
+  return prefix + clean + '/index';
+}
+
+function publicDisplayKeyForRoute(concreteRoute, useIndexJson) {
+  const prefix = 'public/';
+  if (concreteRoute === '/') {
+    return prefix + (useIndexJson ? 'index.json' : 'index');
+  }
+
+  const clean = concreteRoute.replace(/^\/+/, '');
+  if (useIndexJson) return prefix + clean + '/index.json';
+  return prefix + clean;
 }
 
 async function textHash(text) {
   return createHash('sha256').update(text).digest('hex');
 }
 
-function publicManifestEntryFor(sourceRoute, concreteRoute, key, body) {
+function publicManifestEntryFor(sourceRoute, concreteRoute, filePath, body) {
   return {
     route: concreteRoute === '/' ? '/public' : '/public' + concreteRoute,
     srcRoute: sourceRoute,
-    filePath: key,
+    filePath,
     bytes: new TextEncoder().encode(body).length,
     mtime: Date.now(),
     hash: null,
@@ -344,12 +355,13 @@ async function emitPublicAssets({ cwd, entries, outDir, projectConfig, useIndexJ
     const outputs = await expandNodeEntry(entry, projectConfig);
     for (const output of outputs) {
       const body = JSON.stringify(output.value, null, 2) + '\n';
-      const key = outputKeyForRoute(output.route, useIndexJson, true);
-      const target = path.join(outRoot, key);
+      const assetKey = outputKeyForRoute(output.route, useIndexJson, true);
+      const displayKey = publicDisplayKeyForRoute(output.route, useIndexJson);
+      const target = path.join(outRoot, assetKey);
       await fs.mkdir(path.dirname(target), { recursive: true });
       await fs.writeFile(target, body, 'utf8');
 
-      const manifestEntry = publicManifestEntryFor(entry.route, output.route, key, body);
+      const manifestEntry = publicManifestEntryFor(entry.route, output.route, displayKey, body);
       manifestEntry.hash = await textHash(body);
       const owner = owners.get(manifestEntry.route);
       if (owner && owner !== manifestEntry.srcRoute) {
@@ -827,6 +839,10 @@ const WORKER_RUNTIME_JS = `
       if (normalized === '/index.json') return '/';
       normalized = normalized.replace(/\\/index\\.json$/, '');
       if (!normalized) return '/';
+    } else {
+      if (normalized === '/index') return '/';
+      normalized = normalized.replace(/\\/index$/, '');
+      if (!normalized) return '/';
     }
 
     normalized = normalized.replace(/\\.json$/, '');
@@ -842,12 +858,12 @@ const WORKER_RUNTIME_JS = `
   function keyForRoute(concreteRoute, env, isPublicRoute) {
     const prefix = isPublicRoute ? 'public/' : '';
     if (concreteRoute === '/') {
-      return prefix + 'index.json';
+      return prefix + (useIndexJson(env) ? 'index.json' : 'index');
     }
 
     const clean = concreteRoute.replace(/^\\/+/, '');
     if (useIndexJson(env)) return prefix + clean + '/index.json';
-    return prefix + clean + '.json';
+    return prefix + clean;
   }
 
   function publicPathsForRoute(concreteRoute, env) {
@@ -855,16 +871,16 @@ const WORKER_RUNTIME_JS = `
     if (base === '/public') {
       return useIndexJson(env) ? ['/public', '/public/index.json'] : ['/public', '/public/index'];
     }
-    return useIndexJson(env) ? [base, base + '/index.json'] : [base, base + '.json'];
+    return useIndexJson(env) ? [base, base + '/index.json'] : [base, base + '/index'];
   }
 
   function privatePathsForRoute(concreteRoute, env) {
     if (concreteRoute === '/') {
-      return useIndexJson(env) ? ['/', '/index.json'] : ['/', '/index.json'];
+      return useIndexJson(env) ? ['/', '/index.json'] : ['/', '/index'];
     }
     return useIndexJson(env)
       ? [concreteRoute, concreteRoute + '/index.json']
-      : [concreteRoute, concreteRoute + '.json'];
+      : [concreteRoute];
   }
 
   async function purgeCacheForPath(origin, pathname) {
@@ -900,13 +916,13 @@ const WORKER_RUNTIME_JS = `
   function assetRequestPathForRoute(pathname, env) {
     const normalized = normalizeRoutePath(pathname, env, true);
     if (normalized === '/') {
-      return useIndexJson(env) ? '/public/index.json' : '/public/index.json';
+      return useIndexJson(env) ? '/public/index.json' : '/public/index';
     }
-    return useIndexJson(env) ? '/public' + normalized + '/index.json' : '/public' + normalized + '.json';
+    return useIndexJson(env) ? '/public' + normalized + '/index.json' : '/public' + normalized + '/index';
   }
 
   function publicManifestAssetPath(env) {
-    return useIndexJson(env) ? '/public/_manifest/index.json' : '/public/_manifest.json';
+    return useIndexJson(env) ? '/public/_manifest/index.json' : '/public/_manifest/index';
   }
 
   function isPublicManifestPath(pathname) {

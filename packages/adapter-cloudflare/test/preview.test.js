@@ -121,6 +121,22 @@ test('preview metadata exposes worker origin for UI snippets', () => {
   );
 });
 
+test('preview metadata uses extensionless public manifest path when index-json mode is disabled', () => {
+  assert.deepEqual(
+    makeUiMeta('http://127.0.0.1:8787', {
+      useIndexJson: false,
+      privateAuthHeaderName: 'x-private-key',
+    }),
+    {
+      origin: 'http://127.0.0.1:8787',
+      mode: 'cloudflare',
+      useIndexJson: false,
+      privateAuthHeaderName: 'x-private-key',
+      publicManifestPath: '/public/_manifest',
+    }
+  );
+});
+
 test('preview helper triggers local private-output build with build token', async () => {
   const calls = [];
   const originalFetch = global.fetch;

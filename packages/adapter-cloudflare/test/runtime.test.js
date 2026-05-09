@@ -78,8 +78,8 @@ async function makeProject(files) {
   return cwd;
 }
 
-async function loadWorker(cwd) {
-  await bundle({ cwd, srcDir: 'src-api', outFile: 'dist/worker.mjs', useIndexJson: true });
+async function loadWorker(cwd, useIndexJson = true) {
+  await bundle({ cwd, srcDir: 'src-api', outFile: 'dist/worker.mjs', useIndexJson });
   const mod = await import(
     pathToFileURL(path.join(cwd, 'dist/worker.mjs')).href + `?t=${Date.now()}`
   );
@@ -392,4 +392,76 @@ test('rebundling picks up edited route module contents', async () => {
     JSON.parse(await fs.readFile(path.join(cwd, 'public/public/index.json'), 'utf8')),
     { value: 'two' }
   );
+});
+
+test('false index-json mode emits extensionless public and private keys', async () => {
+  const cwd = await makeProject({
+    'statikapi.config.js': `export default {
+  listIndex: {
+    enabled: true,
+    pick: ['id']
+  },
+  cloudflare: {
+    webhook: true,
+    publicByDefault: true,
+  },
+};`,
+    'src-api/posts/[id].js': `export async function paths() { return ['1']; }
+export async function data({ params }) { return { id: params.id, scope: 'public-post' }; }`,
+    'src-api/account/index.js': `export const config = { cloudflare: { public: false } };
+export default { scope: 'private-account' };`,
+  });
+
+  const worker = await loadWorker(cwd, false);
+  const env = makeEnv(cwd, { STATIK_USE_INDEX_JSON: 'false' });
+
+  const buildRes = await worker.fetch(
+    new Request('https://example.test/', {
+      method: 'POST',
+      headers: { authorization: 'Bearer build-secret' },
+      body: JSON.stringify({}),
+    }),
+    env
+  );
+  assert.equal(buildRes.status, 200);
+
+  assert.deepEqual(
+    JSON.parse(await fs.readFile(path.join(cwd, 'public/public/posts/1/index'), 'utf8')),
+    { id: '1', scope: 'public-post' }
+  );
+  assert.deepEqual(
+    JSON.parse(await fs.readFile(path.join(cwd, 'public/public/posts/index'), 'utf8')),
+    [{ id: '1' }]
+  );
+  const publicManifest = JSON.parse(
+    await fs.readFile(path.join(cwd, 'public/public/_manifest/index'), 'utf8')
+  );
+  assert.equal(publicManifest[0].filePath, 'public/posts');
+  assert.equal(publicManifest[1].filePath, 'public/posts/1');
+
+  const privateManifestRes = await worker.fetch(
+    new Request('https://example.test/_manifest', {
+      headers: { 'x-private-key': 'let-me-in' },
+    }),
+    env
+  );
+  const privateManifest = await privateManifestRes.json();
+  assert.equal(privateManifest[0].filePath, 'account');
+
+  const publicRoute = await worker.fetch(new Request('https://example.test/public/posts/1'), env);
+  assert.equal(publicRoute.status, 200);
+  assert.equal((await publicRoute.json()).scope, 'public-post');
+
+  const publicCollection = await worker.fetch(new Request('https://example.test/public/posts'), env);
+  assert.equal(publicCollection.status, 200);
+  assert.deepEqual(await publicCollection.json(), [{ id: '1' }]);
+
+  const privateRoute = await worker.fetch(
+    new Request('https://example.test/account', {
+      headers: { 'x-private-key': 'let-me-in' },
+    }),
+    env
+  );
+  assert.equal(privateRoute.status, 200);
+  assert.equal((await privateRoute.json()).scope, 'private-account');
 });

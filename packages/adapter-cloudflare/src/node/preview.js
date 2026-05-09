@@ -299,7 +299,7 @@ function readTomlVar(toml, key) {
 }
 
 function publicManifestPathFor(useIndexJson) {
-  return useIndexJson ? '/public/_manifest/index.json' : '/public/_manifest.json';
+  return useIndexJson ? '/public/_manifest/index.json' : '/public/_manifest';
 }
 
 export function diffManifestRoutes(prev, next) {

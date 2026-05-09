@@ -36,7 +36,7 @@ This page documents the **current shipped behavior** in this repo.
 ### Manifests
 
 - Public manifest:
-  - `/public/_manifest.json` when `STATIK_USE_INDEX_JSON = "false"`
+  - `/public/_manifest` when `STATIK_USE_INDEX_JSON = "false"`
   - `/public/_manifest/index.json` when `STATIK_USE_INDEX_JSON = "true"`
 - Private manifest:
   - `GET /_manifest`
@@ -168,10 +168,10 @@ export const config = {
 That will generate a parent collection route in addition to the per-item outputs:
 
 - item routes:
-  - `/public/posts/1.json`
-  - `/public/posts/2.json`
+  - `/public/posts/1`
+  - `/public/posts/2`
 - collection route:
-  - `/public/posts.json`
+  - `/public/posts`
 
 The exact file shape depends on `STATIK_USE_INDEX_JSON`.
 
@@ -185,10 +185,16 @@ The adapter supports two public-output shapes via `STATIK_USE_INDEX_JSON`.
 
 Public assets look like:
 
-- `/public/index.json`
-- `/public/posts/1.json`
-- `/public/docs/guide.json`
-- `/public/_manifest.json`
+- route surface:
+  - `/public`
+  - `/public/posts/1`
+  - `/public/docs/guide`
+  - `/public/_manifest`
+- backing asset files may use hidden extensionless `index` files so parent and child routes can coexist:
+  - `public/index`
+  - `public/posts/1/index`
+  - `public/docs/guide/index`
+  - `public/_manifest/index`
 
 ### `STATIK_USE_INDEX_JSON = "true"`
 
@@ -204,6 +210,11 @@ Private routes always keep the route path itself:
 - `/account`
 - `/posts/1`
 - `/_manifest`
+
+For false mode, private stored keys are extensionless too, for example:
+
+- `account`
+- `posts/1`
 
 The preview UI and snippet generator should follow the actual project shape.
 
@@ -545,7 +556,7 @@ Effect:
 Example:
 
 ```bash
-curl -X POST "https://api.example.com/public/posts/1.json" \
+curl -X POST "https://api.example.com/public/posts/1" \
   -H "Authorization: Bearer YOUR_STATIK_BUILD_TOKEN"
 ```
 

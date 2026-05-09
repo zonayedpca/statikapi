@@ -117,6 +117,26 @@ By default the assets directory is `public`, but the scaffold can be configured 
 
 Private outputs stay behind the Worker and require the configured auth header.
 
+### `STATIK_USE_INDEX_JSON`
+
+This project supports two route-shape modes for Cloudflare output:
+
+- `STATIK_USE_INDEX_JSON = "true"`
+  - public routes use index-json paths such as `/public/posts/index.json`
+  - public manifest is served at `/public/_manifest/index.json`
+- `STATIK_USE_INDEX_JSON = "false"`
+  - public routes stay extensionless at the route surface, such as `/public/posts`
+  - private routes stay extensionless too, such as `/posts/1`
+  - public manifest is served at `/public/_manifest`
+
+Implementation detail for false mode:
+
+- public Static Assets may use hidden `index` files under those extensionless route paths so parent and child routes can coexist locally, for example:
+  - route surface: `/public/posts`
+  - backing asset file: `public/posts/index`
+
+The preview UI and snippet generator are expected to follow the actual configured route shape.
+
 ## Pricing and free-tier expectations
 
 This scaffold uses four Cloudflare surfaces:

@@ -19,9 +19,11 @@ function run(args = []) {
 
 test('--help lists commands', async () => {
   const { stdout } = await run(['--help']);
+  assert.match(stdout, /Commands:\n/);
   for (const word of ['build', 'dev']) {
     assert.match(stdout, new RegExp(`\\b${word}\\b`));
   }
+  assert.doesNotMatch(stdout, /Scaffold a new StatikAPI project/);
 });
 
 for (const [cmd, text] of [

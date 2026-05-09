@@ -3,7 +3,7 @@ export const HELP = `statikapi — Static API generator
 Usage:
   statikapi <command> [options]
 
-Commands:Scaffold a new StatikAPI project
+Commands:
   build       Build static JSON endpoints
   dev         Start dev mode (watch & rebuild)
 

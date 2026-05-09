@@ -76,6 +76,41 @@ So:
 - private routes can be rebuilt by webhook
 - public routes require a new build + deploy
 
+### Pricing summary for the adapter path
+
+The adapter uses:
+
+- Workers
+- Static Assets
+- Workers KV
+- R2
+
+The key economic behavior is:
+
+- public Static Asset requests are the cheapest path because Cloudflare documents them as free and unlimited when they do not invoke the Worker
+- private reads and rebuilds use Worker quota
+- private payload storage and reads/writes use R2
+- manifest/control-plane usage uses KV
+
+Cloudflare docs:
+
+- [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/)
+- [Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
+- [Static Assets billing and limitations](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/)
+- [Workers KV pricing](https://developers.cloudflare.com/kv/platform/pricing/)
+- [R2 pricing](https://developers.cloudflare.com/r2/pricing/)
+
+If cost clarity matters for your deployment, read the full breakdown in:
+
+- [Cloudflare Worker + Static Assets Adapter](../serverless/cloudflare-adapter)
+
+Simple rule of thumb:
+
+- mostly public traffic
+  - the adapter stays relatively cost-friendly because Static Asset requests are free
+- mostly private traffic or rebuild-heavy automation
+  - Worker, KV, and R2 usage become the important meters to watch
+
 ---
 
 ## 3) Which option should you choose?
@@ -92,10 +127,41 @@ Choose the adapter when:
 - you need authenticated private reads
 - you need webhook-triggered private rebuilds
 - you want the Cloudflare preview/dev workflow
+- you are comfortable with public routes requiring build + deploy instead of runtime webhook refresh
 
 ---
 
-## 4) Relevant Cloudflare docs
+## 4) Deploying a scaffolded Cloudflare project
+
+Typical scaffolded deploy flow:
+
+```bash
+pnpm build
+pnpm deploy
+```
+
+That assumes:
+
+- `wrangler.toml` is filled in correctly
+- the private R2 bucket already exists
+- the KV namespace already exists
+- your deploy token has the correct Cloudflare permissions
+
+For custom domains, Cloudflare's recommended path is a Worker **Custom Domain**:
+
+- [Workers Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)
+
+Typical dashboard path:
+
+1. Deploy the Worker.
+2. Open **Workers & Pages**.
+3. Select the Worker.
+4. Go to **Settings -> Domains & Routes**.
+5. Add a **Custom Domain** such as `api.example.com`.
+
+---
+
+## 5) Relevant Cloudflare docs
 
 For the adapter path, these official docs are the ones you will use most:
 

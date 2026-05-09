@@ -1,13 +1,107 @@
-# `config` (optional)
+# `config` export
 
-An optional export for per‑route build behavior. (Reserved for future hints such as cache headers, `revalidate`, or `skip`.)
+Routes can optionally export:
 
 ```js
-// any route file
+export const config = { ... };
+```
+
+This is the per-route configuration surface.
+
+The exact supported keys depend on the runtime path.
+
+---
+
+## Regular CLI support
+
+For the normal `statikapi` CLI path, the main supported route-level option is:
+
+### `config.listIndex`
+
+Examples:
+
+```js
 export const config = {
-  // revalidate: 3600,
-  // skip: false
+  listIndex: true,
 };
 ```
 
-> This is forward‑compatible: adding the export today won’t break current builds.
+```js
+export const config = {
+  listIndex: {
+    enabled: true,
+    pick: ['id', 'title'],
+  },
+};
+```
+
+This is meaningful for:
+
+- dynamic routes
+- catch-all routes
+
+It tells StatikAPI to emit a parent collection route in addition to the per-item routes.
+
+---
+
+## Cloudflare adapter support
+
+Cloudflare routes can also export:
+
+```js
+export const config = {
+  cloudflare: {
+    public: false,
+    webhook: true,
+  },
+};
+```
+
+### `config.cloudflare.public`
+
+- omitted or `true`
+  - route is public
+  - emitted under `/public/...`
+- `false`
+  - route is private
+  - served by the Worker on the original route path
+
+### `config.cloudflare.webhook`
+
+- omitted
+  - follows the project default
+- `true`
+  - route can be rebuilt by webhook
+- `false`
+  - route is skipped or rejected for webhook rebuilds, depending on the request
+
+---
+
+## Combined example
+
+```js
+export const config = {
+  listIndex: {
+    enabled: true,
+    pick: ['id', 'title'],
+  },
+  cloudflare: {
+    public: true,
+    webhook: false,
+  },
+};
+```
+
+That means:
+
+- emit a collection route
+- treat this route as public on Cloudflare
+- do not allow webhook rebuilds for it
+
+---
+
+## Validation notes
+
+`config` must be an object when exported.
+
+Invalid shapes cause a route/config load error instead of being silently ignored.

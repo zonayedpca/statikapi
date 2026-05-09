@@ -35,4 +35,16 @@ export async function data({ params }) {
 }
 ```
 
-> Remote fetches run **at build time**, and their responses are baked into static JSON.
+Remote fetches run **at build time**, and their responses are baked into static JSON.
+
+That means:
+
+- regular CLI builds fetch remote data when you run `statikapi build`
+- regular CLI dev mode refetches when a rebuild happens
+- Cloudflare public routes refetch on `build` + `deploy`
+- Cloudflare private routes can refetch on authenticated private rebuild webhooks
+
+This is the key mental model:
+
+- the route is generated ahead of reads
+- the fetch does **not** happen on every client request

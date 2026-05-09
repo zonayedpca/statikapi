@@ -343,7 +343,178 @@ It does **not** magically refresh public assets later from runtime webhooks.
 
 ---
 
-## 8) Webhook rebuild contract
+## 8) Pricing, free limits, and what starts charging
+
+This adapter uses four Cloudflare product surfaces:
+
+- **Workers**
+  - for private route reads, `POST` rebuilds, and the private manifest
+- **Static Assets**
+  - for public routes under `/public/...`
+- **Workers KV**
+  - for manifest/control-plane metadata
+- **R2**
+  - for private route payloads
+
+### What is free on Cloudflare's free tiers
+
+As of May 2026, the most relevant limits for this adapter are:
+
+- **Workers Free**
+  - `100,000` requests per day
+  - `10 ms` CPU time per invocation
+  - `50` external subrequests per invocation
+  - `20,000` Static Asset files per Worker version
+- **Static Assets**
+  - static-asset requests are free and unlimited
+  - no additional storage charge for Static Assets
+- **Workers KV Free**
+  - `100,000` key reads per day
+  - `1,000` writes per day
+  - `1,000` deletes per day
+  - `1,000` list requests per day
+  - `1 GB` stored data
+- **R2 Standard Free**
+  - `10 GB-month` storage per month
+  - `1 million` Class A operations per month
+  - `10 million` Class B operations per month
+  - egress is free
+
+Cloudflare references:
+
+- [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/)
+- [Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
+- [Static Assets billing and limitations](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/)
+- [Workers KV pricing](https://developers.cloudflare.com/kv/platform/pricing/)
+- [R2 pricing](https://developers.cloudflare.com/r2/pricing/)
+
+### What that means for this adapter in practice
+
+If your project is mostly public:
+
+- public asset traffic is the cheapest path
+- static-asset requests do **not** consume Worker request quota when they are served directly by Static Assets
+
+If your project is private-heavy:
+
+- every private read goes through the Worker
+- those requests count against Workers usage
+- each private read also causes R2 read-class work
+
+If you rebuild private routes often:
+
+- the Worker rebuild endpoint uses Worker requests
+- KV updates count against KV usage
+- R2 writes/lists count against R2 Class A operations
+
+### When charges start
+
+#### Workers
+
+- on the free plan, once you exceed the free daily limits, requests stop being free and you need the paid Workers plan
+- on the paid Workers Standard plan, pricing currently includes:
+  - `10 million` requests per month
+  - `30 million` CPU milliseconds per month
+  - then overages are billed per additional million
+- Cloudflare currently documents the Workers Paid plan as having a `$5/month` minimum
+
+#### Static Assets
+
+- static-asset requests are free and unlimited
+- Cloudflare currently documents no extra storage charge for Static Assets themselves
+
+#### Workers KV
+
+- on the free plan, exceeding a daily KV limit causes further operations of that type to fail until reset
+- on the paid plan, overages are billed by operation/storage type
+
+#### R2
+
+- beyond the monthly free tier, R2 bills separately for:
+  - GB-month stored
+  - Class A operations
+  - Class B operations
+- Cloudflare rounds usage up to the next billable unit
+
+### Rough free-tier guidance
+
+These are **rules of thumb**, not guarantees:
+
+- if your API is mostly public and traffic is low to moderate, the free plan can stretch surprisingly far because Static Asset requests are free
+- if you have many authenticated/private reads, the Worker free request limit becomes the first likely bottleneck
+- if you rebuild private data frequently or store lots of private payloads, R2 and KV become the next costs to watch
+
+You should expect to move to the paid Workers plan sooner if:
+
+- private endpoints are used regularly in production
+- private rebuild webhooks run frequently
+- your Worker does noticeable compute per request
+
+### Concrete examples
+
+#### Example A: Mostly public API
+
+Imagine:
+
+- almost all traffic hits `/public/...`
+- private routes are rarely used
+- rebuilds happen a few times per day
+
+This is the most free-tier-friendly shape for this adapter because:
+
+- public Static Asset requests are free and unlimited
+- Worker usage stays relatively low
+- R2/KV activity stays low
+
+In this shape, your first paid pressure point is often **deployment/build frequency** or private-admin usage, not public traffic itself.
+
+#### Example B: Private dashboard/API usage
+
+Imagine:
+
+- authenticated clients frequently read private routes
+- each private request goes through the Worker
+- each private read also hits private storage
+
+In this shape, your first pressure point is usually:
+
+- **Workers request usage**
+
+and then:
+
+- **R2 read operations**
+
+This is the shape where you should expect to move to a paid Workers plan sooner.
+
+#### Example C: Rebuild-heavy private content
+
+Imagine:
+
+- a CMS or backend triggers `POST /` or `POST /route` often
+- each rebuild updates multiple private outputs
+
+In this shape, the cost pressure is usually:
+
+- Worker rebuild requests
+- KV manifest/control-plane writes
+- R2 Class A operations
+
+That means frequent rebuild automation can become the main source of metered usage even before read traffic gets large.
+
+### What happens when you exceed limits
+
+- **Workers Free**
+  - requests can fail once the account exceeds the free request quota
+- **KV Free**
+  - further operations of the exceeded type fail until reset
+- **R2**
+  - overage is billed rather than simply blocked, according to the current pricing model
+
+Check the latest Cloudflare docs before launch, because these limits and prices can change.
+
+---
+
+## 9) Webhook rebuild contract
 
 ### Full rebuild
 
@@ -393,7 +564,7 @@ It should be a long random secret and should be treated like any other deploy-ti
 
 ---
 
-## 9) Private auth header contract
+## 10) Private auth header contract
 
 Private reads require the configured auth header.
 
@@ -413,7 +584,7 @@ Public routes do **not** need that header.
 
 ---
 
-## 10) Cloudflare setup checklist
+## 11) Cloudflare setup checklist
 
 ### A) Account ID
 
@@ -477,7 +648,7 @@ For this adapter, the scaffold defaults to `public`.
 
 ---
 
-## 11) Create the Cloudflare API token correctly
+## 12) Create the Cloudflare API token correctly
 
 Use a **custom API token** for deployment. Do **not** use the global API key.
 
@@ -530,7 +701,122 @@ Those are application/runtime secrets, not Cloudflare deploy credentials.
 
 ---
 
-## 12) Deployment model and tradeoffs
+## 13) Deploy to Cloudflare and add a custom domain
+
+### Deploy the scaffolded project
+
+After filling in `wrangler.toml` and `.dev.vars`, the normal deployment flow is:
+
+```bash
+pnpm build
+pnpm deploy
+```
+
+or, if you prefer Wrangler directly:
+
+```bash
+pnpm build
+wrangler deploy
+```
+
+What this deploy does:
+
+- uploads the Worker bundle
+- uploads the configured Static Assets directory
+- applies the Worker bindings and variables from `wrangler.toml`
+
+Before deploying, confirm:
+
+- the private R2 bucket already exists
+- the KV namespace already exists
+- the `binding` names in `wrangler.toml` match the names referenced by the scaffold
+- your deploy token has the required permissions
+
+### Short production checklist
+
+Before your first production deploy:
+
+1. Create the private R2 bucket.
+2. Create the KV namespace.
+3. Confirm your Cloudflare API token can:
+   - deploy Workers
+   - access KV
+   - access R2
+4. Confirm `wrangler.toml` contains the real:
+   - account id
+   - bucket name
+   - KV namespace id
+   - assets directory
+5. Decide whether your production hostname will be:
+   - `workers.dev` temporarily
+   - or a Custom Domain such as `api.example.com`
+6. Confirm which routes must stay private because they need webhook-refreshable behavior.
+7. Run:
+
+```bash
+pnpm build
+pnpm deploy
+```
+
+### Add a custom domain
+
+For production, Cloudflare recommends using a **Custom Domain** or route instead of relying only on the `workers.dev` hostname.
+
+Official docs:
+
+- [Workers Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)
+- [Routes and domains](https://developers.cloudflare.com/workers/configuration/routing/)
+
+Cloudflare's current Custom Domain flow:
+
+1. Make sure the domain is on an active Cloudflare zone you control.
+2. Deploy the Worker first.
+3. In Cloudflare Dashboard:
+   - go to **Workers & Pages**
+   - open your Worker
+   - go to **Settings -> Domains & Routes**
+   - choose **Add -> Custom Domain**
+4. Enter the hostname, for example:
+   - `api.example.com`
+5. Confirm the setup.
+
+Cloudflare will create the necessary DNS record and certificate handling for that hostname.
+
+### Wrangler-based custom domain example
+
+Cloudflare also documents configuring custom domains in Wrangler:
+
+```toml
+[[routes]]
+pattern = "api.example.com"
+custom_domain = true
+```
+
+Then deploy again:
+
+```bash
+wrangler deploy
+```
+
+### Important caveats
+
+- you cannot create a Custom Domain on a hostname with an existing conflicting CNAME
+- a Custom Domain points the whole hostname at the Worker
+- this adapter expects public assets and private Worker endpoints to live under the same deployed hostname
+
+That means a hostname like `api.example.com` works well for this adapter:
+
+- public assets:
+  - `https://api.example.com/public/...`
+- private routes:
+  - `https://api.example.com/account`
+- manifests:
+  - `https://api.example.com/public/_manifest...`
+  - `https://api.example.com/_manifest`
+
+---
+
+## 14) Deployment model and tradeoffs
 
 This Cloudflare integration is designed around a deliberate tradeoff:
 
@@ -551,7 +837,7 @@ That means you should decide route visibility partly based on freshness needs:
 
 ---
 
-## 13) Troubleshooting
+## 15) Troubleshooting
 
 ### `assets binding missing`
 

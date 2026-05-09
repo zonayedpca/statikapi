@@ -1,26 +1,95 @@
 # Static Routes
 
-A file path becomes a URL path. Examples:
+Static routes are the simplest StatikAPI routes.
 
-```
+A file path maps directly to a route path:
+
+```text
 src-api/
-  index.js          → /index.json
-  about.js          → /about/index.json
-  team/info.js      → /team/info/index.json
+  index.js      -> /
+  about.js      -> /about
+  team/info.js  -> /team/info
 ```
 
-## Example
+In the regular CLI output model, those become:
+
+```text
+api-out/index.json
+api-out/about/index.json
+api-out/team/info/index.json
+```
+
+---
+
+## Example: plain value
 
 ```js
 // src-api/index.js
 export default {
   hello: 'world',
-  generatedAt: new Date().toISOString(),
+  generatedAt: '2026-05-09T12:00:00.000Z',
 };
 ```
 
-Output written to:
+This is the most direct route form:
 
+- no `paths()`
+- no `params`
+- no route-level special handling required
+
+---
+
+## Example: function form
+
+You can also export a function:
+
+```js
+// src-api/about.js
+export default async function data() {
+  return {
+    name: 'StatikAPI',
+    kind: 'static-route-example',
+  };
+}
 ```
-api-out/index.json
+
+That is useful when the value is still static-route-shaped but computed at build time.
+
+---
+
+## When to use a static route
+
+Use a static route when:
+
+- the path is known ahead of time
+- you do not need URL params
+- the route is a singleton endpoint such as:
+  - `/`
+  - `/about`
+  - `/site-metadata`
+
+If you need multiple concrete pages from one file, use:
+
+- [Dynamic Routes](./dynamic-routes)
+- [Catch-all Routes](./catch-all-routes)
+
+---
+
+## Serialization reminder
+
+Static routes still must return JSON-serializable data.
+
+That means:
+
+- strings are fine
+- numbers are fine
+- plain objects/arrays are fine
+- `Date` objects are **not** fine
+
+If you want a timestamp, serialize it yourself:
+
+```js
+export default {
+  generatedAt: new Date().toISOString(),
+};
 ```

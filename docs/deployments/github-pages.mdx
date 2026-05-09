@@ -24,7 +24,7 @@ https://username.github.io/repo-name/users/1/index.json
 
 ## Git Integration
 
-GitHub Pages automatically builds and serves content from specific branches (`gh-pages`, `main`, or `docs/` folders depending on settings).  
+GitHub Pages automatically builds and serves content from specific branches (`gh-pages`, `master`, `main`, or `docs/` folders depending on settings).  
 Once your repository is configured for Pages, any push to the target branch will trigger an automatic redeploy of your static JSON API.
 
 ---
@@ -39,7 +39,7 @@ Example workflow snippet:
 name: Deploy StatikAPI
 on:
   push:
-    branches: [main]
+    branches: [master]
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -56,7 +56,7 @@ jobs:
           publish_dir: ./api-out
 ```
 
-This workflow ensures that every commit to `main` automatically rebuilds and deploys your JSON endpoints to GitHub Pages.
+This workflow ensures that every commit to your chosen deployment branch automatically rebuilds and deploys your JSON endpoints to GitHub Pages.
 
 ---
 

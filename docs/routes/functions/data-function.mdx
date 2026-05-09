@@ -1,27 +1,106 @@
 # `data(context)`
 
-Return the JSON payload for the current route.
+`data()` is the main function form for route modules.
 
-## Signature
+Use it when:
+
+- the route payload is computed
+- you need `params`
+- you want to fetch remote data at build time
+
+---
+
+## Supported forms
+
+StatikAPI accepts either:
 
 ```js
-// Both forms are supported
-export default <plain-object>;
-export async function data(context) { /* return plain-object */ }
-
+export default { hello: 'world' };
 ```
 
-- `context.params` — dynamic params, e.g. `{ id: "1" }` or `{ slug: ["a","b"] }`
-- `context.route` — normalized route path (e.g., `/users/:id`)
-- `context.segments` — array of path tokens
-- `context.file` — absolute source file path (for logging)
-- (More fields may be added in minor versions)
+or:
+
+```js
+export async function data(context) {
+  return { hello: 'world' };
+}
+```
+
+It also accepts:
+
+```js
+export default async function data(context) {
+  return { hello: 'world' };
+}
+```
+
+---
+
+## What `context` currently contains
+
+### Regular CLI path
+
+For the normal `statikapi build` / `statikapi dev` path, `context` currently includes:
+
+- `params`
+  - dynamic/catch-all params when applicable
+- `__fresh`
+  - internal dev-only freshness flag during rebuilds
+
+Examples:
+
+- static route:
+  - `{}`
+- dynamic route `/users/1`:
+  - `{ params: { id: '1' } }`
+- catch-all route `/docs/api/intro`:
+  - `{ params: { slug: ['api', 'intro'] } }`
+
+### Cloudflare adapter path
+
+For the Cloudflare adapter, route execution currently receives:
+
+- `params`
+- `env`
+
+where `env` is the Worker environment/bindings object.
+
+So if you write code that depends on `env`, that is Cloudflare-specific behavior, not the generic local CLI contract.
+
+---
+
+## Example
+
+```js
+export async function data({ params }) {
+  return {
+    id: params.id,
+    role: 'member',
+  };
+}
+```
+
+---
 
 ## Rules
 
-- Must return **JSON-serializable** data:
-  - Plain objects / arrays only
-  - No functions, Dates, or circular refs
-  - Numbers must be finite
+`data()` must return JSON-serializable output.
 
-Violations fail the build with a helpful error.
+Allowed:
+
+- strings
+- booleans
+- finite numbers
+- `null`
+- plain objects
+- arrays
+
+Rejected:
+
+- `Date`
+- `BigInt`
+- functions
+- class instances
+- circular references
+
+If serialization fails, the route build fails with an explicit error.

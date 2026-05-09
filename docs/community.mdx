@@ -43,7 +43,7 @@ We welcome bug reports, fixes, features, docs improvements, and examples.
 1. **Discuss**: If an issue does not exist, open one first (bug or feature template).
    - Bug: [`.github/ISSUE_TEMPLATE/bug_report.md`](https://github.com/zonayedpca/statikapi/tree/master/.github/ISSUE_TEMPLATE/bug_report.md)
    - Feature: [`.github/ISSUE_TEMPLATE/feature_request.md`](https://github.com/zonayedpca/statikapi/tree/master/.github/ISSUE_TEMPLATE/feature_request.md)
-2. **Fork and branch** off `main`. Use a descriptive branch name like `feat/route-aliases`.
+2. **Fork and branch** off the current default branch (`master` in this repo). Use a descriptive branch name like `feat/route-aliases`.
 3. **Develop locally** (see quickstart below). Keep commits small and focused.
 4. **Tests and lint** must pass before opening a PR:
    ```bash
@@ -106,7 +106,7 @@ Useful scripts:
 
 - `pnpm -w lint` and `pnpm -w format` to keep code style consistent.
 - `pnpm -r test` to run tests across packages.
-- `pnpm -C packages/ui build` to build the preview UI (the CLI bundles it on publish).
+- `pnpm ui:build` to rebuild and embed the shared preview UI for both the regular CLI preview and the Cloudflare preview.
 
 ---
 

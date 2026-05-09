@@ -1,24 +1,93 @@
 # `paths()`
 
-Enumerate all concrete pages for dynamic or catch‑all routes.
+`paths()` tells StatikAPI which concrete routes to emit for a dynamic or catch-all file.
 
-## Dynamic example
+It is used by:
+
+- dynamic routes like `users/[id].js`
+- catch-all routes like `docs/[...slug].js`
+
+---
+
+## Dynamic route example
 
 ```js
-// users/[id].js
+// src-api/users/[id].js
 export async function paths() {
-  return ['1', '2', '3']; // strings for [id]
+  return ['1', '2', '3'];
 }
 ```
 
-## Catch‑all example
+Each string becomes one emitted route:
+
+- `/users/1`
+- `/users/2`
+- `/users/3`
+
+---
+
+## Catch-all route example
 
 ```js
-// docs/[...slug].js
+// src-api/docs/[...slug].js
 export async function paths() {
-  return [['a', 'b'], ['guide']]; // arrays of segments for [...slug]
+  return [['guide'], ['api', 'intro']];
 }
 ```
 
-- Return values must be **pure data** (strings or arrays of strings).
-- Throwing rejects the build for that route and surfaces an error.
+Each string array becomes one emitted route:
+
+- `/docs/guide`
+- `/docs/api/intro`
+
+---
+
+## Rules
+
+### Dynamic routes
+
+`paths()` must return:
+
+- an array of strings
+
+### Catch-all routes
+
+`paths()` must return:
+
+- an array of string arrays
+
+### General validation
+
+Returned path segments must be valid route segments:
+
+- no empty strings
+- no `/` inside a segment
+- no non-string values
+
+If `paths()` returns invalid data, the build fails with an explicit error.
+
+---
+
+## Missing `paths()`
+
+If a dynamic or catch-all route does not export `paths()`:
+
+- that route is skipped
+- the whole build does not fail only because `paths()` is missing
+
+This is useful during gradual development, but for a real route you usually want `paths()` in place.
+
+---
+
+## Interaction with `listIndex`
+
+If the same route also uses:
+
+```js
+export const config = { listIndex: true };
+```
+
+then:
+
+- `paths()` controls the concrete emitted routes
+- `listIndex` controls whether a parent collection route is also emitted from those results

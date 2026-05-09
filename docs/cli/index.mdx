@@ -5,4 +5,19 @@ StatikAPI provides two command-line tools to help you work efficiently:
 - **`statikapi`** — the core CLI used to develop and build your static JSON API.
 - **`create-statikapi`** — the scaffolding tool to quickly start new projects with templates and deploy presets.
 
-Use them together to go from setup to production in minutes.
+Use them together like this:
+
+1. `create-statikapi`
+   - start a new project quickly
+   - choose a template
+   - get example routes and scripts
+2. `statikapi`
+   - build JSON locally
+   - run watch/dev mode
+   - preview the generated routes at `/_ui/`
+
+If you are working on the Cloudflare path, the scaffold also introduces:
+
+- `statikapi-cf`
+
+through the generated project scripts, although that adapter CLI is documented from the Cloudflare pages rather than as a separate top-level CLI page.

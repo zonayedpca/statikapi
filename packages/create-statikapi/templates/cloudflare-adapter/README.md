@@ -20,7 +20,7 @@ This project uses **@statikapi/adapter-cf** to:
   - injects the private-route auth header from `.dev.vars` for previewing private endpoints
 
 - `pnpm build`
-  One-off build: bundle worker to `dist/worker.mjs`.
+  One-off build: bundle worker to `dist/worker.mjs` and generate public Static Assets.
 - `pnpm deploy`
   Deploy the Worker with `wrangler deploy`.
 
@@ -100,6 +100,14 @@ For deploy automation, use a Cloudflare API token with only the permissions you 
 - R2 Storage: Edit
 - Workers KV Storage: Edit
 
+Official Cloudflare docs:
+
+- Create API token: https://developers.cloudflare.com/fundamentals/api/get-started/create-token/
+- API token permissions: https://developers.cloudflare.com/fundamentals/api/reference/permissions/
+- Find account id: https://developers.cloudflare.com/fundamentals/setup/find-account-and-zone-ids/
+- KV namespaces: https://developers.cloudflare.com/kv/concepts/kv-namespaces/
+- R2 buckets: https://developers.cloudflare.com/r2/buckets/create-buckets/
+
 ## Static assets
 
 Public outputs under `/public/...` are intended to be served as Cloudflare Static Assets through the Worker configuration.
@@ -108,3 +116,103 @@ Those asset-matching requests should be served directly by Cloudflare Static Ass
 By default the assets directory is `public`, but the scaffold can be configured to use a different Static Assets directory if you want.
 
 Private outputs stay behind the Worker and require the configured auth header.
+
+## Pricing and free-tier expectations
+
+This scaffold uses four Cloudflare surfaces:
+
+- Workers
+- Static Assets
+- Workers KV
+- R2
+
+As of May 2026, the most important free-tier behavior is:
+
+- Static Asset requests are free and unlimited when they do not invoke the Worker
+- Workers Free includes `100,000` requests per day
+- Workers KV Free includes small daily read/write/list limits and `1 GB` of stored data
+- R2 Standard Free includes `10 GB-month` storage, `1 million` Class A operations, and `10 million` Class B operations per month
+
+What that means in practice:
+
+- public route traffic is usually the cheapest part of this architecture
+- private route traffic consumes Worker quota and R2 usage
+- rebuild-heavy workflows consume Worker, KV, and R2 operations
+
+Quick rules of thumb:
+
+- mostly public traffic
+  - best fit for the free tier
+- mostly private traffic
+  - Worker quota becomes the likely first limit
+- frequent private rebuild webhooks
+  - Worker + KV + R2 operations become the likely first metered area
+
+If you exceed free-tier limits:
+
+- Workers and KV free-tier limits can start failing requests/operations until reset or until you move to the paid plan
+- R2 overage is billed according to Cloudflare's current R2 pricing
+
+Always verify the current numbers before launch:
+
+- Workers pricing: https://developers.cloudflare.com/workers/platform/pricing/
+- Workers limits: https://developers.cloudflare.com/workers/platform/limits/
+- Static Assets billing: https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/
+- KV pricing: https://developers.cloudflare.com/kv/platform/pricing/
+- R2 pricing: https://developers.cloudflare.com/r2/pricing/
+
+## Deploying this scaffold
+
+1. Create the private R2 bucket.
+2. Create the KV namespace.
+3. Fill in `wrangler.toml` with the real bucket name, namespace id, account id, and deploy token.
+4. Copy `.dev.vars.example` to `.dev.vars` for local use.
+5. Build:
+
+```bash
+pnpm build
+```
+
+6. Deploy:
+
+```bash
+pnpm deploy
+```
+
+This uploads:
+
+- the Worker bundle
+- the configured Static Assets directory
+- the Worker bindings and variables from `wrangler.toml`
+
+Short production checklist:
+
+1. Create the private R2 bucket.
+2. Create the KV namespace.
+3. Fill in the real account id, bucket name, namespace id, and token values.
+4. Decide which routes must stay private because they need webhook-refreshable behavior.
+5. Run `pnpm build`.
+6. Run `pnpm deploy`.
+
+## Adding a custom domain
+
+After deploy, attach a production hostname to the Worker.
+
+Cloudflare docs:
+
+- https://developers.cloudflare.com/workers/configuration/routing/custom-domains/
+
+Typical dashboard flow:
+
+1. Open **Workers & Pages**.
+2. Select this Worker.
+3. Go to **Settings -> Domains & Routes**.
+4. Choose **Add -> Custom Domain**.
+5. Enter a hostname such as `api.example.com`.
+
+Cloudflare will create the required DNS/certificate handling for that hostname.
+
+This adapter expects public and private endpoints to share that same hostname, for example:
+
+- `https://api.example.com/public/...`
+- `https://api.example.com/account`

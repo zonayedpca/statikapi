@@ -516,7 +516,7 @@ async function main(argv) {
     console.log('  ' + scriptHint(pkgMgr, 'deploy') + '  # deploy the Worker with wrangler\n');
     console.log('Then:');
     console.log('  - Inspect wrangler.toml and statikapi.config.js');
-    console.log('  - Copy .dev.vars.example to .dev.vars for local secrets if needed');
+    console.log('  - Review .dev.vars for local/dev values and deploy CLI envs');
     console.log('  - Create the private R2 bucket and one KV namespace');
     console.log('  - Cloudflare account id: Dashboard -> Workers & Pages -> Overview');
     console.log('  - KV namespace id: Dashboard -> Workers & Pages -> KV -> your namespace');
@@ -924,7 +924,7 @@ STATIK_PRIVATE_AUTH_HEADER_VALUE=${privateAuthHeaderValue}
 # Public route assets are generated into ./${assetsDir}
 # Private route data is stored in the configured R2 bucket, and the manifest lives in KV.
 `;
-  await fs.writeFile(path.join(dest, '.dev.vars.example'), body, 'utf8');
+  await fs.writeFile(path.join(dest, '.dev.vars'), body, 'utf8');
 }
 
 async function writeGitignore(dest, { outDir, template, assetsDir = DEFAULT_CF_ASSETS_DIR }) {

@@ -80,7 +80,7 @@ The template creates:
 
 - `wrangler.toml`
 - `statikapi.config.js`
-- `.dev.vars.example`
+- `.dev.vars`
 - `src-api/`
 - package-manager-specific `dev`, `build`, and `deploy` scripts
 
@@ -104,7 +104,6 @@ After scaffolding:
 ```bash
 cd my-worker
 pnpm install
-cp .dev.vars.example .dev.vars
 pnpm dev
 ```
 
@@ -115,6 +114,22 @@ The default dev flow:
 - starts local `wrangler dev`
 - starts the preview UI
 - tries to open `/_ui/` automatically
+
+### Local vs deployed variables
+
+The scaffold now writes a real `.dev.vars` file directly.
+
+Use `.dev.vars` for:
+
+- local preview/private-route auth during `pnpm dev`
+- local `wrangler` commands that need `CLOUDFLARE_ACCOUNT_ID` or `CLOUDFLARE_API_TOKEN`
+
+In the current scaffold contract:
+
+- `.dev.vars` stays local to your machine
+- deploy-time Worker runtime values still come from `wrangler.toml` when you run `wrangler deploy`
+
+So if a value must affect the deployed Worker runtime, make sure it is set in the deployed Worker configuration, not just in local `.dev.vars`.
 
 ---
 

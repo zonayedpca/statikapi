@@ -30,7 +30,7 @@ This project uses **@statikapi/adapter-cf** to:
 - `dist/worker.mjs` — generated worker bundle
 - `statikapi.config.js` — project-level Cloudflare defaults
 - `wrangler.toml` — Static Assets config, private bucket binding, KV binding, and runtime env vars
-- `.dev.vars.example` — copy to `.dev.vars` for local secrets and account-scoped deploy envs
+- `.dev.vars` — local/dev values plus account-scoped deploy CLI envs used on your machine
 
 ## Local preview
 
@@ -49,6 +49,9 @@ For private routes, it reads:
 - `STATIK_PRIVATE_AUTH_HEADER_VALUE`
 
 from `.dev.vars` so you can inspect private outputs locally without manually attaching headers in the browser.
+
+`.dev.vars` is for local development and local deploy CLI environment values on your machine.
+It is not uploaded to Cloudflare by itself.
 
 ## Route visibility
 
@@ -107,6 +110,23 @@ Official Cloudflare docs:
 - Find account id: https://developers.cloudflare.com/fundamentals/setup/find-account-and-zone-ids/
 - KV namespaces: https://developers.cloudflare.com/kv/concepts/kv-namespaces/
 - R2 buckets: https://developers.cloudflare.com/r2/buckets/create-buckets/
+
+## Local vs deployed variables
+
+Use the generated `.dev.vars` file for:
+
+- local preview/private-route auth during `pnpm dev`
+- local `wrangler` commands that need `CLOUDFLARE_ACCOUNT_ID` or `CLOUDFLARE_API_TOKEN`
+
+For deployed Worker runtime behavior in the current scaffold:
+
+- Cloudflare publishes the Worker `[vars]` from `wrangler.toml` when you run `pnpm deploy`
+- local-only values in `.dev.vars` stay on your machine unless you also set matching values in your deployed Worker configuration
+
+That means:
+
+- `.dev.vars` helps local development and local deploy commands
+- `wrangler.toml` still defines the current scaffold's deploy-time Worker runtime vars
 
 ## Static assets
 
@@ -186,7 +206,7 @@ Always verify the current numbers before launch:
 1. Create the private R2 bucket.
 2. Create the KV namespace.
 3. Fill in `wrangler.toml` with the real bucket name, namespace id, account id, and deploy token.
-4. Copy `.dev.vars.example` to `.dev.vars` for local use.
+4. Review `.dev.vars` for local use and local deploy CLI envs.
 5. Build:
 
 ```bash

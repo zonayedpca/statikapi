@@ -12,12 +12,26 @@ function normalizeOrigin(origin) {
   return (origin || getOrigin()).replace(/\/+$/, '');
 }
 
+function isCloudflarePublicRoute(route, entry) {
+  return entry?.public === true || route === '/public' || route.startsWith('/public/');
+}
+
+function cloudflareEndpointPath(route, entry, meta) {
+  const useIndexJson = meta?.useIndexJson === true;
+  const isPublic = isCloudflarePublicRoute(route, entry);
+
+  if (!useIndexJson) return route === '/' ? '/' : route;
+  if (route === '/') return '/index.json';
+  if (isPublic && route === '/public') return '/public/index.json';
+  return route.replace(/\/+$/, '') + '/index.json';
+}
+
 /** Build an absolute endpoint URL for a given route (e.g., "/users/1"). */
 export function endpointUrl(route, { meta } = {}) {
   const origin = normalizeOrigin(meta?.origin);
 
   if (meta?.mode === 'cloudflare') {
-    return origin + (route === '/' ? '/' : route);
+    return origin + cloudflareEndpointPath(route, null, meta);
   }
 
   return origin + (route === '/' ? '/' : `${route}/`) + 'index.json';
@@ -25,7 +39,10 @@ export function endpointUrl(route, { meta } = {}) {
 
 /** Return snippet strings for curl, browser fetch, and Node (built-in) fetch. */
 export function makeSnippets(route, { entry, meta } = {}) {
-  const url = endpointUrl(route, { entry, meta });
+  const url =
+    meta?.mode === 'cloudflare'
+      ? normalizeOrigin(meta?.origin) + cloudflareEndpointPath(route, entry, meta)
+      : endpointUrl(route, { entry, meta });
   const q = JSON.stringify(url); // safe in JS strings
   const isPrivateCloudflare = meta?.mode === 'cloudflare' && entry?.public === false;
   const privateHeaderName = meta?.privateAuthHeaderName || 'x-private-auth';

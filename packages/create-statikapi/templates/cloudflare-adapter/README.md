@@ -29,8 +29,8 @@ This project uses **@statikapi/adapter-cf** to:
 - `src-api/` — all your StatikAPI endpoints (JS modules)
 - `dist/worker.mjs` — generated worker bundle
 - `statikapi.config.js` — project-level Cloudflare defaults
-- `wrangler.toml` — Static Assets config, private bucket binding, KV binding, and runtime env vars
-- `.dev.vars` — local/dev values plus account-scoped deploy CLI envs used on your machine
+- `wrangler.toml` — Static Assets config, private bucket binding, KV binding, and non-secret runtime env vars
+- `.dev.vars` — local/dev values, account-scoped deploy CLI envs, and local copies of the auth/build secrets
 
 ## Local preview
 
@@ -117,16 +117,25 @@ Use the generated `.dev.vars` file for:
 
 - local preview/private-route auth during `pnpm dev`
 - local `wrangler` commands that need `CLOUDFLARE_ACCOUNT_ID` or `CLOUDFLARE_API_TOKEN`
+- local copies of:
+  - `STATIK_BUILD_TOKEN`
+  - `STATIK_PRIVATE_AUTH_HEADER_NAME`
+  - `STATIK_PRIVATE_AUTH_HEADER_VALUE`
 
 For deployed Worker runtime behavior in the current scaffold:
 
-- Cloudflare publishes the Worker `[vars]` from `wrangler.toml` when you run `pnpm deploy`
-- local-only values in `.dev.vars` stay on your machine unless you also set matching values in your deployed Worker configuration
+- `wrangler.toml` still carries non-secret runtime config such as `STATIK_SRC`, `STATIK_USE_INDEX_JSON`, bindings, and usage-limit values
+- `.dev.vars` stays local to your machine
+- if you want deployed rebuild webhooks and private auth checks to work, you must also set these in the deployed Worker configuration:
+  - `STATIK_BUILD_TOKEN`
+  - `STATIK_PRIVATE_AUTH_HEADER_NAME`
+  - `STATIK_PRIVATE_AUTH_HEADER_VALUE`
 
 That means:
 
 - `.dev.vars` helps local development and local deploy commands
-- `wrangler.toml` still defines the current scaffold's deploy-time Worker runtime vars
+- `wrangler.toml` is no longer the scaffolded source of truth for the auth/build secrets
+- deployed Worker auth/build secrets must be set separately in Cloudflare
 
 ## Static assets
 
@@ -205,8 +214,12 @@ Always verify the current numbers before launch:
 
 1. Create the private R2 bucket.
 2. Create the KV namespace.
-3. Fill in `wrangler.toml` with the real bucket name, namespace id, account id, and deploy token.
+3. Fill in `wrangler.toml` with the real bucket name, namespace id, and other non-secret runtime config.
 4. Review `.dev.vars` for local use and local deploy CLI envs.
+5. Set deployed Worker auth/build values in Cloudflare for:
+   - `STATIK_BUILD_TOKEN`
+   - `STATIK_PRIVATE_AUTH_HEADER_NAME`
+   - `STATIK_PRIVATE_AUTH_HEADER_VALUE`
 5. Build:
 
 ```bash
@@ -223,16 +236,20 @@ This uploads:
 
 - the Worker bundle
 - the configured Static Assets directory
-- the Worker bindings and variables from `wrangler.toml`
+- the Worker bindings and non-secret variables from `wrangler.toml`
 
 Short production checklist:
 
 1. Create the private R2 bucket.
 2. Create the KV namespace.
-3. Fill in the real account id, bucket name, namespace id, and token values.
-4. Decide which routes must stay private because they need webhook-refreshable behavior.
-5. Run `pnpm build`.
-6. Run `pnpm deploy`.
+3. Fill in the real account id, bucket name, namespace id, and local CLI token values.
+4. Set deployed Worker auth/build values in Cloudflare for:
+   - `STATIK_BUILD_TOKEN`
+   - `STATIK_PRIVATE_AUTH_HEADER_NAME`
+   - `STATIK_PRIVATE_AUTH_HEADER_VALUE`
+5. Decide which routes must stay private because they need webhook-refreshable behavior.
+6. Run `pnpm build`.
+7. Run `pnpm deploy`.
 
 ## Adding a custom domain
 

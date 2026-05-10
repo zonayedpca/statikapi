@@ -1134,20 +1134,11 @@ async function patchCloudflareWrangler(
     .replace(/id\s*=\s*"REPLACE_ME_KV_NAMESPACE_ID"/, `id = "${kvId}"`)
 
     // STATIK_* vars
-    .replace(/STATIK_BUILD_TOKEN\s*=\s*".*"/, `STATIK_BUILD_TOKEN = "${buildToken}"`)
     .replace(/STATIK_SRC\s*=\s*".*"/, `STATIK_SRC = "${statikSrc}"`)
     .replace(/STATIK_USE_INDEX_JSON\s*=\s*".*"/, `STATIK_USE_INDEX_JSON = "${statikUseIndexJson}"`)
     .replace(
       /STATIK_PRIVATE_BUCKET_BINDING\s*=\s*".*"/,
       `STATIK_PRIVATE_BUCKET_BINDING = "${privateBucketBinding}"`
-    )
-    .replace(
-      /STATIK_PRIVATE_AUTH_HEADER_NAME\s*=\s*".*"/,
-      `STATIK_PRIVATE_AUTH_HEADER_NAME = "${privateAuthHeaderName}"`
-    )
-    .replace(
-      /STATIK_PRIVATE_AUTH_HEADER_VALUE\s*=\s*".*"/,
-      `STATIK_PRIVATE_AUTH_HEADER_VALUE = "${privateAuthHeaderValue}"`
     )
     .replace(
       /STATIK_WORKER_REQUEST_LIMIT\s*=\s*".*"/,

@@ -61,11 +61,13 @@ test('scaffolds CLOUDFLARE template with static assets, private storage, config,
   assert.match(wrangler, /binding = "ASSETS"/);
   assert.doesNotMatch(wrangler, /run_worker_first/);
   assert.match(wrangler, /STATIK_PRIVATE_BUCKET/);
-  assert.match(wrangler, /STATIK_PRIVATE_AUTH_HEADER_NAME/);
   assert.match(wrangler, /STATIK_WORKER_REQUEST_LIMIT/);
   assert.match(wrangler, /STATIK_R2_CLASS_A_LIMIT/);
   assert.match(wrangler, /STATIK_R2_CLASS_B_LIMIT/);
   assert.doesNotMatch(wrangler, /STATIK_PUBLIC_BUCKET/);
+  assert.doesNotMatch(wrangler, /STATIK_BUILD_TOKEN/);
+  assert.doesNotMatch(wrangler, /STATIK_PRIVATE_AUTH_HEADER_NAME/);
+  assert.doesNotMatch(wrangler, /STATIK_PRIVATE_AUTH_HEADER_VALUE/);
 
   const config = await fs.readFile(path.join(appDir, 'statikapi.config.js'), 'utf8');
   assert.doesNotMatch(config, /servingMode/);
@@ -75,6 +77,8 @@ test('scaffolds CLOUDFLARE template with static assets, private storage, config,
   const envTemplate = await fs.readFile(path.join(appDir, '.dev.vars'), 'utf8');
   assert.match(envTemplate, /CLOUDFLARE_ACCOUNT_ID=/);
   assert.match(envTemplate, /CLOUDFLARE_API_TOKEN=/);
+  assert.match(envTemplate, /STATIK_BUILD_TOKEN=/);
+  assert.match(envTemplate, /STATIK_PRIVATE_AUTH_HEADER_NAME=/);
   assert.match(envTemplate, /STATIK_PRIVATE_AUTH_HEADER_VALUE=/);
 
   t.after(async () => {

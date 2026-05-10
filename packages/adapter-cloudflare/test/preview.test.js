@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
+  createPrivateOutputPrimer,
+  createPreviewManifestLoader,
   diffManifestRoutes,
   fetchManifest,
   fetchRoute,
@@ -163,4 +165,81 @@ test('preview helper triggers local private-output build with build token', asyn
   assert.equal(calls[0].url, 'http://127.0.0.1:8787/_preview/build');
   assert.equal(calls[0].method, 'POST');
   assert.equal(calls[0].headers.get('authorization'), 'Bearer build-secret');
+});
+
+test('preview private-output primer only triggers one successful build per server session', async () => {
+  const calls = [];
+  const originalFetch = global.fetch;
+  global.fetch = async (input, init = {}) => {
+    calls.push({ url: String(input), headers: new Headers(init.headers || {}), method: init.method });
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+    });
+  };
+
+  try {
+    const prime = createPrivateOutputPrimer('http://127.0.0.1:8787', {}, 'build-secret');
+    assert.equal(await prime(), true);
+    assert.equal(await prime(), false);
+    assert.equal(await prime(), false);
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'http://127.0.0.1:8787/_preview/build');
+});
+
+test('preview manifest loader does not retrigger preview builds on every manifest read', async () => {
+  const calls = [];
+  const originalFetch = global.fetch;
+  global.fetch = async (input, init = {}) => {
+    const url = String(input);
+    calls.push({ url, method: init.method || 'GET', headers: new Headers(init.headers || {}) });
+
+    if (url.endsWith('/_preview/build')) {
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json; charset=utf-8' },
+      });
+    }
+
+    if (url.endsWith('/public/_manifest')) {
+      return new Response(JSON.stringify([{ route: '/public', hash: 'pub' }]), {
+        status: 200,
+        headers: { 'content-type': 'application/json; charset=utf-8' },
+      });
+    }
+
+    if (url.endsWith('/_manifest')) {
+      return new Response(JSON.stringify([{ route: '/account', hash: 'priv' }]), {
+        status: 200,
+        headers: { 'content-type': 'application/json; charset=utf-8' },
+      });
+    }
+
+    throw new Error(`unexpected fetch: ${url}`);
+  };
+
+  try {
+    const workerOrigin = 'http://127.0.0.1:8787';
+    const ensurePrivateOutputs = createPrivateOutputPrimer(workerOrigin, {}, 'build-secret');
+    const loadManifestForUi = createPreviewManifestLoader(
+      workerOrigin,
+      makeUiMeta(workerOrigin, { useIndexJson: false }),
+      {},
+      ensurePrivateOutputs
+    );
+
+    const first = await loadManifestForUi();
+    const second = await loadManifestForUi();
+    assert.equal(first.length, 2);
+    assert.equal(second.length, 2);
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  const previewBuildCalls = calls.filter((call) => call.url.endsWith('/_preview/build'));
+  assert.equal(previewBuildCalls.length, 1);
 });

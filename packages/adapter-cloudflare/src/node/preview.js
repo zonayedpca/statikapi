@@ -17,6 +17,8 @@ export async function startPreviewServer({
   const localEnv = await loadLocalEnv(cwd);
   const buildToken = await readBuildToken(cwd, localEnv);
   const uiMeta = await loadUiMeta(cwd, workerOrigin, localEnv);
+  const ensurePrivateOutputs = createPrivateOutputPrimer(workerOrigin, localEnv, buildToken);
+  const loadManifestForUi = createPreviewManifestLoader(workerOrigin, uiMeta, localEnv, ensurePrivateOutputs);
   const sseClients = new Set();
   let lastManifest = null;
   let pollTimer = null;
@@ -41,8 +43,7 @@ export async function startPreviewServer({
       }
 
       if (pathname === '/ui/index' && req.method === 'GET') {
-        await refreshPreviewPrivateOutputs(workerOrigin, localEnv, { buildToken }).catch(() => {});
-        const manifest = await fetchManifest(workerOrigin, uiMeta, localEnv);
+        const manifest = await loadManifestForUi();
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify(manifest));
         return;
@@ -227,6 +228,44 @@ export async function refreshPreviewPrivateOutputs(workerOrigin, localEnv = {}, 
   }
 
   return true;
+}
+
+export function createPrivateOutputPrimer(workerOrigin, localEnv = {}, buildToken = '') {
+  let primed = false;
+  let inFlight = null;
+
+  return async function ensurePrivateOutputs() {
+    if (primed) return false;
+    const token = buildToken || localEnv.STATIK_BUILD_TOKEN || process.env.STATIK_BUILD_TOKEN;
+    if (!token) {
+      primed = true;
+      return false;
+    }
+    if (inFlight) return inFlight;
+
+    inFlight = refreshPreviewPrivateOutputs(workerOrigin, localEnv, { buildToken: token })
+      .then((refreshed) => {
+        if (refreshed) primed = true;
+        return refreshed;
+      })
+      .finally(() => {
+        inFlight = null;
+      });
+
+    return inFlight;
+  };
+}
+
+export function createPreviewManifestLoader(
+  workerOrigin,
+  uiMeta = makeUiMeta(workerOrigin),
+  localEnv = {},
+  ensurePrivateOutputs = async () => false
+) {
+  return async function loadManifestForUi() {
+    await ensurePrivateOutputs();
+    return fetchManifest(workerOrigin, uiMeta, localEnv);
+  };
 }
 
 function privateAuthHeaderName(localEnv) {

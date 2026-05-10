@@ -114,7 +114,7 @@ It scaffolds a project for:
 
 - `wrangler.toml`
 - `statikapi.config.js`
-- `.dev.vars.example`
+- `.dev.vars`
 - `src-api/`
 - package scripts for `dev`, `build`, and `deploy`
 
@@ -186,7 +186,6 @@ Typical flow:
 ```bash
 cd my-worker
 pnpm install
-cp .dev.vars.example .dev.vars
 pnpm dev
 ```
 
@@ -206,6 +205,12 @@ The preview UI shows:
 - grouped visibility
 - preview JSON
 - copy-ready snippets
+
+Deploy notes for the scaffolded Cloudflare project:
+
+- `pnpm deploy` now runs the StatikAPI build before `wrangler deploy`
+- deployed Worker secrets still must be set in Cloudflare separately; local `.dev.vars` does not upload them by itself
+- if you set `STATIK_DEPLOY_ORIGIN` in `.dev.vars`, `pnpm deploy` can also seed private outputs right after deploy
 
 ---
 

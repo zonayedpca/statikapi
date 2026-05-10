@@ -46,7 +46,7 @@ test('scaffolds CLOUDFLARE template with static assets, private storage, config,
   }
 
   const pkg = JSON.parse(await fs.readFile(path.join(appDir, 'package.json'), 'utf8'));
-  assert.equal(pkg.scripts.deploy, 'wrangler deploy');
+  assert.equal(pkg.scripts.deploy, 'statikapi-cf deploy');
   assert.equal(pkg.scripts.dev, 'statikapi-cf dev --worker-port 8787 --port 8788');
   assert.equal(
     pkg.scripts.preview,
@@ -80,6 +80,7 @@ test('scaffolds CLOUDFLARE template with static assets, private storage, config,
   assert.match(envTemplate, /STATIK_BUILD_TOKEN=/);
   assert.match(envTemplate, /STATIK_PRIVATE_AUTH_HEADER_NAME=/);
   assert.match(envTemplate, /STATIK_PRIVATE_AUTH_HEADER_VALUE=/);
+  assert.match(envTemplate, /STATIK_DEPLOY_ORIGIN=/);
 
   t.after(async () => {
     await tmp.cleanup();

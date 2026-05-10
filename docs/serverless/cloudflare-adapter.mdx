@@ -360,6 +360,8 @@ or:
 wrangler deploy
 ```
 
+In the scaffolded project, `pnpm deploy` is the safer default because it runs the StatikAPI build first and can optionally seed private outputs after deploy if `STATIK_DEPLOY_ORIGIN` is configured.
+
 Deploying publishes:
 
 - Worker code
@@ -735,7 +737,6 @@ Those are application/runtime secrets, not Cloudflare deploy credentials.
 After filling in `wrangler.toml`, preparing `.dev.vars`, and setting the deployed Worker auth/build vars, the normal deployment flow is:
 
 ```bash
-pnpm build
 pnpm deploy
 ```
 
@@ -752,6 +753,12 @@ What this deploy does:
 - uploads the configured Static Assets directory
 - applies the Worker bindings and non-secret variables from `wrangler.toml`
 
+What `pnpm deploy` adds on top of raw `wrangler deploy`:
+
+- runs the StatikAPI build first so changed public Static Assets are fresh at deploy time
+- loads local deploy credentials from `.dev.vars` for the wrapper command
+- if `STATIK_DEPLOY_ORIGIN` is set, triggers a post-deploy `POST /` so private outputs are seeded immediately
+
 Before deploying, confirm:
 
 - the private R2 bucket already exists
@@ -762,6 +769,17 @@ Before deploying, confirm:
   - `STATIK_PRIVATE_AUTH_HEADER_NAME`
   - `STATIK_PRIVATE_AUTH_HEADER_VALUE`
 - your deploy token has the required permissions
+
+You can set those deployed Worker values either:
+
+- in the Cloudflare dashboard under Worker settings/secrets
+- or with Wrangler:
+
+```bash
+wrangler secret put STATIK_BUILD_TOKEN
+wrangler secret put STATIK_PRIVATE_AUTH_HEADER_NAME
+wrangler secret put STATIK_PRIVATE_AUTH_HEADER_VALUE
+```
 
 ### Short production checklist
 
@@ -782,11 +800,17 @@ Before your first production deploy:
    - `workers.dev` temporarily
    - or a Custom Domain such as `api.example.com`
 6. Confirm which routes must stay private because they need webhook-refreshable behavior.
-7. Run:
+7. Optionally set `STATIK_DEPLOY_ORIGIN=https://your-app.example.com` in `.dev.vars` if you want deploy to seed private outputs automatically.
+8. Run:
 
 ```bash
-pnpm build
 pnpm deploy
+```
+
+If you do not set `STATIK_DEPLOY_ORIGIN`, seed private outputs after deploy with:
+
+```bash
+pnpm exec statikapi-cf rebuild --worker https://your-app.example.com
 ```
 
 ### Add a custom domain

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { exec, spawn } from 'node:child_process';
 
 import { bundle } from '../src/node/bundle.js';
+import { triggerRemoteBuild } from '../src/node/deploy.js';
 import { loadLocalEnv, refreshPreviewPrivateOutputs, startPreviewServer } from '../src/node/preview.js';
 
 function parseArgs(argv) {
@@ -19,11 +20,12 @@ function parseArgs(argv) {
     port: 8788,
     workerOrigin: 'http://127.0.0.1:8787',
     workerPort: 8787,
+    routePath: '/',
     noOpen: false,
     pollMs: 750,
   };
 
-  if (argv[0] === 'preview' || argv[0] === 'dev') {
+  if (argv[0] === 'preview' || argv[0] === 'dev' || argv[0] === 'deploy' || argv[0] === 'rebuild') {
     out.command = argv[0];
     argv = argv.slice(1);
   }
@@ -38,6 +40,7 @@ function parseArgs(argv) {
     else if (a === '--port' && argv[i + 1]) out.port = Number(argv[++i]);
     else if (a === '--worker' && argv[i + 1]) out.workerOrigin = argv[++i];
     else if (a === '--worker-port' && argv[i + 1]) out.workerPort = Number(argv[++i]);
+    else if (a === '--route' && argv[i + 1]) out.routePath = argv[++i];
     else if (a === '--poll-ms' && argv[i + 1]) out.pollMs = Number(argv[++i]);
     else if (a === '--pretty') out.prettyDefault = true;
     else if (a === '--watch') out.watch = true;
@@ -48,6 +51,8 @@ function parseArgs(argv) {
           `  statikapi-cf [--src src-api] [--out dist/worker.mjs] [--public-out public] [--pretty] [--cwd DIR]\n` +
           `  statikapi-cf preview [--cwd DIR] [--host 127.0.0.1] [--port 8788] [--worker http://127.0.0.1:8787] [--no-open]\n` +
           `  statikapi-cf dev [--cwd DIR] [--src src-api] [--out dist/worker.mjs] [--public-out public] [--host 127.0.0.1] [--port 8788] [--worker-port 8787] [--poll-ms 750] [--no-open]\n` +
+          `  statikapi-cf deploy [--cwd DIR] [--src src-api] [--out dist/worker.mjs] [--public-out public] [--worker https://your-app.example.com]\n` +
+          `  statikapi-cf rebuild --worker https://your-app.example.com [--route /users/1] [--cwd DIR]\n` +
           `Auto-detects src from wrangler.toml [vars] STATIK_SRC and public assets directory from [assets].directory when present.`
       );
       process.exit(0);
@@ -108,6 +113,26 @@ function readTomlAssetsDirectory(toml) {
 async function runBuildOnce(options) {
   await bundle(options);
   console.log(`✔ worker emitted → ${path.relative(options.cwd, options.outFile)}`);
+}
+
+function spawnWranglerProcess(args, cwd, env = process.env) {
+  const child = spawn('wrangler', args, {
+    cwd,
+    env,
+    stdio: 'inherit',
+  });
+  child.on('error', (err) => {
+    console.error(err?.stack || err?.message || String(err));
+  });
+  return child;
+}
+
+async function runWrangler(args, cwd, env = process.env) {
+  const child = spawnWranglerProcess(args, cwd, env);
+  const code = await new Promise((resolve) => child.once('exit', (exitCode) => resolve(exitCode ?? 0)));
+  if (code !== 0) {
+    throw new Error(`wrangler ${args.join(' ')} exited with code ${code}`);
+  }
 }
 
 async function collectWatchState(root, srcDir) {
@@ -261,10 +286,7 @@ async function runDev({
   let restartChain = Promise.resolve();
 
   function spawnWrangler() {
-    const child = spawn('wrangler', ['dev', '--local', '--port', String(workerPort)], {
-      cwd: root,
-      stdio: 'inherit',
-    });
+    const child = spawnWranglerProcess(['dev', '--local', '--port', String(workerPort)], root);
     child.on('error', (err) => {
       if (shuttingDown) return;
       console.error(err?.stack || err?.message || String(err));
@@ -364,6 +386,50 @@ async function triggerPrivateRebuild(workerOrigin, buildToken, reason) {
   );
 }
 
+async function runDeploy({
+  root,
+  srcDir,
+  outFile,
+  publicOutDir,
+  prettyDefault,
+  useIndexJson,
+  workerOrigin,
+  buildToken,
+  env,
+}) {
+  await runBuildOnce({
+    cwd: root,
+    srcDir,
+    outFile,
+    publicOutDir,
+    prettyDefault,
+    useIndexJson,
+  });
+
+  await runWrangler(['deploy'], root, env);
+
+  if (!workerOrigin) {
+    console.log(
+      'statikapi-cf deploy → public assets were rebuilt and deployed. To seed private outputs now, run `statikapi-cf rebuild --worker https://your-app.example.com` or set `STATIK_DEPLOY_ORIGIN` in `.dev.vars` before deploy.'
+    );
+    return;
+  }
+
+  if (!buildToken) {
+    throw new Error(
+      'STATIK_BUILD_TOKEN is required to seed private outputs after deploy when STATIK_DEPLOY_ORIGIN or --worker is set'
+    );
+  }
+
+  await triggerRemoteBuild(workerOrigin, buildToken, '/');
+  console.log(`statikapi-cf deploy → seeded private outputs via ${workerOrigin}`);
+}
+
+async function runRemoteRebuild({ workerOrigin, buildToken, routePath = '/' }) {
+  await triggerRemoteBuild(workerOrigin, buildToken, routePath);
+  console.log(`statikapi-cf rebuild → triggered ${routePath} on ${workerOrigin}`);
+}
+
 (async function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -390,6 +456,10 @@ async function triggerPrivateRebuild(workerOrigin, buildToken, reason) {
     readTomlVar(wranglerToml, 'STATIK_BUILD_TOKEN') ||
     process.env.STATIK_BUILD_TOKEN ||
     '';
+  const workerOrigin =
+    args.workerOrigin || localEnv.STATIK_DEPLOY_ORIGIN || process.env.STATIK_DEPLOY_ORIGIN || '';
+  const routePath = args.routePath || process.env.STATIK_DEPLOY_ROUTE || '/';
+  const childEnv = { ...process.env, ...localEnv };
 
   try {
     if (args.command === 'preview') {
@@ -423,6 +493,29 @@ async function triggerPrivateRebuild(workerOrigin, buildToken, reason) {
         pollMs: Number.isFinite(args.pollMs) ? args.pollMs : 750,
         buildToken,
       });
+      return;
+    }
+
+    if (args.command === 'deploy') {
+      await runDeploy({
+        root,
+        srcDir,
+        outFile,
+        publicOutDir,
+        prettyDefault: args.prettyDefault,
+        useIndexJson,
+        workerOrigin,
+        buildToken,
+        env: childEnv,
+      });
+      return;
+    }
+
+    if (args.command === 'rebuild') {
+      if (!workerOrigin) {
+        throw new Error('Set --worker or STATIK_DEPLOY_ORIGIN before using `statikapi-cf rebuild`');
+      }
+      await runRemoteRebuild({ workerOrigin, buildToken, routePath });
       return;
     }
 

@@ -7,7 +7,7 @@
     "wrangler:dev": "wrangler dev --local",
     "preview": "statikapi-cf preview --worker http://127.0.0.1:8787 --port 8788",
     "dev": "statikapi-cf dev --worker-port 8787 --port 8788",
-    "deploy": "wrangler deploy"
+    "deploy": "statikapi-cf deploy"
   },
   "devDependencies": {
     "@statikapi/adapter-cf": "workspace:*",

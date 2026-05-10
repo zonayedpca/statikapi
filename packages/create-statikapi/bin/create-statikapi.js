@@ -920,6 +920,8 @@ CLOUDFLARE_API_TOKEN=${cloudflareApiToken}
 STATIK_BUILD_TOKEN=${buildToken}
 STATIK_PRIVATE_AUTH_HEADER_NAME=${privateAuthHeaderName}
 STATIK_PRIVATE_AUTH_HEADER_VALUE=${privateAuthHeaderValue}
+# Optional: set your deployed Worker/custom-domain origin to auto-seed private outputs after \`pnpm deploy\`
+STATIK_DEPLOY_ORIGIN=
 
 # Public route assets are generated into ./${assetsDir}
 # Private route data is stored in the configured R2 bucket, and the manifest lives in KV.

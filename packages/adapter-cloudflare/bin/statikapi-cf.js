@@ -4,7 +4,7 @@ import path from 'node:path';
 import { exec, spawn } from 'node:child_process';
 
 import { bundle } from '../src/node/bundle.js';
-import { triggerRemoteBuild } from '../src/node/deploy.js';
+import { seedRemoteBuild, triggerRemoteBuild } from '../src/node/deploy.js';
 import { loadLocalEnv, refreshPreviewPrivateOutputs, startPreviewServer } from '../src/node/preview.js';
 
 function parseArgs(argv) {
@@ -415,14 +415,22 @@ async function runDeploy({
     return;
   }
 
-  if (!buildToken) {
-    throw new Error(
-      'STATIK_BUILD_TOKEN is required to seed private outputs after deploy when STATIK_DEPLOY_ORIGIN or --worker is set'
-    );
+  const seeded = await seedRemoteBuild(workerOrigin, buildToken, '/');
+  if (seeded.seeded) {
+    console.log(`statikapi-cf deploy → seeded private outputs via ${workerOrigin}`);
+    return;
   }
 
-  await triggerRemoteBuild(workerOrigin, buildToken, '/');
-  console.log(`statikapi-cf deploy → seeded private outputs via ${workerOrigin}`);
+  if (seeded.skipped) {
+    console.warn(
+      `statikapi-cf deploy → skipped private output seeding: ${seeded.reason}. Set deployed Worker secrets in Cloudflare, then seed manually with \`statikapi-cf rebuild --worker ${workerOrigin}\`.`
+    );
+    return;
+  }
+
+  console.warn(
+    `statikapi-cf deploy → deployed successfully, but private output seeding failed (${seeded.error?.status || seeded.error?.message || 'unknown error'}). Set deployed Worker secrets in Cloudflare, then seed manually with \`statikapi-cf rebuild --worker ${workerOrigin}\`.`
+  );
 }
 
 async function runRemoteRebuild({ workerOrigin, buildToken, routePath = '/' }) {

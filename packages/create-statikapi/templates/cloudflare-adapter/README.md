@@ -22,7 +22,14 @@ This project uses **@statikapi/adapter-cf** to:
 - `pnpm build`
   One-off build: bundle worker to `dist/worker.mjs` and generate public Static Assets.
 - `pnpm deploy`
-  Build first, then deploy the Worker with `wrangler deploy`. If `STATIK_DEPLOY_ORIGIN` is set, this also seeds private outputs after deploy.
+  Build first, then deploy the Worker with `wrangler deploy`. If `STATIK_DEPLOY_ORIGIN` is set, this also tries to seed private outputs after deploy. Seeding is best-effort and will warn instead of failing the deploy if the Worker origin or deployed secrets are not ready yet.
+
+Git-connected deployments also work if you connect this repository in the Cloudflare dashboard. In that setup:
+
+- use `pnpm deploy` as the deploy command if you want the wrapper's build-first and best-effort seeding behavior
+- keep deploy credentials in Cloudflare's build/project secrets or deployment settings
+- keep runtime secrets configured on the deployed Worker separately
+- set `STATIK_DEPLOY_ORIGIN` to the final deployed Worker or custom domain if you want automatic post-deploy private seeding
 
 ## Files
 
@@ -102,6 +109,23 @@ For deploy automation, use a Cloudflare API token with only the permissions you 
 - Workers Scripts: Edit
 - R2 Storage: Edit
 - Workers KV Storage: Edit
+
+The deployed Worker also needs these runtime secrets in Cloudflare:
+
+- `STATIK_BUILD_TOKEN`
+- `STATIK_PRIVATE_AUTH_HEADER_NAME`
+- `STATIK_PRIVATE_AUTH_HEADER_VALUE`
+
+Set them either:
+
+- in the Cloudflare dashboard under the Worker secrets/settings UI
+- or with Wrangler:
+
+```bash
+wrangler secret put STATIK_BUILD_TOKEN
+wrangler secret put STATIK_PRIVATE_AUTH_HEADER_NAME
+wrangler secret put STATIK_PRIVATE_AUTH_HEADER_VALUE
+```
 
 Official Cloudflare docs:
 
@@ -249,6 +273,7 @@ Because `pnpm deploy` runs the StatikAPI build first, changed public Static Asse
 Private outputs after deploy:
 
 - if `STATIK_DEPLOY_ORIGIN` is set, `pnpm deploy` will also trigger `POST /` against that deployed Worker so private outputs are seeded immediately
+- if that seed step fails, `pnpm deploy` will still succeed and print a warning with the manual fallback command
 - if `STATIK_DEPLOY_ORIGIN` is not set, run this manually after deploy:
 
 ```bash

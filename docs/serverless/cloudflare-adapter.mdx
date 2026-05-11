@@ -728,6 +728,30 @@ Keep it separate from:
 
 Those are application/runtime secrets, not Cloudflare deploy credentials.
 
+### Git-connected deployments
+
+Cloudflare can also deploy a Worker from a connected Git repository through its build system. That path is useful if you want deployments to run on pushes instead of from your terminal or self-managed CI.
+
+For this repo, keep the same separation of responsibilities:
+
+- source code and `wrangler.toml` live in git
+- deploy credentials live in Cloudflare build/project secrets or deployment settings
+- runtime secrets live in the deployed Worker configuration
+- `STATIK_DEPLOY_ORIGIN` points at the final deployed Worker or custom domain if you want automatic post-deploy private-output seeding
+
+Recommended Git-connected setup:
+
+1. Connect the repository in the Cloudflare dashboard.
+2. Choose the branch you want to deploy.
+3. Set the deployment command to `pnpm deploy` if you want this wrapper's build-first and best-effort seed behavior.
+4. Make sure the deployment environment has the Cloudflare deploy credential and any build-time values the wrapper needs.
+5. Set the deployed Worker secrets separately for:
+   - `STATIK_BUILD_TOKEN`
+   - `STATIK_PRIVATE_AUTH_HEADER_NAME`
+   - `STATIK_PRIVATE_AUTH_HEADER_VALUE`
+
+If you prefer a simpler remote pipeline, you can use `wrangler deploy` as the deployment command and keep the StatikAPI build outside the Cloudflare build step. That works too, but then you must document the manual build and post-deploy seed steps yourself.
+
 ---
 
 ## 13) Deploy to Cloudflare and add a custom domain
@@ -757,7 +781,8 @@ What `pnpm deploy` adds on top of raw `wrangler deploy`:
 
 - runs the StatikAPI build first so changed public Static Assets are fresh at deploy time
 - loads local deploy credentials from `.dev.vars` for the wrapper command
-- if `STATIK_DEPLOY_ORIGIN` is set, triggers a post-deploy `POST /` so private outputs are seeded immediately
+- if `STATIK_DEPLOY_ORIGIN` is set, tries a post-deploy `POST /` so private outputs are seeded immediately
+- if that seed step cannot run or the deployed Worker is not ready yet, `pnpm deploy` still succeeds and prints a warning with the manual fallback command
 
 Before deploying, confirm:
 
@@ -780,6 +805,12 @@ wrangler secret put STATIK_BUILD_TOKEN
 wrangler secret put STATIK_PRIVATE_AUTH_HEADER_NAME
 wrangler secret put STATIK_PRIVATE_AUTH_HEADER_VALUE
 ```
+
+If you want the deploy wrapper to try seeding private outputs automatically after a deploy, also set:
+
+- `STATIK_DEPLOY_ORIGIN`
+
+in `.dev.vars` to the deployed Worker or custom-domain origin.
 
 ### Short production checklist
 

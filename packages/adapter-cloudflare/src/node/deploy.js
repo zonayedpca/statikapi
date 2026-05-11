@@ -27,9 +27,28 @@ export async function triggerRemoteBuild(workerOrigin, buildToken, routePath = '
   return true;
 }
 
+export async function seedRemoteBuild(workerOrigin, buildToken, routePath = '/') {
+  const origin = String(workerOrigin || '').replace(/\/+$/, '');
+  const token = String(buildToken || '');
+
+  if (!origin) {
+    return { seeded: false, skipped: true, reason: 'worker origin is required' };
+  }
+
+  if (!token) {
+    return { seeded: false, skipped: true, reason: 'STATIK_BUILD_TOKEN is required' };
+  }
+
+  try {
+    await triggerRemoteBuild(origin, token, routePath);
+    return { seeded: true, skipped: false };
+  } catch (error) {
+    return { seeded: false, skipped: false, error };
+  }
+}
+
 export function normalizeBuildRoutePath(routePath = '/') {
   const raw = String(routePath || '/').trim();
   if (!raw || raw === '/') return '/';
   return raw.startsWith('/') ? raw : '/' + raw;
 }
-

@@ -155,6 +155,7 @@ export async function data({ params }) { return { id: params.id, scope: 'private
     publicManifest.map((entry) => entry.route),
     ['/public', '/public/posts', '/public/posts/1']
   );
+  assert.equal(publicManifest.find((entry) => entry.route === '/public/posts/1').webhookAvailable, true);
 
   const manifestDenied = await worker.fetch(new Request('https://example.test/_manifest'), env);
   assert.equal(manifestDenied.status, 403);
@@ -170,6 +171,8 @@ export async function data({ params }) { return { id: params.id, scope: 'private
     manifest.map((entry) => entry.route),
     ['/account']
   );
+  assert.equal(manifest[0].webhookAvailable, true);
+  assert.equal(manifest[0].webhookRoute, '/account');
 
   const publicRes = await worker.fetch(new Request('https://example.test/public/posts/1'), env);
   assert.equal(publicRes.status, 200);
@@ -245,6 +248,44 @@ export async function data({ params }) { return { id: params.id, scope: 'private
     (await targetedCollection.json()).error,
     /Public routes are emitted as static assets/
   );
+});
+
+test('public manifest entries expose webhook availability and source route metadata', async () => {
+  const cwd = await makeProject({
+    'statikapi.config.js': `export default {
+  cloudflare: {
+    webhook: true,
+    publicByDefault: true,
+  },
+};`,
+    'src-api/users/[id].js': `export const config = { cloudflare: { public: true, webhook: false } };
+export async function paths() { return ['1']; }
+export default function data({ params }) { return { id: params.id, scope: 'public-user' }; }`,
+  });
+
+  const worker = await loadWorker(cwd);
+  const env = makeEnv(cwd);
+
+  const buildRes = await worker.fetch(
+    new Request('https://example.test/', {
+      method: 'POST',
+      headers: { authorization: 'Bearer build-secret' },
+      body: JSON.stringify({}),
+    }),
+    env
+  );
+  assert.equal(buildRes.status, 200);
+
+  const publicManifestRes = await worker.fetch(
+    new Request('https://example.test/public/_manifest'),
+    env
+  );
+  assert.equal(publicManifestRes.status, 200);
+  const publicManifest = await publicManifestRes.json();
+  const userEntry = publicManifest.find((entry) => entry.route === '/public/users/1');
+  assert.ok(userEntry);
+  assert.equal(userEntry.webhookAvailable, false);
+  assert.equal(userEntry.webhookRoute, '/users/:id');
 });
 
 test('targeted private webhook rebuild updates stored private output', async () => {
@@ -375,6 +416,8 @@ test('rebundling picks up edited route module contents', async () => {
   assert.equal(publicManifest.length, 1);
   assert.equal(publicManifest[0].route, '/public');
   assert.equal(publicManifest[0].srcRoute, '/');
+  assert.equal(publicManifest[0].webhookAvailable, true);
+  assert.equal(publicManifest[0].webhookRoute, '/');
   assert.equal(publicManifest[0].filePath, 'public/index.json');
   assert.equal(publicManifest[0].public, true);
   assert.equal(typeof publicManifest[0].hash, 'string');

@@ -329,10 +329,12 @@ async function textHash(text) {
   return createHash('sha256').update(text).digest('hex');
 }
 
-function publicManifestEntryFor(sourceRoute, concreteRoute, filePath, body) {
+function publicManifestEntryFor(sourceRoute, concreteRoute, filePath, body, policy) {
   return {
     route: concreteRoute === '/' ? '/public' : '/public' + concreteRoute,
     srcRoute: sourceRoute,
+    webhookAvailable: policy?.webhook === true,
+    webhookRoute: sourceRoute,
     filePath,
     bytes: new TextEncoder().encode(body).length,
     mtime: Date.now(),
@@ -361,7 +363,7 @@ async function emitPublicAssets({ cwd, entries, outDir, projectConfig, useIndexJ
       await fs.mkdir(path.dirname(target), { recursive: true });
       await fs.writeFile(target, body, 'utf8');
 
-      const manifestEntry = publicManifestEntryFor(entry.route, output.route, displayKey, body);
+      const manifestEntry = publicManifestEntryFor(entry.route, output.route, displayKey, body, policy);
       manifestEntry.hash = await textHash(body);
       const owner = owners.get(manifestEntry.route);
       if (owner && owner !== manifestEntry.srcRoute) {
@@ -969,6 +971,8 @@ const WORKER_RUNTIME_JS = `
     return {
       route: exposedRouteFor(concreteRoute, policy.public),
       srcRoute: sourceRoute,
+      webhookAvailable: policy.webhook === true,
+      webhookRoute: sourceRoute,
       filePath: written.key,
       bytes: written.bytes,
       mtime: Date.now(),

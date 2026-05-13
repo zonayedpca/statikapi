@@ -212,6 +212,7 @@ Deploy notes for the scaffolded Cloudflare project:
 - deployed Worker secrets still must be set in Cloudflare separately; local `.dev.vars` does not upload them by itself
 - if you need to seed private outputs after deploy, send a manual `POST` to `YOUR_WORKER_URL/` with `Authorization: Bearer YOUR_STATIK_BUILD_TOKEN`
 - if you connect the repo to Cloudflare Git-based deployments, keep the same split between deployment credentials, build-time values, and deployed Worker secrets
+- the Cloudflare manifest also carries `srcRoute`, `webhookAvailable`, and `webhookRoute` for each entry
 
 ---
 

@@ -42,6 +42,12 @@ This page documents the **current shipped behavior** in this repo.
   - `GET /_manifest`
   - requires the private auth header
 
+Manifest entries include route metadata from the source route:
+
+- `srcRoute` records the original route pattern
+- `webhookAvailable` is `true` when that route can be refreshed by webhook POSTs
+- `webhookRoute` repeats the source route that webhook POSTs target
+
 ### Webhook rebuilds
 
 - `POST /`

@@ -9,6 +9,12 @@ This project uses **@statikapi/adapter-cf** to:
 - Store a manifest and runtime limit counters in KV
 - Trigger rebuilds via authenticated `POST` webhooks on route paths
 
+The generated manifest entries include:
+
+- `srcRoute`
+- `webhookAvailable`
+- `webhookRoute`
+
 ## Commands
 
 - `pnpm dev`  

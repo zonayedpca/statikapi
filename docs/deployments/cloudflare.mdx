@@ -147,8 +147,6 @@ That assumes:
 - the KV namespace already exists
 - your deploy token has the correct Cloudflare permissions
 
-If `STATIK_DEPLOY_ORIGIN` is set, `pnpm deploy` also tries to seed private outputs after deploy. That step is best-effort and will warn instead of failing if the deployed Worker is not ready yet or the required deployed secrets have not been added.
-
 The deployed Worker secrets still need to be set separately in Cloudflare:
 
 - `STATIK_BUILD_TOKEN`
@@ -163,6 +161,15 @@ wrangler secret put STATIK_PRIVATE_AUTH_HEADER_NAME
 wrangler secret put STATIK_PRIVATE_AUTH_HEADER_VALUE
 ```
 
+If you need to seed private outputs after deploy, do it manually with any HTTP client against your deployed Worker:
+
+```bash
+curl -X POST "YOUR_WORKER_URL/" \
+  -H "Authorization: Bearer YOUR_STATIK_BUILD_TOKEN"
+```
+
+Use `STATIK_BUILD_TOKEN` for that POST request. `STATIK_PRIVATE_AUTH_HEADER_NAME` and `STATIK_PRIVATE_AUTH_HEADER_VALUE` are for private reads, not for the seed POST.
+
 ### Git-connected deployments
 
 Cloudflare also supports deploying a Worker from a connected Git repository. That is a valid deployment shape for this adapter, as long as you keep the same split between deployment credentials and runtime secrets.
@@ -171,14 +178,14 @@ Recommended setup:
 
 1. Connect the repository in the Cloudflare dashboard.
 2. Choose the branch you want Cloudflare to deploy.
-3. Use `pnpm deploy` as the deployment command if you want the wrapper's build-first behavior and best-effort post-deploy seeding.
+3. Use `pnpm deploy` as the deployment command if you want the wrapper's build-first behavior.
 4. Set the Cloudflare deploy credential and any build-time values in the Git-connected deployment environment.
 5. Set the deployed Worker secrets separately for:
    - `STATIK_BUILD_TOKEN`
    - `STATIK_PRIVATE_AUTH_HEADER_NAME`
    - `STATIK_PRIVATE_AUTH_HEADER_VALUE`
 
-If you prefer not to use the wrapper in Cloudflare's build pipeline, you can use `wrangler deploy` directly and run `pnpm build` or another build step separately. In that case, document the post-deploy private seeding step yourself.
+If you prefer not to use the wrapper in Cloudflare's build pipeline, you can use `wrangler deploy` directly and run `pnpm build` or another build step separately. In that case, keep the same manual private seeding instructions in your runbook.
 
 For custom domains, Cloudflare's recommended path is a Worker **Custom Domain**:
 

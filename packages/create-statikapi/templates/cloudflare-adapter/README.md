@@ -22,14 +22,14 @@ This project uses **@statikapi/adapter-cf** to:
 - `pnpm build`
   One-off build: bundle worker to `dist/worker.mjs` and generate public Static Assets.
 - `pnpm deploy`
-  Build first, then deploy the Worker with `wrangler deploy`. If `STATIK_DEPLOY_ORIGIN` is set, this also tries to seed private outputs after deploy. Seeding is best-effort and will warn instead of failing the deploy if the Worker origin or deployed secrets are not ready yet.
+  Build first, then deploy the Worker with `wrangler deploy`. If you need private outputs refreshed after deploy, send a manual `POST` to your deployed Worker with `Authorization: Bearer YOUR_STATIK_BUILD_TOKEN`.
 
 Git-connected deployments also work if you connect this repository in the Cloudflare dashboard. In that setup:
 
-- use `pnpm deploy` as the deploy command if you want the wrapper's build-first and best-effort seeding behavior
+- use `pnpm deploy` as the deploy command if you want the wrapper's build-first behavior
 - keep deploy credentials in Cloudflare's build/project secrets or deployment settings
 - keep runtime secrets configured on the deployed Worker separately
-- set `STATIK_DEPLOY_ORIGIN` to the final deployed Worker or custom domain if you want automatic post-deploy private seeding
+- set `STATIK_DEPLOY_ORIGIN` to the final deployed Worker or custom domain if you want a saved origin for manual seeding
 
 ## Files
 
@@ -255,7 +255,7 @@ Always verify the current numbers before launch:
    - `STATIK_BUILD_TOKEN`
    - `STATIK_PRIVATE_AUTH_HEADER_NAME`
    - `STATIK_PRIVATE_AUTH_HEADER_VALUE`
-5. Optional: set `STATIK_DEPLOY_ORIGIN` in `.dev.vars` if you want `pnpm deploy` to seed private outputs automatically after deploy.
+5. Optional: set `STATIK_DEPLOY_ORIGIN` in `.dev.vars` if you want to keep the deployed origin handy for manual seeding.
 6. Deploy:
 
 ```bash
@@ -272,12 +272,13 @@ Because `pnpm deploy` runs the StatikAPI build first, changed public Static Asse
 
 Private outputs after deploy:
 
-- if `STATIK_DEPLOY_ORIGIN` is set, `pnpm deploy` will also trigger `POST /` against that deployed Worker so private outputs are seeded immediately
-- if that seed step fails, `pnpm deploy` will still succeed and print a warning with the manual fallback command
-- if `STATIK_DEPLOY_ORIGIN` is not set, run this manually after deploy:
+- if you need to seed private outputs after deploy, use a manual `POST /` against the deployed Worker
+- `STATIK_DEPLOY_ORIGIN` is only a convenience value for that manual step, not an automatic seeding switch
+- if you do not know the deployed origin from memory, use the placeholder pattern below and substitute your real Worker URL:
 
 ```bash
-pnpm exec statikapi-cf rebuild --worker https://your-app.example.com
+curl -X POST "YOUR_WORKER_URL/" \
+  -H "Authorization: Bearer YOUR_STATIK_BUILD_TOKEN"
 ```
 
 Short production checklist:
@@ -290,7 +291,7 @@ Short production checklist:
    - `STATIK_PRIVATE_AUTH_HEADER_NAME`
    - `STATIK_PRIVATE_AUTH_HEADER_VALUE`
 5. Decide which routes must stay private because they need webhook-refreshable behavior.
-6. Optionally set `STATIK_DEPLOY_ORIGIN` in `.dev.vars` so deploy also seeds private outputs.
+6. Optionally set `STATIK_DEPLOY_ORIGIN` in `.dev.vars` so the deployed origin is easy to reuse in your manual seed command.
 7. Run `pnpm deploy`.
 
 ## Adding a custom domain

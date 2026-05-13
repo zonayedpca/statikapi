@@ -27,6 +27,21 @@ export async function triggerRemoteBuild(workerOrigin, buildToken, routePath = '
   return true;
 }
 
+export function formatManualSeedInstructions(workerUrl = 'YOUR_WORKER_URL') {
+  const origin = String(workerUrl || '').trim() || 'YOUR_WORKER_URL';
+  return [
+    'To seed private outputs manually, send a POST request to your deployed Worker.',
+    '',
+    'Example:',
+    '',
+    `curl -X POST "${origin}/" \\`,
+    '  -H "Authorization: Bearer YOUR_STATIK_BUILD_TOKEN"',
+    '',
+    'Use `STATIK_BUILD_TOKEN` for this POST request.',
+    '`STATIK_PRIVATE_AUTH_HEADER_NAME` and `STATIK_PRIVATE_AUTH_HEADER_VALUE` are for private reads, not for seeding.',
+  ].join('\n');
+}
+
 export async function seedRemoteBuild(workerOrigin, buildToken, routePath = '/') {
   const origin = String(workerOrigin || '').replace(/\/+$/, '');
   const token = String(buildToken || '');

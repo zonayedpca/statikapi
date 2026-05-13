@@ -4,7 +4,7 @@ import path from 'node:path';
 import { exec, spawn } from 'node:child_process';
 
 import { bundle } from '../src/node/bundle.js';
-import { seedRemoteBuild, triggerRemoteBuild } from '../src/node/deploy.js';
+import { formatManualSeedInstructions, triggerRemoteBuild } from '../src/node/deploy.js';
 import { loadLocalEnv, refreshPreviewPrivateOutputs, startPreviewServer } from '../src/node/preview.js';
 
 function parseArgs(argv) {
@@ -51,7 +51,7 @@ function parseArgs(argv) {
           `  statikapi-cf [--src src-api] [--out dist/worker.mjs] [--public-out public] [--pretty] [--cwd DIR]\n` +
           `  statikapi-cf preview [--cwd DIR] [--host 127.0.0.1] [--port 8788] [--worker http://127.0.0.1:8787] [--no-open]\n` +
           `  statikapi-cf dev [--cwd DIR] [--src src-api] [--out dist/worker.mjs] [--public-out public] [--host 127.0.0.1] [--port 8788] [--worker-port 8787] [--poll-ms 750] [--no-open]\n` +
-          `  statikapi-cf deploy [--cwd DIR] [--src src-api] [--out dist/worker.mjs] [--public-out public] [--worker https://your-app.example.com]\n` +
+          `  statikapi-cf deploy [--cwd DIR] [--src src-api] [--out dist/worker.mjs] [--public-out public]\n` +
           `  statikapi-cf rebuild --worker https://your-app.example.com [--route /users/1] [--cwd DIR]\n` +
           `Auto-detects src from wrangler.toml [vars] STATIK_SRC and public assets directory from [assets].directory when present.`
       );
@@ -393,8 +393,6 @@ async function runDeploy({
   publicOutDir,
   prettyDefault,
   useIndexJson,
-  workerOrigin,
-  buildToken,
   env,
 }) {
   await runBuildOnce({
@@ -408,28 +406,8 @@ async function runDeploy({
 
   await runWrangler(['deploy'], root, env);
 
-  if (!workerOrigin) {
-    console.log(
-      'statikapi-cf deploy → public assets were rebuilt and deployed. To seed private outputs now, run `statikapi-cf rebuild --worker https://your-app.example.com` or set `STATIK_DEPLOY_ORIGIN` in `.dev.vars` before deploy.'
-    );
-    return;
-  }
-
-  const seeded = await seedRemoteBuild(workerOrigin, buildToken, '/');
-  if (seeded.seeded) {
-    console.log(`statikapi-cf deploy → seeded private outputs via ${workerOrigin}`);
-    return;
-  }
-
-  if (seeded.skipped) {
-    console.warn(
-      `statikapi-cf deploy → skipped private output seeding: ${seeded.reason}. Set deployed Worker secrets in Cloudflare, then seed manually with \`statikapi-cf rebuild --worker ${workerOrigin}\`.`
-    );
-    return;
-  }
-
-  console.warn(
-    `statikapi-cf deploy → deployed successfully, but private output seeding failed (${seeded.error?.status || seeded.error?.message || 'unknown error'}). Set deployed Worker secrets in Cloudflare, then seed manually with \`statikapi-cf rebuild --worker ${workerOrigin}\`.`
+  console.log(
+    `statikapi-cf deploy → public assets were rebuilt and deployed.\n\n${formatManualSeedInstructions()}`
   );
 }
 
@@ -512,8 +490,6 @@ async function runRemoteRebuild({ workerOrigin, buildToken, routePath = '/' }) {
         publicOutDir,
         prettyDefault: args.prettyDefault,
         useIndexJson,
-        workerOrigin,
-        buildToken,
         env: childEnv,
       });
       return;

@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { normalizeBuildRoutePath, seedRemoteBuild, triggerRemoteBuild } from '../src/node/deploy.js';
+import {
+  formatManualSeedInstructions,
+  normalizeBuildRoutePath,
+  seedRemoteBuild,
+  triggerRemoteBuild,
+} from '../src/node/deploy.js';
 
 test('normalizeBuildRoutePath keeps root and normalizes leading slashes', () => {
   assert.equal(normalizeBuildRoutePath('/'), '/');
@@ -38,6 +43,14 @@ test('seedRemoteBuild skips missing deploy secrets without throwing', async () =
   assert.equal(seeded.seeded, false);
   assert.equal(seeded.skipped, true);
   assert.match(seeded.reason, /STATIK_BUILD_TOKEN/);
+});
+
+test('formatManualSeedInstructions keeps the manual seed guidance generic', () => {
+  const instructions = formatManualSeedInstructions();
+  assert.match(instructions, /YOUR_WORKER_URL/);
+  assert.match(instructions, /Authorization: Bearer YOUR_STATIK_BUILD_TOKEN/);
+  assert.match(instructions, /STATIK_PRIVATE_AUTH_HEADER_NAME/);
+  assert.match(instructions, /STATIK_PRIVATE_AUTH_HEADER_VALUE/);
 });
 
 test('seedRemoteBuild reports remote build failures without throwing', async () => {

@@ -143,7 +143,11 @@ test('preview helper triggers local private-output build with build token', asyn
   const calls = [];
   const originalFetch = global.fetch;
   global.fetch = async (input, init = {}) => {
-    calls.push({ url: String(input), headers: new Headers(init.headers || {}), method: init.method });
+    calls.push({
+      url: String(input),
+      headers: new Headers(init.headers || {}),
+      method: init.method,
+    });
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
       headers: { 'content-type': 'application/json; charset=utf-8' },
@@ -171,7 +175,11 @@ test('preview private-output primer only triggers one successful build per serve
   const calls = [];
   const originalFetch = global.fetch;
   global.fetch = async (input, init = {}) => {
-    calls.push({ url: String(input), headers: new Headers(init.headers || {}), method: init.method });
+    calls.push({
+      url: String(input),
+      headers: new Headers(init.headers || {}),
+      method: init.method,
+    });
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
       headers: { 'content-type': 'application/json; charset=utf-8' },

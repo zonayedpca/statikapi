@@ -155,7 +155,10 @@ export async function data({ params }) { return { id: params.id, scope: 'private
     publicManifest.map((entry) => entry.route),
     ['/public', '/public/posts', '/public/posts/1']
   );
-  assert.equal(publicManifest.find((entry) => entry.route === '/public/posts/1').webhookAvailable, true);
+  assert.equal(
+    publicManifest.find((entry) => entry.route === '/public/posts/1').webhookAvailable,
+    true
+  );
 
   const manifestDenied = await worker.fetch(new Request('https://example.test/_manifest'), env);
   assert.equal(manifestDenied.status, 403);
@@ -495,7 +498,10 @@ export default { scope: 'private-account' };`,
   assert.equal(publicRoute.status, 200);
   assert.equal((await publicRoute.json()).scope, 'public-post');
 
-  const publicCollection = await worker.fetch(new Request('https://example.test/public/posts'), env);
+  const publicCollection = await worker.fetch(
+    new Request('https://example.test/public/posts'),
+    env
+  );
   assert.equal(publicCollection.status, 200);
   assert.deepEqual(await publicCollection.json(), [{ id: '1' }]);
 

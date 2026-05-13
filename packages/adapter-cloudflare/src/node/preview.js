@@ -18,7 +18,12 @@ export async function startPreviewServer({
   const buildToken = await readBuildToken(cwd, localEnv);
   const uiMeta = await loadUiMeta(cwd, workerOrigin, localEnv);
   const ensurePrivateOutputs = createPrivateOutputPrimer(workerOrigin, localEnv, buildToken);
-  const loadManifestForUi = createPreviewManifestLoader(workerOrigin, uiMeta, localEnv, ensurePrivateOutputs);
+  const loadManifestForUi = createPreviewManifestLoader(
+    workerOrigin,
+    uiMeta,
+    localEnv,
+    ensurePrivateOutputs
+  );
   const sseClients = new Set();
   let lastManifest = null;
   let pollTimer = null;
@@ -210,7 +215,8 @@ export async function fetchRoute(workerOrigin, route, localEnv, options = {}) {
 }
 
 export async function refreshPreviewPrivateOutputs(workerOrigin, localEnv = {}, options = {}) {
-  const buildToken = options.buildToken || localEnv.STATIK_BUILD_TOKEN || process.env.STATIK_BUILD_TOKEN;
+  const buildToken =
+    options.buildToken || localEnv.STATIK_BUILD_TOKEN || process.env.STATIK_BUILD_TOKEN;
   if (!buildToken) return false;
 
   const res = await fetch(new URL('/_preview/build', workerOrigin), {
@@ -300,9 +306,7 @@ async function readBuildToken(cwd, localEnv = {}) {
   const wranglerPath = path.join(cwd, 'wrangler.toml');
   try {
     const raw = await fs.readFile(wranglerPath, 'utf8');
-    return (
-      readTomlVar(raw, 'STATIK_BUILD_TOKEN') || process.env.STATIK_BUILD_TOKEN || ''
-    );
+    return readTomlVar(raw, 'STATIK_BUILD_TOKEN') || process.env.STATIK_BUILD_TOKEN || '';
   } catch {
     return process.env.STATIK_BUILD_TOKEN || '';
   }

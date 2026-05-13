@@ -363,7 +363,13 @@ async function emitPublicAssets({ cwd, entries, outDir, projectConfig, useIndexJ
       await fs.mkdir(path.dirname(target), { recursive: true });
       await fs.writeFile(target, body, 'utf8');
 
-      const manifestEntry = publicManifestEntryFor(entry.route, output.route, displayKey, body, policy);
+      const manifestEntry = publicManifestEntryFor(
+        entry.route,
+        output.route,
+        displayKey,
+        body,
+        policy
+      );
       manifestEntry.hash = await textHash(body);
       const owner = owners.get(manifestEntry.route);
       if (owner && owner !== manifestEntry.srcRoute) {

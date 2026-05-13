@@ -5,7 +5,11 @@ import { exec, spawn } from 'node:child_process';
 
 import { bundle } from '../src/node/bundle.js';
 import { formatManualSeedInstructions, triggerRemoteBuild } from '../src/node/deploy.js';
-import { loadLocalEnv, refreshPreviewPrivateOutputs, startPreviewServer } from '../src/node/preview.js';
+import {
+  loadLocalEnv,
+  refreshPreviewPrivateOutputs,
+  startPreviewServer,
+} from '../src/node/preview.js';
 
 function parseArgs(argv) {
   const out = {
@@ -129,7 +133,9 @@ function spawnWranglerProcess(args, cwd, env = process.env) {
 
 async function runWrangler(args, cwd, env = process.env) {
   const child = spawnWranglerProcess(args, cwd, env);
-  const code = await new Promise((resolve) => child.once('exit', (exitCode) => resolve(exitCode ?? 0)));
+  const code = await new Promise((resolve) =>
+    child.once('exit', (exitCode) => resolve(exitCode ?? 0))
+  );
   if (code !== 0) {
     throw new Error(`wrangler ${args.join(' ')} exited with code ${code}`);
   }

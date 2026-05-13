@@ -261,8 +261,8 @@ Always verify the current numbers before launch:
    - `STATIK_BUILD_TOKEN`
    - `STATIK_PRIVATE_AUTH_HEADER_NAME`
    - `STATIK_PRIVATE_AUTH_HEADER_VALUE`
-5. Optional: set `STATIK_DEPLOY_ORIGIN` in `.dev.vars` if you want to keep the deployed origin handy for manual seeding.
-6. Deploy:
+6. Optional: set `STATIK_DEPLOY_ORIGIN` in `.dev.vars` if you want to keep the deployed origin handy for manual seeding.
+7. Deploy:
 
 ```bash
 pnpm deploy

@@ -4,7 +4,10 @@ import assert from 'node:assert/strict';
 import { endpointUrl, makeSnippets } from '../src/lib/snippets.js';
 
 test('endpointUrl keeps classic CLI routes on index.json paths', () => {
-  assert.equal(endpointUrl('/posts', { meta: { origin: 'http://127.0.0.1:3000' } }), 'http://127.0.0.1:3000/posts/index.json');
+  assert.equal(
+    endpointUrl('/posts', { meta: { origin: 'http://127.0.0.1:3000' } }),
+    'http://127.0.0.1:3000/posts/index.json'
+  );
 });
 
 test('Cloudflare snippets use extensionless public and private URLs when useIndexJson is false', () => {

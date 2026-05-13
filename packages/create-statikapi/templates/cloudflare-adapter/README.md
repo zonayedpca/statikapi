@@ -28,7 +28,7 @@ The generated manifest entries include:
 - `pnpm build`
   One-off build: bundle worker to `dist/worker.mjs` and generate public Static Assets.
 - `pnpm deploy`
-  Build first, then deploy the Worker with `wrangler deploy`. If you need private outputs refreshed after deploy, send a manual `POST` to your deployed Worker with `Authorization: Bearer YOUR_STATIK_BUILD_TOKEN`.
+  Build first, then deploy the Worker with `wrangler deploy`. If you need private outputs refreshed after deploy, send a manual `POST` to your deployed Worker with `Authorization: Bearer YOUR_STATIK_BUILD_TOKEN`. Make sure the deployed Worker has the same secrets as your local `.dev.vars` by setting `STATIK_BUILD_TOKEN`, `STATIK_PRIVATE_AUTH_HEADER_NAME`, and `STATIK_PRIVATE_AUTH_HEADER_VALUE` in Wrangler or the Cloudflare dashboard.
 
 Git-connected deployments also work if you connect this repository in the Cloudflare dashboard. In that setup:
 

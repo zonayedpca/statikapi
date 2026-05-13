@@ -851,6 +851,8 @@ curl -X POST "YOUR_WORKER_URL/" \
   -H "Authorization: Bearer YOUR_STATIK_BUILD_TOKEN"
 ```
 
+Make sure the deployed Worker has the same secrets as your local `.dev.vars` by setting `STATIK_BUILD_TOKEN`, `STATIK_PRIVATE_AUTH_HEADER_NAME`, and `STATIK_PRIVATE_AUTH_HEADER_VALUE` in Wrangler or the Cloudflare dashboard.
+
 ### Add a custom domain
 
 For production, Cloudflare recommends using a **Custom Domain** or route instead of relying only on the `workers.dev` hostname.

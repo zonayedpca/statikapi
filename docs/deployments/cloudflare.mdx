@@ -169,6 +169,7 @@ curl -X POST "YOUR_WORKER_URL/" \
 ```
 
 Use `STATIK_BUILD_TOKEN` for that POST request. `STATIK_PRIVATE_AUTH_HEADER_NAME` and `STATIK_PRIVATE_AUTH_HEADER_VALUE` are for private reads, not for the seed POST.
+Make sure the deployed Worker has the same secrets as your local `.dev.vars` by setting `STATIK_BUILD_TOKEN`, `STATIK_PRIVATE_AUTH_HEADER_NAME`, and `STATIK_PRIVATE_AUTH_HEADER_VALUE` in Wrangler or the Cloudflare dashboard.
 
 ### Git-connected deployments
 

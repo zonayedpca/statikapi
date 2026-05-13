@@ -57,6 +57,7 @@ test('formatManualSeedInstructions keeps the manual seed guidance generic', () =
   const instructions = formatManualSeedInstructions();
   assert.match(instructions, /YOUR_WORKER_URL/);
   assert.match(instructions, /Authorization: Bearer YOUR_STATIK_BUILD_TOKEN/);
+  assert.match(instructions, /wrangler secret put STATIK_BUILD_TOKEN/);
   assert.match(instructions, /STATIK_PRIVATE_AUTH_HEADER_NAME/);
   assert.match(instructions, /STATIK_PRIVATE_AUTH_HEADER_VALUE/);
 });

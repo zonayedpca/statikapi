@@ -27,6 +27,15 @@
     ]
   },
   {
+    "title": "Serverless Adapters",
+    "children": [
+      {
+        "title": "Cloudflare Worker + Static Assets Adapter",
+        "slug": "serverless/cloudflare-adapter"
+      }
+    ]
+  },
+  {
     "title": "Routes",
     "children": [
       {

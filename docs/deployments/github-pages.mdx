@@ -1,17 +1,28 @@
 # GitHub Pages
 
-GitHub Pages can serve JSON files just like regular static assets.
+GitHub Pages can serve the generated `api-out/` folder as static files.
+
+The current GitHub Pages flow is either:
+
+- publish from a configured branch and folder
+- or use a GitHub Actions workflow, which is the more flexible option for compiled output
 
 ---
 
 ## Manual Deployment
 
-You can manually commit and push your `api-out/` directory to a branch or folder used by GitHub Pages.
+If you use branch publishing, configure GitHub Pages to deploy from a branch and either the repository root or a `/docs` folder.
+
+For a simple static output branch, you can push the generated files to a dedicated Pages branch:
 
 ```bash
-git add api-out
-git commit -m "Add API output"
-git subtree push --prefix api-out origin gh-pages
+git checkout --orphan gh-pages
+git rm -rf .
+cp -R api-out/. .
+touch .nojekyll
+git add .
+git commit -m "Publish API output"
+git push origin gh-pages
 ```
 
 Your endpoints will be publicly accessible at:
@@ -24,46 +35,59 @@ https://username.github.io/repo-name/users/1/index.json
 
 ## Git Integration
 
-GitHub Pages automatically builds and serves content from specific branches (`gh-pages`, `master`, `main`, or `docs/` folders depending on settings).  
-Once your repository is configured for Pages, any push to the target branch will trigger an automatic redeploy of your static JSON API.
+GitHub Pages now supports either a publishing source or a custom GitHub Actions workflow.
+
+If you choose branch publishing, GitHub lets you select any branch as the source and either the repository root or a `/docs` folder as the publishing folder. Every push to that source republishes the site.
 
 ---
 
 ## Automation with GitHub Actions
 
-You can automate your StatikAPI build and deployment using **GitHub Actions**.
+For compiled output, the current recommended flow is GitHub Actions.
 
-Example workflow snippet:
+Example workflow:
 
 ```yaml
-name: Deploy StatikAPI
+name: Deploy StatikAPI to GitHub Pages
 on:
   push:
-    branches: [master]
+    branches: [main]
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: npm ci
+      - uses: actions/checkout@v6
+      - uses: actions/configure-pages@v5
       - name: Build API
         run: npx statikapi build
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./api-out
+          path: ./api-out
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 ```
 
-This workflow ensures that every commit to your chosen deployment branch automatically rebuilds and deploys your JSON endpoints to GitHub Pages.
+This workflow builds `api-out/`, uploads it as a Pages artifact, and deploys it with the official Pages actions.
 
 ---
 
 ## Considerations
 
 - Best for **small APIs**, demos, and documentation datasets.
-- GitHub Pages has limited bandwidth and file size per repository.
+- GitHub Pages has a recommended source repository limit of 1 GB, a published site limit of 1 GB, and a 10-minute deploy timeout.
+- A custom GitHub Actions workflow does not count against the normal Pages build-per-hour limit.
 - For **larger or dynamic datasets**, consider using **Cloudflare R2**, **Amazon S3**, or another CDN-backed object storage.
-- You can also host your APIs directly with **StatikAPI Cloud** _(coming soon)_ — a managed hosting platform with automatic builds, caching, and versioned JSON hosting.  
-  [Join the waitlist](#subscription) for early access.
+- You can also host your APIs directly with **StatikAPI Cloud** _(coming soon)_ — a managed hosting platform with automatic builds, caching, and versioned JSON hosting.

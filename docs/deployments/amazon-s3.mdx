@@ -2,6 +2,8 @@
 
 Amazon S3 is a solid option for large or enterprise‑grade static JSON APIs, especially when paired with **CloudFront** for global CDN delivery.
 
+For public access, remember that new S3 buckets block public access by default, so you need an explicit bucket policy and public access settings if you expose the objects directly.
+
 ---
 
 ## Using the AWS CLI
@@ -22,10 +24,10 @@ Use `sync` to mirror your local `api-out/` to a bucket. The AWS CLI will general
 aws s3 sync api-out s3://my-bucket-name/ --delete
 ```
 
-**Force JSON content type for everything (only if all files are JSON):**
+**Force JSON content type for everything (only if all files in the upload are JSON):**
 
 ```bash
-aws s3 sync api-out s3://my-bucket-name/ --delete --content-type "application/json"
+aws s3 sync api-out s3://my-bucket-name/ --delete --content-type application/json
 ```
 
 **Optional caching headers (tune to your needs):**
@@ -71,6 +73,8 @@ Minimal example policy (adjust `Resource` ARN to your bucket name/region):
 http://my-bucket-name.s3-website-us-east-1.amazonaws.com/users/1/index.json
 ```
 
+S3 website endpoints are HTTP-only. If you need HTTPS or a custom domain, put **CloudFront** in front of the bucket.
+
 ### Option B — CloudFront over S3 (recommended for production)
 
 - Create a **CloudFront distribution** with the S3 bucket as the origin.
@@ -97,7 +101,7 @@ Typical GitHub Actions flow using OIDC and the AWS CLI:
 name: Deploy StatikAPI to S3
 on:
   push:
-    branches: [master]
+    branches: [main]
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -128,7 +132,7 @@ jobs:
 ## Considerations
 
 - S3 can scale to very large datasets; pair with **CloudFront** for low‑latency global access and fine‑grained caching.
+- If you serve objects directly from S3, make sure your bucket policy and Block Public Access settings match your access model.
 - Prefer **short cache** for frequently updated JSON; increase `max-age` for versioned paths.
 - Keep object keys stable if you intend to leverage CDN caching effectively.
-- You can also host your APIs directly with **StatikAPI Cloud** _(coming soon)_ — a managed platform for static JSON hosting with automatic builds and versioned deployments.  
-  [Join the waitlist](#subscription) for early access.
+- You can also host your APIs directly with **StatikAPI Cloud** _(coming soon)_ — a managed platform for static JSON hosting with automatic builds and versioned deployments.

@@ -12,10 +12,12 @@ The process is typically the same — upload your `api-out/` directory and map y
 You can deploy your JSON files through **Vercel** either by:
 
 - placing them under the `public/` directory in an existing project, or
-- using **Vercel CLI** to deploy `api-out/` directly:
+- using the Vercel CLI from the output directory:
   ```bash
-  vercel --prod api-out
+  vercel --cwd api-out --prod
   ```
+
+If `api-out/` is the project root for a static deployment, the CLI can publish it directly.
 
 ### Firebase Hosting
 
@@ -54,8 +56,10 @@ Create a new **Static Site** and point it to your `api-out/` folder.
 You can deploy instantly using the Surge CLI:
 
 ```bash
-npx surge api-out myapi.surge.sh
+surge --project api-out --domain myapi.surge.sh
 ```
+
+If you run the command from inside `api-out/`, you can omit `--project`.
 
 ---
 
@@ -69,5 +73,4 @@ Use a **CDN layer** (Cloudflare, Fastly, BunnyCDN, or similar) in front of your 
 
 - These services are best suited for **small to medium** JSON projects or API prototypes.
 - For larger datasets or high-traffic APIs, prefer **object storage** solutions like **Cloudflare R2** or **Amazon S3**.
-- You can also host your APIs directly with **StatikAPI Cloud** _(coming soon)_ — a managed platform for static JSON APIs with automatic builds, versioned deployments, and integrated CDN caching.  
-  [Join the waitlist](#subscription) to get early access.
+- You can also host your APIs directly with **StatikAPI Cloud** _(coming soon)_ — a managed platform for static JSON APIs with automatic builds, versioned deployments, and integrated CDN caching.

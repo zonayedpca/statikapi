@@ -11,7 +11,7 @@ Use it when you want a simple route-file workflow, local preview, and a clear de
 
 ### 1. Scaffold a project
 
-Pick the package manager you already use:
+Pick the package manager you already use, then either choose the Cloudflare adapter in the prompt or pass `--template cloudflare-adapter` yourself:
 
 ```bash
 pnpm dlx create-statikapi my-api
@@ -25,7 +25,7 @@ yarn dlx create-statikapi my-api
 npx create-statikapi my-api
 ```
 
-To start with the Cloudflare scaffold:
+To start with the Cloudflare scaffold directly:
 
 ```bash
 pnpm dlx create-statikapi my-worker --template cloudflare-adapter
@@ -77,7 +77,7 @@ That writes the generated API output to `api-out/`.
 
 ## Cloudflare Controls
 
-If you want the Cloudflare path, scaffold with `--template cloudflare-adapter`.
+If you want the Cloudflare path, choose the Cloudflare adapter during the interactive scaffold prompt or pass `--template cloudflare-adapter`.
 That template gives you a Worker + Static Assets setup with project controls in:
 
 - `wrangler.toml` for Static Assets, R2, KV, and runtime vars

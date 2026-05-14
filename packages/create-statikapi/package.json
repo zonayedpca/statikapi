@@ -1,6 +1,6 @@
 {
   "name": "create-statikapi",
-  "version": "1.0.0-rc.8",
+  "version": "1.0.0-rc.9",
   "type": "module",
   "bin": {
     "create-statikapi": "bin/create-statikapi.js"

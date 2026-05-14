@@ -7,6 +7,17 @@
 StatikAPI turns filesystem route modules into static JSON endpoints.
 Use it when you want a simple route-file workflow, local preview, and a clear deployment path.
 
+## Example File Map
+
+| Source file | Generated output | Notes |
+| --- | --- | --- |
+| `src-api/index.js` | `api-out/index.json` | Single top-level route. |
+| `src-api/book.js` | `api-out/book.json` | One route file becomes one JSON file. |
+| `src-api/users/index.js` | `api-out/users/index.json` | Nested route folders stay nested in output. |
+| `src-api/users/[id].js` | `api-out/users/[id].json` | Dynamic routes still generate concrete JSON files at build time. |
+| `src-api/docs/[...slug].js` | `api-out/docs/[...slug].json` | Catch-all routes also map to generated JSON output. |
+| `src-api/index.js`, `src-api/users/[id].js`, `src-api/posts/index.js` | `api-out/index.json`, `api-out/users/[id].json`, `api-out/posts/index.json` | Multiple source files become multiple generated JSON files in one build. |
+
 ## Quick Start
 
 ### 1. Scaffold a project

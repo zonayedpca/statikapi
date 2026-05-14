@@ -1,11 +1,41 @@
-# 🧱 StatikAPI — Static JSON API Generator (Monorepo)
+# StatikAPI
 
-**StatikAPI** is a Next.js-inspired static API generator that builds JSON endpoints from simple filesystem modules.  
-It’s like “static site generation,” but for structured API responses instead of HTML pages.
+<p align="center">
+  <img src="./docs/assets/readme-hero.gif" alt="StatikAPI setup flow: scaffold, dev, deploy" width="100%" />
+</p>
 
----
+StatikAPI turns filesystem route modules into static JSON endpoints, a local preview UI, and Cloudflare-ready scaffolds.
+It is built for OSS developers who want a simple local loop, a clear deployment story, and a repo they can understand quickly.
 
-## 📦 Monorepo Structure
+## Why it exists
+
+- Build API payloads from route files instead of hand-writing JSON assets.
+- Keep local development fast with `statikapi dev` and the preview UI at `/_ui`.
+- Scaffold new projects with `create-statikapi`, including a Cloudflare path.
+- Keep the repo structure small enough that contributors can find the contract quickly.
+
+## At A Glance
+
+| Package | Role |
+| --- | --- |
+| `packages/cli` | Local `statikapi` build, dev, and preview runtime |
+| `packages/ui` | Shared React preview UI rendered in dev |
+| `packages/create-statikapi` | Project scaffolding and template generation |
+| `packages/adapter-cloudflare` | Cloudflare Worker + Static Assets build/runtime |
+| `packages/core` | Minimal shared package namespace |
+
+## OSS Workflow
+
+1. Scaffold a new project:
+   `npx create-statikapi my-api --template cloudflare-adapter`
+2. Run local development:
+   `pnpm dev`
+3. Build static output:
+   `pnpm build`
+4. Deploy when ready:
+   `pnpm deploy`
+
+## Monorepo Map
 
 ```
 .
@@ -13,7 +43,7 @@ It’s like “static site generation,” but for structured API responses inste
 │  ├─ cli/              → The `statikapi` CLI (build, dev, preview)
 │  ├─ core/             → Shared utilities and internal helpers
 │  ├─ ui/               → React preview UI served at /_ui
-│  └─ create-statikapi/ → Project scaffolder (WIP)
+│  └─ create-statikapi/ → Project scaffolder
 │
 ├─ example/
 │  ├─ basic/            → Simple static routes

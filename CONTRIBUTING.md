@@ -1,6 +1,7 @@
 # Contributing to StatikAPI
 
-Thanks for your interest! This guide explains how to set up the repo, make changes, and open PRs.
+Thanks for your interest! This guide is for people working on the StatikAPI repository itself.
+If you are using StatikAPI in your own project, start with [README.md](README.md) and the docs site.
 
 ## Repo Setup
 

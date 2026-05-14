@@ -81,13 +81,14 @@ test('scaffolds CLOUDFLARE template with static assets, private storage, config,
   assert.match(envTemplate, /STATIK_PRIVATE_AUTH_HEADER_NAME=/);
   assert.match(envTemplate, /STATIK_PRIVATE_AUTH_HEADER_VALUE=/);
   assert.match(envTemplate, /STATIK_DEPLOY_ORIGIN=/);
+  await assert.rejects(fs.stat(path.join(appDir, '.dev.vars.example')));
 
   t.after(async () => {
     await tmp.cleanup();
   });
 });
 
-test('cloudflare scaffold accepts a custom static assets directory', async (t) => {
+test('cloudflare scaffold accepts custom source and static assets directories', async (t) => {
   const tmp = await makeTmp();
   const appName = 'my-cloudflare-assets-dir';
 
@@ -97,16 +98,34 @@ test('cloudflare scaffold accepts a custom static assets directory', async (t) =
     '--template',
     'cloudflare-adapter',
     '--no-install',
-    '--assets-dir',
-    'static-output',
+    '--assets-dir=static-output',
+    '--src-dir=api-src',
   ]);
 
   const appDir = tmp.join(appName);
+  const expectedFiles = ['wrangler.toml', 'package.json', 'README.md', '.dev.vars'];
+
+  for (const rel of expectedFiles) {
+    const stat = await fs.stat(path.join(appDir, rel)).catch(() => null);
+    assert.ok(stat && stat.isFile(), `expected file missing: ${rel}`);
+  }
+
+  await assert.rejects(fs.stat(path.join(appDir, '.dev.vars.example')));
+
+  const pkg = JSON.parse(await fs.readFile(path.join(appDir, 'package.json'), 'utf8'));
+  assert.equal(pkg.scripts.build, 'statikapi-cf --src api-src --out dist/worker.mjs');
+
   const wrangler = await fs.readFile(path.join(appDir, 'wrangler.toml'), 'utf8');
   assert.match(wrangler, /directory = "\.\/static-output"/);
+  assert.match(wrangler, /STATIK_SRC = "api-src"/);
 
   const envTemplate = await fs.readFile(path.join(appDir, '.dev.vars'), 'utf8');
   assert.match(envTemplate, /\.\/static-output/);
+
+  const readme = await fs.readFile(path.join(appDir, 'README.md'), 'utf8');
+  assert.match(readme, /api-src\//);
+  assert.match(readme, /static-output/);
+  assert.doesNotMatch(readme, /src-api\//);
 
   const gitignore = await fs.readFile(path.join(appDir, '.gitignore'), 'utf8');
   assert.match(gitignore, /static-output/);

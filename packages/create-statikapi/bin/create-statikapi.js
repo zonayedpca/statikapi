@@ -463,6 +463,12 @@ async function main(argv) {
       privateAuthHeaderName,
       privateAuthHeaderValue,
     });
+    await patchCloudflareReadme(dest, {
+      appName,
+      srcDir: statikSrcVar || srcDir || DEFAULT_SRC,
+      assetsDir,
+    });
+    await removeIfExists(path.join(dest, '.dev.vars.example'));
   }
 
   // .gitignore (optional, default yes)
@@ -927,6 +933,31 @@ STATIK_DEPLOY_ORIGIN=
 # Private route data is stored in the configured R2 bucket, and the manifest lives in KV.
 `;
   await fs.writeFile(path.join(dest, '.dev.vars'), body, 'utf8');
+}
+
+async function patchCloudflareReadme(dest, { appName, srcDir, assetsDir }) {
+  const readmePath = path.join(dest, 'README.md');
+  if (!fss.existsSync(readmePath)) return;
+
+  let body = await fs.readFile(readmePath, 'utf8');
+  body = body
+    .replace(/APP_NAME/g, appName)
+    .replace(/`src-api\/`/g, `\`${srcDir}/\``)
+    .replace(/`src-api`/g, `\`${srcDir}\``)
+    .replace(/`keep rebuilding when src-api\/ or statikapi\.config\.js changes`/g, `\`keep rebuilding when ${srcDir}/ or statikapi.config.js changes\``)
+    .replace(/By default the assets directory is `public`/g, `By default the assets directory is \`${assetsDir}\``)
+    .replace(/backing asset file: `public\/posts\/index`/g, `backing asset file: \`${assetsDir}/posts/index\``)
+    .replace(/`public\/posts\/index`/g, `\`${assetsDir}/posts/index\``);
+
+  await fs.writeFile(readmePath, body, 'utf8');
+}
+
+async function removeIfExists(p) {
+  try {
+    await fs.unlink(p);
+  } catch {
+    /* ignore */
+  }
 }
 
 async function writeGitignore(dest, { outDir, template, assetsDir = DEFAULT_CF_ASSETS_DIR }) {

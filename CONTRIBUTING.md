@@ -7,10 +7,10 @@ If you are using StatikAPI in your own project, start with [README.md](README.md
 
 - **Requirements**: Node 22, pnpm, git
 - **Install**: `pnpm install`
-- **Build/Type**: JavaScript (ESM). No TypeScript.
+- **Build/Type**: JavaScript (ESM) for the repo packages. The showcase example also includes TypeScript routes.
 - **Packages**:
   - `packages/cli` – CLI (`statikapi`)
-  - `packages/core` – shared logic
+  - `packages/core` – minimal shared package namespace
   - `packages/ui` – preview React UI
   - `example/*` – sample projects
   - `docs/` – OSS docs content (MDX files consumed by the website later)

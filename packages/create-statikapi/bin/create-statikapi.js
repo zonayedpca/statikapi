@@ -944,9 +944,18 @@ async function patchCloudflareReadme(dest, { appName, srcDir, assetsDir }) {
     .replace(/APP_NAME/g, appName)
     .replace(/`src-api\/`/g, `\`${srcDir}/\``)
     .replace(/`src-api`/g, `\`${srcDir}\``)
-    .replace(/`keep rebuilding when src-api\/ or statikapi\.config\.js changes`/g, `\`keep rebuilding when ${srcDir}/ or statikapi.config.js changes\``)
-    .replace(/By default the assets directory is `public`/g, `By default the assets directory is \`${assetsDir}\``)
-    .replace(/backing asset file: `public\/posts\/index`/g, `backing asset file: \`${assetsDir}/posts/index\``)
+    .replace(
+      /`keep rebuilding when src-api\/ or statikapi\.config\.js changes`/g,
+      `\`keep rebuilding when ${srcDir}/ or statikapi.config.js changes\``
+    )
+    .replace(
+      /By default the assets directory is `public`/g,
+      `By default the assets directory is \`${assetsDir}\``
+    )
+    .replace(
+      /backing asset file: `public\/posts\/index`/g,
+      `backing asset file: \`${assetsDir}/posts/index\``
+    )
     .replace(/`public\/posts\/index`/g, `\`${assetsDir}/posts/index\``);
 
   await fs.writeFile(readmePath, body, 'utf8');

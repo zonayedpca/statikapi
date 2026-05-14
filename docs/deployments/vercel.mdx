@@ -1,0 +1,68 @@
+# Vercel
+
+Vercel can host `statikapi` output as a static deployment.
+
+The current flow is usually one of these:
+
+- let Vercel build from your repo and point the project output to `api-out/`
+- or deploy a linked project from the CLI when you want a manual publish step
+
+---
+
+## Git Integration
+
+The most common setup is a connected Git repository.
+
+For StatikAPI projects, set the build command to `statikapi build` and the output directory to `api-out/`. Vercel treats that directory as the deploy target and serves the generated files through its CDN.
+
+A minimal `vercel.json` can look like this:
+
+```json
+{
+  "outputDirectory": "api-out"
+}
+```
+
+If your build step is already producing `api-out/`, this is the simplest path:
+
+1. connect the repo to Vercel
+2. make sure the build command produces `api-out/`
+3. make sure the project output directory is `api-out`
+4. push changes and let Vercel redeploy automatically
+
+---
+
+## CLI Deploys
+
+You can also deploy from the command line.
+
+If the directory is already linked as a Vercel project root, deploy it with:
+
+```bash
+vercel --cwd path/to/project
+```
+
+If you want a production deployment right away:
+
+```bash
+vercel --cwd path/to/project --prod
+```
+
+The CLI prints the deployment URL to stdout, which makes it easy to capture in CI.
+
+---
+
+## Static File Behavior
+
+Vercel serves static files from the deployment output without rewriting their filenames or extensions.
+
+That makes it a good fit for generated JSON APIs because your route paths can stay stable and map directly to static files.
+
+---
+
+## Considerations
+
+- Best for teams already using Vercel for frontend hosting or preview deploys.
+- Use `outputDirectory: "api-out"` if you want Vercel to build and publish your generated files.
+- If you need a pure bucket-style object store, S3 or R2 is still the better fit.
+- You can also host your APIs directly with **StatikAPI Cloud** _(coming soon)_ — a managed platform for static JSON APIs with automatic builds and versioned deployments.

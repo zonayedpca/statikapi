@@ -22,6 +22,7 @@
       { "title": "Cloudflare", "slug": "deployments/cloudflare" },
       { "title": "Netlify", "slug": "deployments/netlify" },
       { "title": "GitHub Pages", "slug": "deployments/github-pages" },
+      { "title": "Vercel", "slug": "deployments/vercel" },
       { "title": "Amazon S3", "slug": "deployments/amazon-s3" },
       { "title": "Other Providers", "slug": "deployments/other" }
     ]

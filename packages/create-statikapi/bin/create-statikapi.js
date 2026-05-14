@@ -356,7 +356,9 @@ async function main(argv) {
     language = template === 'cloudflare-adapter' ? 'js' : answers.language || language || 'js';
 
     srcDir =
-      template === 'cloudflare-adapter' ? srcDir || DEFAULT_SRC : answers.srcDir || DEFAULT_SRC;
+      template === 'cloudflare-adapter'
+        ? answers.statikSrc || srcDir || DEFAULT_SRC
+        : answers.srcDir || DEFAULT_SRC;
     outDir = template === 'cloudflare-adapter' ? DEFAULT_OUT : answers.outDir || DEFAULT_OUT;
     wantGitignore = template === 'cloudflare-adapter' ? wantGitignore : !!answers.gitignore;
 
@@ -369,7 +371,7 @@ async function main(argv) {
       buildToken = answers.buildToken || buildToken;
       cloudflareAccountId = answers.cloudflareAccountId || cloudflareAccountId;
       cloudflareApiToken = answers.cloudflareApiToken || cloudflareApiToken;
-      statikSrcVar = answers.statikSrc || srcDir || DEFAULT_SRC;
+      statikSrcVar = srcDir;
       statikUseIndexJson =
         typeof answers.statikUseIndexJson === 'string'
           ? answers.statikUseIndexJson

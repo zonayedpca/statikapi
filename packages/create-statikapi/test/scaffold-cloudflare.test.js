@@ -119,6 +119,10 @@ test('cloudflare scaffold accepts custom source and static assets directories', 
   assert.match(wrangler, /directory = "\.\/static-output"/);
   assert.match(wrangler, /STATIK_SRC = "api-src"/);
 
+  const renamedSource = await fs.stat(path.join(appDir, 'api-src', 'index.js'));
+  assert.ok(renamedSource.isFile(), 'expected custom source directory to contain example files');
+  await assert.rejects(fs.stat(path.join(appDir, 'src-api')));
+
   const envTemplate = await fs.readFile(path.join(appDir, '.dev.vars'), 'utf8');
   assert.match(envTemplate, /\.\/static-output/);
 

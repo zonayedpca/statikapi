@@ -9,13 +9,13 @@ Use it when you want a simple route-file workflow, local preview, and a clear de
 
 ## Example File Map
 
-| Source file | Generated output | Notes |
-| --- | --- | --- |
-| `src-api/index.js` | `api-out/index.json` | Single top-level route. |
-| `src-api/book.js` | `api-out/book.json` | One route file becomes one JSON file. |
-| `src-api/users/index.js` | `api-out/users/index.json` | Nested route folders stay nested in output. |
-| `src-api/users/[id].js` | `api-out/users/1.json`, `api-out/users/2.json`, `api-out/users/3.json` | Dynamic routes expand to one JSON file per discovered route parameter. |
-| `src-api/docs/[...slug].js` | `api-out/docs/guide.json`, `api-out/docs/api/auth.json` | Catch-all routes expand into one JSON file per discovered path. |
+| Source file                                                           | Generated output                                                                                 | Notes                                                                    |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `src-api/index.js`                                                    | `api-out/index.json`                                                                             | Single top-level route.                                                  |
+| `src-api/book.js`                                                     | `api-out/book.json`                                                                              | One route file becomes one JSON file.                                    |
+| `src-api/users/index.js`                                              | `api-out/users/index.json`                                                                       | Nested route folders stay nested in output.                              |
+| `src-api/users/[id].js`                                               | `api-out/users/1.json`, `api-out/users/2.json`, `api-out/users/3.json`                           | Dynamic routes expand to one JSON file per discovered route parameter.   |
+| `src-api/docs/[...slug].js`                                           | `api-out/docs/guide.json`, `api-out/docs/api/auth.json`                                          | Catch-all routes expand into one JSON file per discovered path.          |
 | `src-api/index.js`, `src-api/users/[id].js`, `src-api/posts/index.js` | `api-out/index.json`, `api-out/users/1.json`, `api-out/users/2.json`, `api-out/posts/index.json` | Multiple source files become multiple generated JSON files in one build. |
 
 ## Quick Start
